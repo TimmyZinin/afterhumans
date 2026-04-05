@@ -370,6 +370,9 @@ namespace Afterhumans.EditorTools
             // (server rack, graffiti, NPC stations, foil hat, extra books)
             BotanikaEnvProps.Apply(propsRoot);
 
+            // BOT-A04: volumetric atmosphere (glass ceiling + dust motes + window accents)
+            BotanikaAtmosphere.Apply(propsRoot);
+
             EditorSceneManager.MarkSceneDirty(scene);
             bool saved = EditorSceneManager.SaveScene(scene, ScenePath);
             if (saved)
