@@ -1,0 +1,77 @@
+using System;
+using System.IO;
+using UnityEditor;
+using UnityEditor.Build.Reporting;
+using UnityEngine;
+
+namespace Afterhumans.EditorTools
+{
+    /// <summary>
+    /// Build automation for Afterhumans Episode 0.
+    /// Call via Unity CLI batchmode:
+    ///   Unity -batchmode -nographics -quit -projectPath ~/afterhumans \
+    ///     -buildTarget StandaloneOSX \
+    ///     -executeMethod Afterhumans.EditorTools.BuildScript.BuildMacOS \
+    ///     -logFile /dev/stdout
+    /// </summary>
+    public static class BuildScript
+    {
+        private static readonly string[] Scenes = {
+            "Assets/_Project/Scenes/Scene_MainMenu.unity",
+            "Assets/_Project/Scenes/Scene_Botanika.unity",
+            "Assets/_Project/Scenes/Scene_City.unity",
+            "Assets/_Project/Scenes/Scene_Desert.unity",
+            "Assets/_Project/Scenes/Scene_Credits.unity",
+        };
+
+        [MenuItem("Afterhumans/Build macOS (Apple Silicon)")]
+        public static void BuildMacOS()
+        {
+            string outputPath = GetBuildOutputPath();
+            Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.Standalone, ScriptingImplementation.Mono2x);
+            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Standalone, "com.timzinin.afterhumans");
+            PlayerSettings.productName = "Послелюди";
+            PlayerSettings.companyName = "Tim Zinin";
+            PlayerSettings.bundleVersion = "0.1.0";
+
+            // Apple Silicon native
+            PlayerSettings.SetArchitecture(NamedBuildTarget.Standalone, 2); // 2 = ARM64 / Apple Silicon
+
+            // Reduce build size, acceptable for macOS standalone
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Standalone, ManagedStrippingLevel.Low);
+
+            var options = new BuildPlayerOptions
+            {
+                scenes = Scenes,
+                locationPathName = outputPath,
+                target = BuildTarget.StandaloneOSX,
+                options = BuildOptions.None
+            };
+
+            BuildReport report = BuildPipeline.BuildPlayer(options);
+            BuildSummary summary = report.summary;
+
+            if (summary.result == BuildResult.Succeeded)
+            {
+                Debug.Log($"[BuildScript] Build SUCCEEDED: {summary.totalSize / (1024 * 1024)} MB, {summary.totalTime}");
+                Debug.Log($"[BuildScript] Output: {outputPath}");
+            }
+            else
+            {
+                Debug.LogError($"[BuildScript] Build FAILED: {summary.result}");
+                throw new Exception($"Build failed: {summary.result}");
+            }
+        }
+
+        private static string GetBuildOutputPath()
+        {
+            string custom = Environment.GetEnvironmentVariable("BUILD_OUTPUT");
+            if (!string.IsNullOrEmpty(custom)) return custom;
+
+            string projectRoot = Path.GetDirectoryName(Application.dataPath);
+            return Path.Combine(projectRoot, "build", "Afterhumans.app");
+        }
+    }
+}
