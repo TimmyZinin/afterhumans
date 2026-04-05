@@ -28,9 +28,11 @@ namespace Afterhumans.EditorTools
 
             var mi = (ModelImporter)assetImporter;
 
-            // 1 unit = 1 meter (skill game-art industry standard)
-            mi.globalScale = 0.01f;
-            mi.useFileScale = false;
+            // 1 unit = 1 meter: Unity FBX importer сам обрабатывает UnitScaleFactor=100
+            // из Kenney FBX header через useFileScale=true (default). Явный
+            // globalScale=0.01 ломал scale в 100 раз — фикс: keep defaults (1/true).
+            mi.globalScale = 1f;
+            mi.useFileScale = true;
 
             // Kenney props: no animations, no cameras, no lights
             mi.importCameras = false;

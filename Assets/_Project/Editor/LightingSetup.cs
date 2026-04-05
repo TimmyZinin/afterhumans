@@ -46,14 +46,21 @@ namespace Afterhumans.EditorTools
                 RenderSettings.sun = sun;
             }
 
-            // Make the sky fade into fog color so the horizon feels atmospheric.
-            // Built-in Render Pipeline does not apply fog to the skybox, so we set
-            // the Player camera's clearFlags to SolidColor with our fog tint.
+            // Open-world presets (City/Desert) set camera to SolidColor with fog tint so the
+            // horizon blends into the fog. Botanika is an interior and keeps Skybox so the
+            // windows show sky beyond the walls.
             var playerCam = FindPlayerCamera();
             if (playerCam != null)
             {
-                playerCam.clearFlags = CameraClearFlags.SolidColor;
-                playerCam.backgroundColor = RenderSettings.fogColor;
+                if (preset == Preset.Botanika)
+                {
+                    playerCam.clearFlags = CameraClearFlags.Skybox;
+                }
+                else
+                {
+                    playerCam.clearFlags = CameraClearFlags.SolidColor;
+                    playerCam.backgroundColor = RenderSettings.fogColor;
+                }
             }
 
             Debug.Log($"[LightingSetup] Applied {preset} preset. fogColor={RenderSettings.fogColor}, density={RenderSettings.fogDensity}");
@@ -71,11 +78,12 @@ namespace Afterhumans.EditorTools
 
         private static void ApplyBotanika()
         {
-            // Warm golden-hour oasis
-            RenderSettings.fogColor = new Color(0.95f, 0.78f, 0.55f, 1f);
-            RenderSettings.fogDensity = 0.035f;
-            RenderSettings.ambientLight = new Color(0.62f, 0.48f, 0.30f);  // warm amber ambient
-            RenderSettings.ambientIntensity = 1.0f;
+            // Interior greenhouse — soft warm glow, LOW fog density (we're indoors, not in the desert).
+            // Camera keeps Skybox clearFlags in this preset so the windows show sky beyond the walls.
+            RenderSettings.fogColor = new Color(0.95f, 0.80f, 0.58f, 1f);
+            RenderSettings.fogDensity = 0.008f;
+            RenderSettings.ambientLight = new Color(0.58f, 0.48f, 0.34f);
+            RenderSettings.ambientIntensity = 1.25f;
         }
 
         private static void ApplyCity()

@@ -9,6 +9,7 @@ using Afterhumans.Player;
 using Afterhumans.Dialogue;
 using Afterhumans.Kafka;
 using Afterhumans.Scenes;
+using Afterhumans.Art;
 
 namespace Afterhumans.EditorTools
 {
@@ -30,11 +31,15 @@ namespace Afterhumans.EditorTools
         // NPC knot MUST be a top-level knot (=== name ===) in dataland.ink, not a stitch (= name).
         // Ink.Story.ChoosePathString() only resolves top-level paths.
         // targetScene is the next scene the exit trigger should load (null = no trigger).
-        private static readonly (string scene, string npcKnot, string npcName, string targetScene, Vector3 exitPos)[] GameScenes = new[]
+        // gateVar/lockedKnot: if set, the Ink bool must be true before the player can leave.
+        // themeName: SceneTheme asset at Assets/_Project/Art/Themes/{name}.asset для BOT-F06.
+        private static readonly (string scene, string themeName, string npcKnot, string npcName, string targetScene, Vector3 exitPos, string gateVar, string lockedKnot)[] GameScenes = new[]
         {
-            ("Scene_Botanika", "sasha",   "Placeholder_NPC_Sasha",    "Scene_City",    new Vector3(0f, 1f, 12f)),
-            ("Scene_City",     "dmitriy", "Placeholder_NPC_Dmitriy",  "Scene_Desert",  new Vector3(0f, 1f, 14f)),
-            ("Scene_Desert",   "cursor",  "Placeholder_Cursor",       "Scene_Credits", new Vector3(0f, 1f, 16f)),
+            // Botanika → City is gated: player must talk to Nikolai first (sets door_to_city_open)
+            ("Scene_Botanika", "Botanika", "sasha",   "Placeholder_NPC_Sasha",    "Scene_City",    new Vector3(0f, 1f, 12f), "door_to_city_open", "door_to_city"),
+            // City → Desert and Desert → Credits are ungated
+            ("Scene_City",     "City",     "dmitriy", "Placeholder_NPC_Dmitriy",  "Scene_Desert",  new Vector3(0f, 1f, 14f), null, null),
+            ("Scene_Desert",   "Desert",   "cursor",  "Placeholder_Cursor",       "Scene_Credits", new Vector3(0f, 1f, 16f), null, null),
         };
 
         [MenuItem("Afterhumans/Setup/Enrich All Scenes")]
@@ -42,7 +47,7 @@ namespace Afterhumans.EditorTools
         {
             Debug.Log("[SceneEnricher] Starting enrichment...");
 
-            foreach (var (scene, npcKnot, npcName, targetScene, exitPos) in GameScenes)
+            foreach (var (scene, themeName, npcKnot, npcName, targetScene, exitPos, gateVar, lockedKnot) in GameScenes)
             {
                 string path = $"{ScenesDir}/{scene}.unity";
                 if (!File.Exists(path))
@@ -54,7 +59,7 @@ namespace Afterhumans.EditorTools
                 Debug.Log($"[SceneEnricher] Opening {scene}...");
                 var sceneObj = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
 
-                EnrichScene(sceneObj, scene, npcKnot, npcName, targetScene, exitPos);
+                EnrichScene(sceneObj, scene, themeName, npcKnot, npcName, targetScene, exitPos, gateVar, lockedKnot);
 
                 // Force flush all changes before save
                 EditorSceneManager.MarkSceneDirty(sceneObj);
@@ -87,7 +92,7 @@ namespace Afterhumans.EditorTools
             Debug.Log("[SceneEnricher] Done.");
         }
 
-        private static void EnrichScene(Scene scene, string sceneName, string npcKnot, string npcName, string targetScene, Vector3 exitPos)
+        private static void EnrichScene(Scene scene, string sceneName, string themeName, string npcKnot, string npcName, string targetScene, Vector3 exitPos, string gateVar, string lockedKnot)
         {
             // Remove stock Main Camera — we'll create our own on the Player
             foreach (var root in scene.GetRootGameObjects())
@@ -216,9 +221,40 @@ namespace Afterhumans.EditorTools
             CreateDialogueSystem();
 
             // Scene transition fade overlay + exit trigger to next scene
-            CreateSceneTransitionAndExit(targetScene, exitPos);
+            CreateSceneTransitionAndExit(targetScene, exitPos, gateVar, lockedKnot);
+
+            // BOT-F06 + BOT-A01: ThemeLoader runtime applies SceneTheme (палитра,
+            // освещение, fog, Volume Profile post-FX) в Awake при scene load.
+            CreateThemeLoader(themeName);
 
             EditorSceneManager.MarkSceneDirty(scene);
+        }
+
+        private static void CreateThemeLoader(string themeName)
+        {
+            var existing = GameObject.Find("ThemeRoot");
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            var root = new GameObject("ThemeRoot");
+            var loader = Undo.AddComponent<ThemeLoader>(root);
+
+            var themePath = $"Assets/_Project/Art/Themes/{themeName}.asset";
+            var theme = AssetDatabase.LoadAssetAtPath<SceneTheme>(themePath);
+            if (theme == null)
+            {
+                Debug.LogWarning($"[SceneEnricher] SceneTheme not found: {themePath}");
+                return;
+            }
+
+            var so = new SerializedObject(loader);
+            var themeProp = so.FindProperty("theme");
+            if (themeProp != null)
+            {
+                themeProp.objectReferenceValue = theme;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            Debug.Log($"[SceneEnricher] ThemeLoader wired to {themeName}");
         }
 
         private static void CreateDialogueSystem()
@@ -404,7 +440,7 @@ namespace Afterhumans.EditorTools
             }
         }
 
-        private static void CreateSceneTransitionAndExit(string targetScene, Vector3 exitPos)
+        private static void CreateSceneTransitionAndExit(string targetScene, Vector3 exitPos, string gateVar, string lockedKnot)
         {
             // --- 1. SceneTransition GameObject with its own Canvas + fade Image
             var existingTransition = GameObject.Find("SceneTransition");
@@ -454,12 +490,13 @@ namespace Afterhumans.EditorTools
                 var trigger = Undo.AddComponent<SceneExitTrigger>(exit);
                 var soTrig = new SerializedObject(trigger);
                 var tsProp = soTrig.FindProperty("targetScene");
-                if (tsProp != null)
-                {
-                    tsProp.stringValue = targetScene;
-                    soTrig.ApplyModifiedPropertiesWithoutUndo();
-                }
-                Debug.Log($"[SceneEnricher] Exit trigger → {targetScene} at {exitPos}");
+                if (tsProp != null) tsProp.stringValue = targetScene;
+                var gateProp = soTrig.FindProperty("gateInkVarName");
+                if (gateProp != null) gateProp.stringValue = gateVar ?? "";
+                var lockedProp = soTrig.FindProperty("lockedKnot");
+                if (lockedProp != null) lockedProp.stringValue = lockedKnot ?? "";
+                soTrig.ApplyModifiedPropertiesWithoutUndo();
+                Debug.Log($"[SceneEnricher] Exit trigger → {targetScene} at {exitPos} (gate={gateVar ?? "none"})");
             }
         }
 
