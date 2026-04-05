@@ -30,7 +30,7 @@ namespace Afterhumans.EditorTools
             if (!Directory.Exists(MaterialsDir)) Directory.CreateDirectory(MaterialsDir);
             string path = $"{MaterialsDir}/{name}.mat";
             var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-            var shader = Shader.Find("Standard") ?? Shader.Find("Universal Render Pipeline/Lit");
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             if (existing == null)
             {
                 var mat = new Material(shader);

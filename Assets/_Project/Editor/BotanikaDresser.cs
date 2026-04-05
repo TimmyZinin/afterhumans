@@ -49,13 +49,12 @@ namespace Afterhumans.EditorTools
             }
             string path = $"{MaterialsDir}/{name}.mat";
             var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-            // Project uses Built-in Render Pipeline (GraphicsSettings.m_CustomRenderPipeline is null),
-            // so Standard shader is the correct choice — URP/Lit renders as magenta missing-shader.
-            var shader = Shader.Find("Standard");
+            // BOT-F01: URP активен → используем URP/Lit. Fallback на Standard для edge cases.
+            var shader = Shader.Find("Universal Render Pipeline/Lit");
             if (shader == null)
             {
-                Debug.LogWarning("[BotanikaDresser] Standard shader not found, trying URP/Lit");
-                shader = Shader.Find("Universal Render Pipeline/Lit");
+                Debug.LogWarning("[BotanikaDresser] URP/Lit not found — URP not activated? Falling back to Standard");
+                shader = Shader.Find("Standard");
             }
             if (existing == null)
             {
@@ -93,6 +92,111 @@ namespace Afterhumans.EditorTools
             AssetDatabase.SaveAssets();
         }
 
+        private static void BuildGreenhouseShell(GameObject parent)
+        {
+            // Floor: 11x11 tiles, each 1m square, centered on origin so room spans (-5.5..5.5)
+            var matTile = LoadOrCreateLit("Tint_TileFloor", new Color(0.58f, 0.45f, 0.30f), 0.1f);
+            for (int x = -5; x <= 5; x++)
+            {
+                for (int z = -5; z <= 5; z++)
+                {
+                    Place(parent, $"{FurnitureFbx}/floorFull.fbx",
+                        new Vector3(x, 0f, z), Quaternion.identity, Vector3.one, matTile);
+                }
+            }
+
+            // Walls along the perimeter, with wallWindow tiles every 3rd slot for light
+            var matPlaster = LoadOrCreateLit("Tint_Plaster", new Color(0.75f, 0.63f, 0.48f), 0.1f);
+            for (int x = -5; x <= 5; x++)
+            {
+                // North wall (+Z side), facing -Z (into room)
+                bool windowN = (x + 5) % 3 == 1;
+                string wallN = windowN ? "wallWindow" : "wall";
+                Place(parent, $"{FurnitureFbx}/{wallN}.fbx",
+                    new Vector3(x, 0f, 5.5f), Quaternion.Euler(0f, 180f, 0f), Vector3.one, matPlaster);
+
+                // South wall (-Z side), facing +Z
+                // Leave a 3-wide gap for the doorway in the middle
+                if (x >= -1 && x <= 1)
+                {
+                    if (x == 0)
+                    {
+                        Place(parent, $"{FurnitureFbx}/doorway.fbx",
+                            new Vector3(x, 0f, -5.5f), Quaternion.identity, Vector3.one, matPlaster);
+                    }
+                    continue;
+                }
+                bool windowS = (x + 5) % 3 == 2;
+                string wallS = windowS ? "wallWindow" : "wall";
+                Place(parent, $"{FurnitureFbx}/{wallS}.fbx",
+                    new Vector3(x, 0f, -5.5f), Quaternion.identity, Vector3.one, matPlaster);
+            }
+            for (int z = -5; z <= 5; z++)
+            {
+                // West wall (-X)
+                bool windowW = (z + 5) % 3 == 1;
+                string wallW = windowW ? "wallWindow" : "wall";
+                Place(parent, $"{FurnitureFbx}/{wallW}.fbx",
+                    new Vector3(-5.5f, 0f, z), Quaternion.Euler(0f, 90f, 0f), Vector3.one, matPlaster);
+
+                // East wall (+X)
+                bool windowE = (z + 5) % 3 == 2;
+                string wallE = windowE ? "wallWindow" : "wall";
+                Place(parent, $"{FurnitureFbx}/{wallE}.fbx",
+                    new Vector3(5.5f, 0f, z), Quaternion.Euler(0f, -90f, 0f), Vector3.one, matPlaster);
+            }
+
+            // Ceiling lamps in a 2x2 grid, mounted at y=2.8 (Kenney wall height ~3m)
+            var matLamp = LoadOrCreateLit("Tint_CeilingLamp", new Color(0.95f, 0.82f, 0.55f), 0.4f);
+            Place(parent, $"{FurnitureFbx}/lampSquareCeiling.fbx",
+                new Vector3(-2.5f, 2.8f, -2.5f), Quaternion.identity, Vector3.one, matLamp);
+            Place(parent, $"{FurnitureFbx}/lampSquareCeiling.fbx",
+                new Vector3(2.5f, 2.8f, -2.5f), Quaternion.identity, Vector3.one, matLamp);
+            Place(parent, $"{FurnitureFbx}/lampSquareCeiling.fbx",
+                new Vector3(-2.5f, 2.8f, 2.5f), Quaternion.identity, Vector3.one, matLamp);
+            Place(parent, $"{FurnitureFbx}/lampSquareCeiling.fbx",
+                new Vector3(2.5f, 2.8f, 2.5f), Quaternion.identity, Vector3.one, matLamp);
+
+            // Rug in front of the sofa
+            Place(parent, $"{FurnitureFbx}/rugDoormat.fbx",
+                new Vector3(0f, 0.01f, 1.8f), Quaternion.identity, new Vector3(2f, 1f, 2f), _matUpholstery);
+
+            Debug.Log("[BotanikaDresser] Greenhouse shell built (11x11 floor, walls with windows, doorway, ceiling lamps)");
+        }
+
+        // Override of Place that accepts an explicit material — used by BuildGreenhouseShell.
+        private static void Place(GameObject parent, string assetPath, Vector3 pos, Quaternion rot, Vector3 scale, Material forcedMat)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
+            if (prefab == null)
+            {
+                Debug.LogError($"[BotanikaDresser] Asset not found: {assetPath}");
+                return;
+            }
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            if (instance == null) return;
+            instance.transform.SetParent(parent.transform, worldPositionStays: false);
+            instance.transform.position = pos;
+            instance.transform.rotation = rot;
+            instance.transform.localScale = scale;
+            foreach (var r in instance.GetComponentsInChildren<Renderer>(includeInactive: true))
+            {
+                var count = r.sharedMaterials.Length;
+                var mats = new Material[count];
+                for (int i = 0; i < count; i++) mats[i] = forcedMat;
+                r.sharedMaterials = mats;
+            }
+            if (instance.GetComponent<Collider>() == null)
+            {
+                var mf = instance.GetComponentInChildren<MeshFilter>();
+                if (mf != null)
+                {
+                    var mc = instance.AddComponent<MeshCollider>();
+                    mc.sharedMesh = mf.sharedMesh;
+                }
+            }
+        }
+
         private static Material PickMaterial(string assetName)
         {
             string n = assetName.ToLowerInvariant();
@@ -126,15 +230,27 @@ namespace Afterhumans.EditorTools
 
             var propsRoot = new GameObject(PropsRootName);
 
-            // Pull Player well back and slightly off-axis so the whole hero arrangement
-            // (sofa + Sasha + coffee table + bookcases) is framed nicely at spawn,
-            // and the first few steps forward bring them to the NPC naturally.
+            // --- GREENHOUSE SHELL (floor + walls + doorway + ceiling lamps) ---
+            // Kenney furniture kit floor/wall tiles are ~1m x 1m. Build a 10x10 room.
+            BuildGreenhouseShell(propsRoot);
+
+            // Player spawns just inside the greenhouse doorway (south wall),
+            // facing +Z toward Sasha on the sofa. Room spans (-5.5..5.5) on both axes.
             var player = GameObject.Find("Player");
             if (player != null)
             {
-                player.transform.position = new Vector3(0f, 1.1f, -12f);
+                player.transform.position = new Vector3(0f, 1.1f, -4.5f);
                 player.transform.rotation = Quaternion.identity;
-                Debug.Log("[BotanikaDresser] Player spawn moved to (0, 1.1, -12)");
+                Debug.Log("[BotanikaDresser] Player spawn at doorway (0, 1.1, -4.5)");
+            }
+
+            // Hide the 50m placeholder ground plane — our 11x11 tile floor replaces it.
+            var oldGround = GameObject.Find("Placeholder_Ground");
+            if (oldGround != null)
+            {
+                var rend = oldGround.GetComponent<Renderer>();
+                if (rend != null) rend.enabled = false;
+                Debug.Log("[BotanikaDresser] Hid placeholder 50m ground plane");
             }
 
             // Relocate Sasha NPC to (0, 1, 3) so the hero arrangement is clean.
@@ -169,15 +285,15 @@ namespace Afterhumans.EditorTools
                 Quaternion.identity,
                 Vector3.one);
 
-            // Bookcase along the back wall
+            // Bookcase along the back wall (pulled inside room)
             Place(propsRoot, $"{FurnitureFbx}/bookcaseOpen.fbx",
-                new Vector3(-4f, 0f, 5.5f),
-                Quaternion.Euler(0f, 90f, 0f),
+                new Vector3(-4.5f, 0f, 4.8f),
+                Quaternion.identity,
                 Vector3.one);
 
             Place(propsRoot, $"{FurnitureFbx}/bookcaseOpenLow.fbx",
-                new Vector3(4f, 0f, 5.5f),
-                Quaternion.Euler(0f, -90f, 0f),
+                new Vector3(4.5f, 0f, 4.8f),
+                Quaternion.identity,
                 Vector3.one);
 
             // Lounge chair to the side where other NPCs could sit
