@@ -58,6 +58,26 @@ namespace Afterhumans.EditorTools
             Debug.Log("[VolumeProfileBuilder] 3 Volume Profiles created and wired to SceneTheme assets");
         }
 
+        /// <summary>
+        /// mm-review HIGH fix: безопасный clear через VolumeProfile.Remove<T>()
+        /// public API вместо DestroyImmediate(allowDestroyingAssets=true) которое
+        /// могло повредить sub-assets на disk.
+        /// </summary>
+        private static void SafeClearProfile(VolumeProfile profile)
+        {
+            // Remove known types we may have added
+            profile.Remove<Bloom>();
+            profile.Remove<Tonemapping>();
+            profile.Remove<ColorAdjustments>();
+            profile.Remove<WhiteBalance>();
+            profile.Remove<ShadowsMidtonesHighlights>();
+            profile.Remove<Vignette>();
+            profile.Remove<FilmGrain>();
+            profile.Remove<DepthOfField>();
+            profile.Remove<ChromaticAberration>();
+            profile.Remove<LensDistortion>();
+        }
+
         private static VolumeProfile BuildBotanikaProfile()
         {
             string path = $"{ProfilesDir}/VP_Botanika.asset";
@@ -68,12 +88,7 @@ namespace Afterhumans.EditorTools
                 AssetDatabase.CreateAsset(profile, path);
             }
 
-            // Clear existing overrides for idempotency
-            for (int i = profile.components.Count - 1; i >= 0; i--)
-            {
-                Object.DestroyImmediate(profile.components[i], allowDestroyingAssets: true);
-            }
-            profile.components.Clear();
+            SafeClearProfile(profile);
 
             // Bloom — visible sun rays + warm highlights
             var bloom = profile.Add<Bloom>(true);
@@ -137,9 +152,7 @@ namespace Afterhumans.EditorTools
                 profile = ScriptableObject.CreateInstance<VolumeProfile>();
                 AssetDatabase.CreateAsset(profile, path);
             }
-            for (int i = profile.components.Count - 1; i >= 0; i--)
-                Object.DestroyImmediate(profile.components[i], true);
-            profile.components.Clear();
+            SafeClearProfile(profile);
 
             var bloom = profile.Add<Bloom>(true);
             bloom.intensity.Override(0.3f);
@@ -185,9 +198,7 @@ namespace Afterhumans.EditorTools
                 profile = ScriptableObject.CreateInstance<VolumeProfile>();
                 AssetDatabase.CreateAsset(profile, path);
             }
-            for (int i = profile.components.Count - 1; i >= 0; i--)
-                Object.DestroyImmediate(profile.components[i], true);
-            profile.components.Clear();
+            SafeClearProfile(profile);
 
             var bloom = profile.Add<Bloom>(true);
             bloom.intensity.Override(1.3f);

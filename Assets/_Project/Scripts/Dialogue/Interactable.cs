@@ -49,6 +49,14 @@ namespace Afterhumans.Dialogue
             s_all.Remove(this);
         }
 
+        // mm-review HIGH fix: OnDisable может не fire при Object.Destroy cascade
+        // (parent destroy). OnDestroy всегда fires и garantирует cleanup from
+        // static list. Prevents stale references в PlayerInteraction.Update loop.
+        private void OnDestroy()
+        {
+            s_all.Remove(this);
+        }
+
         public void Interact()
         {
             if (!IsAvailable) return;

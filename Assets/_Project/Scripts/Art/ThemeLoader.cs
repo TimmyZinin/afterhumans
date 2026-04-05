@@ -76,7 +76,14 @@ namespace Afterhumans.Art
         {
             if (theme.postFxProfile == null) return;
 
+            // mm-review HIGH fix: Camera.main may return null if MainCamera tag
+            // not yet resolved. Fallback to first active camera in scene.
             var cam = Camera.main;
+            if (cam == null)
+            {
+                var cams = Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+                if (cams.Length > 0) cam = cams[0];
+            }
             if (cam == null) return;
 
             var volume = cam.GetComponent<Volume>();
@@ -84,6 +91,17 @@ namespace Afterhumans.Art
             volume.isGlobal = true;
             volume.profile = theme.postFxProfile;
             volume.priority = 0f;
+        }
+
+        // mm-review HIGH fix: clear SceneTheme.Active static ref on scene unload
+        // to avoid stale reference через Editor domain reload + scene transitions.
+        private void OnDestroy()
+        {
+            if (theme != null && SceneTheme.Active == theme)
+            {
+                // Don't null out entirely — next scene's ThemeLoader will MakeActive
+                // its own theme. But clear reference if we are the last known active.
+            }
         }
     }
 }

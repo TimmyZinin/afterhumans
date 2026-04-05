@@ -28,11 +28,15 @@ namespace Afterhumans.EditorTools
 
             var mi = (ModelImporter)assetImporter;
 
-            // 1 unit = 1 meter: Unity FBX importer сам обрабатывает UnitScaleFactor=100
-            // из Kenney FBX header через useFileScale=true (default). Явный
-            // globalScale=0.01 ломал scale в 100 раз — фикс: keep defaults (1/true).
-            mi.globalScale = 1f;
-            mi.useFileScale = true;
+            // BOT-F02 CRITICAL fix (empirically tuned via ScaleDiagnostics):
+            // - globalScale=1 + useFileScale=true: sofa measured 11.2m (target 2m), 5.6×
+            // - globalScale=0.01 + useFileScale=false: sofa 0.11m, 100× too small
+            // - globalScale=0.2 + useFileScale=false: sofa ≈ 2.24m ✓ (target 2m)
+            // Kenney FBX files have vertex data ~5× oversized from their stated cm
+            // unit; compensate with 0.2× global scale + disable file scale to avoid
+            // double application.
+            mi.globalScale = 0.2f;
+            mi.useFileScale = false;
 
             // Kenney props: no animations, no cameras, no lights
             mi.importCameras = false;

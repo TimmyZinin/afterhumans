@@ -93,15 +93,19 @@ namespace Afterhumans.EditorTools
                 return;
             }
 
-            // World bounds → local space for BoxCollider
+            // World bounds → local space for BoxCollider.
+            // mm-review HIGH fix: size must divide by |lossyScale| component-wise
+            // (axis-aligned bounds assumption; rotation handled by InverseTransformPoint
+            // on center but size is axis-scalar, not a transformed vector).
             var box2 = instance.AddComponent<BoxCollider>();
             var worldBounds = combinedBounds.Value;
             box2.center = instance.transform.InverseTransformPoint(worldBounds.center);
-            box2.size = Vector3.Scale(worldBounds.size, new Vector3(
-                instance.transform.lossyScale.x == 0 ? 1 : 1f / instance.transform.lossyScale.x,
-                instance.transform.lossyScale.y == 0 ? 1 : 1f / instance.transform.lossyScale.y,
-                instance.transform.lossyScale.z == 0 ? 1 : 1f / instance.transform.lossyScale.z
-            ));
+            var ls = instance.transform.lossyScale;
+            var invScale = new Vector3(
+                ls.x == 0 ? 1f : 1f / Mathf.Abs(ls.x),
+                ls.y == 0 ? 1f : 1f / Mathf.Abs(ls.y),
+                ls.z == 0 ? 1f : 1f / Mathf.Abs(ls.z));
+            box2.size = Vector3.Scale(worldBounds.size, invScale);
         }
 
         /// <summary>
