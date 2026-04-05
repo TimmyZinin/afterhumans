@@ -3,6 +3,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Afterhumans.Art;
 
 namespace Afterhumans.EditorTools
 {
@@ -39,6 +40,7 @@ namespace Afterhumans.EditorTools
         private static Material _matFlowerPurple;
 
         private const string MaterialsDir = "Assets/_Project/Materials/Tints";
+        private const string BotanikaThemePath = "Assets/_Project/Art/Themes/Botanika.asset";
 
         private static Material LoadOrCreateLit(string name, Color color, float smoothness = 0.2f)
         {
@@ -77,19 +79,58 @@ namespace Afterhumans.EditorTools
             return existing;
         }
 
+        // BOT-A08: palette now data-driven from Botanika.asset SceneTheme.
+        // Missing theme fields fall back to hardcoded defaults below so that
+        // adding new tint slots doesn't require theme schema changes yet.
         private static void InitMaterials()
         {
-            _matWood = LoadOrCreateLit("Tint_Wood", new Color(0.42f, 0.28f, 0.18f), 0.15f);
-            _matUpholstery = LoadOrCreateLit("Tint_Upholstery", new Color(0.55f, 0.30f, 0.22f), 0.1f);
-            _matMetal = LoadOrCreateLit("Tint_Metal", new Color(0.55f, 0.52f, 0.48f), 0.6f);
-            _matLeaf = LoadOrCreateLit("Tint_Leaf", new Color(0.28f, 0.52f, 0.18f), 0.15f);
-            _matBark = LoadOrCreateLit("Tint_Bark", new Color(0.32f, 0.22f, 0.15f), 0.1f);
-            _matStem = LoadOrCreateLit("Tint_Stem", new Color(0.38f, 0.55f, 0.25f), 0.15f);
-            _matBook = LoadOrCreateLit("Tint_Book", new Color(0.65f, 0.22f, 0.18f), 0.15f);
-            _matFlowerRed = LoadOrCreateLit("Tint_FlowerRed", new Color(0.85f, 0.2f, 0.2f), 0.3f);
-            _matFlowerYellow = LoadOrCreateLit("Tint_FlowerYellow", new Color(0.95f, 0.82f, 0.18f), 0.3f);
-            _matFlowerPurple = LoadOrCreateLit("Tint_FlowerPurple", new Color(0.58f, 0.32f, 0.78f), 0.3f);
+            var theme = AssetDatabase.LoadAssetAtPath<SceneTheme>(BotanikaThemePath);
+            if (theme == null)
+            {
+                Debug.LogWarning("[BotanikaDresser] Botanika.asset SceneTheme missing — falling back to hardcoded palette.");
+            }
+
+            // Helper: derive tint from theme.tertiary (warm wood) adjusted per role.
+            // Where theme has a direct match, use theme color. Otherwise mix.
+            Color wood       = theme != null ? theme.tertiary  : new Color(0.42f, 0.28f, 0.18f);
+            Color upholstery = theme != null ? Multiply(theme.accent2, 0.85f) : new Color(0.55f, 0.30f, 0.22f);
+            Color metal      = new Color(0.55f, 0.52f, 0.48f);  // metal stays neutral, not themed
+            Color leaf       = theme != null ? theme.secondary : new Color(0.28f, 0.52f, 0.18f);
+            Color bark       = theme != null ? theme.shadow    : new Color(0.32f, 0.22f, 0.15f);
+            Color stem       = theme != null ? Lighten(theme.secondary, 0.25f) : new Color(0.38f, 0.55f, 0.25f);
+            Color book       = theme != null ? theme.accent2   : new Color(0.65f, 0.22f, 0.18f);
+            Color flowerRed  = theme != null ? Lighten(theme.accent2, 0.15f) : new Color(0.85f, 0.2f, 0.2f);
+            Color flowerYell = theme != null ? theme.accent1   : new Color(0.95f, 0.82f, 0.18f);
+            Color flowerPurp = new Color(0.58f, 0.32f, 0.78f);  // no theme slot; keep fixed
+
+            _matWood         = LoadOrCreateLit("Tint_Wood",         wood,        0.15f);
+            _matUpholstery   = LoadOrCreateLit("Tint_Upholstery",   upholstery,  0.1f);
+            _matMetal        = LoadOrCreateLit("Tint_Metal",        metal,       0.6f);
+            _matLeaf         = LoadOrCreateLit("Tint_Leaf",         leaf,        0.15f);
+            _matBark         = LoadOrCreateLit("Tint_Bark",         bark,        0.1f);
+            _matStem         = LoadOrCreateLit("Tint_Stem",         stem,        0.15f);
+            _matBook         = LoadOrCreateLit("Tint_Book",         book,        0.15f);
+            _matFlowerRed    = LoadOrCreateLit("Tint_FlowerRed",    flowerRed,   0.3f);
+            _matFlowerYellow = LoadOrCreateLit("Tint_FlowerYellow", flowerYell,  0.3f);
+            _matFlowerPurple = LoadOrCreateLit("Tint_FlowerPurple", flowerPurp,  0.3f);
             AssetDatabase.SaveAssets();
+        }
+
+        // Small color math helpers for palette derivation — keep inline to avoid
+        // a utility file for one-off use. If more sites need these, promote to
+        // Assets/_Project/Scripts/Art/ColorUtils.cs.
+        private static Color Multiply(Color c, float f)
+        {
+            return new Color(c.r * f, c.g * f, c.b * f, c.a);
+        }
+
+        private static Color Lighten(Color c, float amount)
+        {
+            return new Color(
+                Mathf.Lerp(c.r, 1f, amount),
+                Mathf.Lerp(c.g, 1f, amount),
+                Mathf.Lerp(c.b, 1f, amount),
+                c.a);
         }
 
         private static void BuildGreenhouseShell(GameObject parent)

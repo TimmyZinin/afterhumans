@@ -53,8 +53,70 @@ namespace Afterhumans.EditorTools
             BuildGlassCeiling(root);
             BuildSunRayDust(root);
             BuildWindowAccentLights(root);
+            BuildInteriorAccentLights(root);   // BOT-A06
+            BuildWindowGlassOverlays(root);    // BOT-A07
 
-            Debug.Log("[BotanikaAtmosphere] DONE — glass ceiling + dust motes + 2 window accents added.");
+            Debug.Log("[BotanikaAtmosphere] DONE — glass ceiling + dust motes + 2 window accents + 3 interior accents + 8 window overlays.");
+        }
+
+        // ---------- BOT-A06: interior warm accent lights ----------
+        private static void BuildInteriorAccentLights(GameObject parent)
+        {
+            // Three focused warm point lights на ключевые NPC stations для
+            // «islands of warmth» эффекта (ART_BIBLE §4.1 — warm pools of light
+            // между cool shadows). Server rack уже имеет 3 cool blinking LEDs
+            // как contrasting accent, поэтому здесь только warm interior pools.
+            var warmColor = new Color(1.0f, 0.82f, 0.52f);  // accent1 direction
+            CreatePointLight(parent, "Accent_CoffeeTable", new Vector3(0f, 2.0f, 1.8f),
+                warmColor, 1.8f, 5f);
+            CreatePointLight(parent, "Accent_NikolaiCorner", new Vector3(-4.2f, 2.5f, 4.3f),
+                warmColor, 1.4f, 4f);
+            CreatePointLight(parent, "Accent_KirillKitchen", new Vector3(3.8f, 2.3f, 2.2f),
+                new Color(1.0f, 0.78f, 0.48f), 1.3f, 3.5f);  // slightly more orange (kitchen)
+        }
+
+        // ---------- BOT-A07: window glass overlays ----------
+        private static void BuildWindowGlassOverlays(GameObject parent)
+        {
+            // Place thin glass quads in front of each wallWindow tile so the
+            // greenhouse has actual visible transparent glass, not just opaque
+            // walls with window-shaped openings. Mirrors greenhouseShell window
+            // slots from BotanikaDresser.BuildGreenhouseShell: pattern every 3rd
+            // tile in each wall axis, offset (+5, +5, -5, -5) from origin.
+            var glassMat = GetOrCreateGlassMaterial();
+
+            // North wall (z=+5.5), faces south (-Z), windows at x where (x+5)%3==1
+            // x ∈ [-5,5] integers → windows at x=-4, -1, 2, 5
+            PlaceWindowOverlay(parent, glassMat, "NorthWindow_xneg4", new Vector3(-4f, 1.5f, 5.4f), Quaternion.Euler(0f, 0f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "NorthWindow_xneg1", new Vector3(-1f, 1.5f, 5.4f), Quaternion.Euler(0f, 0f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "NorthWindow_x2",    new Vector3(2f,  1.5f, 5.4f), Quaternion.Euler(0f, 0f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "NorthWindow_x5",    new Vector3(5f,  1.5f, 5.4f), Quaternion.Euler(0f, 0f, 0f));
+
+            // East wall (x=+5.5), faces west (-X), windows at z where (z+5)%3==2
+            // z ∈ [-5,5] → windows at z=-3, 0, 3
+            PlaceWindowOverlay(parent, glassMat, "EastWindow_zneg3", new Vector3(5.4f, 1.5f, -3f), Quaternion.Euler(0f, 90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "EastWindow_z0",    new Vector3(5.4f, 1.5f,  0f), Quaternion.Euler(0f, 90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "EastWindow_z3",    new Vector3(5.4f, 1.5f,  3f), Quaternion.Euler(0f, 90f, 0f));
+
+            // West wall (x=-5.5), windows at z where (z+5)%3==1 → z=-4, -1, 2, 5
+            PlaceWindowOverlay(parent, glassMat, "WestWindow_zneg4", new Vector3(-5.4f, 1.5f, -4f), Quaternion.Euler(0f, -90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "WestWindow_zneg1", new Vector3(-5.4f, 1.5f, -1f), Quaternion.Euler(0f, -90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "WestWindow_z2",    new Vector3(-5.4f, 1.5f,  2f), Quaternion.Euler(0f, -90f, 0f));
+        }
+
+        private static void PlaceWindowOverlay(GameObject parent, Material glassMat, string name,
+            Vector3 worldPos, Quaternion worldRot)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            go.name = name;
+            go.transform.SetParent(parent.transform, false);
+            go.transform.position = worldPos;
+            go.transform.rotation = worldRot;
+            go.transform.localScale = new Vector3(0.9f, 1.6f, 1f);  // window pane dims
+            var rend = go.GetComponent<Renderer>();
+            if (rend != null) rend.sharedMaterial = glassMat;
+            var col = go.GetComponent<Collider>();
+            if (col != null) Object.DestroyImmediate(col);
         }
 
         private static Material GetOrCreateGlassMaterial()
@@ -279,6 +341,8 @@ namespace Afterhumans.EditorTools
 
         /// <summary>
         /// BOT-T01 integration: verifies atmosphere layer objects exist.
+        /// Includes A04 (glass, dust, window accents) + A06 (interior accents)
+        /// + A07 (window overlays).
         /// </summary>
         public static bool Verify(out string reason)
         {
@@ -296,10 +360,34 @@ namespace Afterhumans.EditorTools
             var ps = dust.GetComponent<ParticleSystem>();
             if (ps == null) { reason = "SunRayDust has no ParticleSystem"; return false; }
 
-            var eastAcc = GameObject.Find("WindowAccent_East");
-            if (eastAcc == null) { reason = "WindowAccent_East missing"; return false; }
-            var northAcc = GameObject.Find("WindowAccent_North");
-            if (northAcc == null) { reason = "WindowAccent_North missing"; return false; }
+            // A04 window accent lights
+            string[] lightNames = { "WindowAccent_East", "WindowAccent_North",
+                // A06 interior accents
+                "Accent_CoffeeTable", "Accent_NikolaiCorner", "Accent_KirillKitchen" };
+            foreach (var n in lightNames)
+            {
+                var go = GameObject.Find(n);
+                if (go == null) { reason = $"{n} missing"; return false; }
+                var l = go.GetComponent<Light>();
+                if (l == null) { reason = $"{n} has no Light component"; return false; }
+            }
+
+            // A07 window overlays — at least 10 overlay quads expected
+            int overlayCount = 0;
+            string[] overlayPrefixes = { "NorthWindow_", "EastWindow_", "WestWindow_" };
+            var allGos = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+            foreach (var go in allGos)
+            {
+                foreach (var p in overlayPrefixes)
+                {
+                    if (go.name.StartsWith(p)) { overlayCount++; break; }
+                }
+            }
+            if (overlayCount < 10)
+            {
+                reason = $"Window glass overlays count={overlayCount} expected >=10";
+                return false;
+            }
 
             reason = "OK";
             return true;
