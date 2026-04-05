@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -17,13 +18,34 @@ namespace Afterhumans.EditorTools
     /// </summary>
     public static class BuildScript
     {
-        private static readonly string[] Scenes = {
-            "Assets/_Project/Scenes/Scene_MainMenu.unity",
-            "Assets/_Project/Scenes/Scene_Botanika.unity",
-            "Assets/_Project/Scenes/Scene_City.unity",
-            "Assets/_Project/Scenes/Scene_Desert.unity",
-            "Assets/_Project/Scenes/Scene_Credits.unity",
-        };
+        /// <summary>
+        /// Get scenes from EditorBuildSettings (respects manual reorder via ProjectSetup.SetBotanikaFirstForTesting).
+        /// Falls back to hardcoded order if no enabled scenes in settings.
+        /// </summary>
+        private static string[] GetScenes()
+        {
+            var enabled = EditorBuildSettings.scenes
+                .Where(s => s.enabled && !string.IsNullOrEmpty(s.path))
+                .Select(s => s.path)
+                .ToArray();
+
+            if (enabled.Length > 0)
+            {
+                Debug.Log($"[BuildScript] Using {enabled.Length} scenes from EditorBuildSettings:");
+                foreach (var s in enabled) Debug.Log($"  - {s}");
+                return enabled;
+            }
+
+            Debug.LogWarning("[BuildScript] No enabled scenes in EditorBuildSettings, using hardcoded fallback");
+            return new[]
+            {
+                "Assets/_Project/Scenes/Scene_Botanika.unity",
+                "Assets/_Project/Scenes/Scene_MainMenu.unity",
+                "Assets/_Project/Scenes/Scene_City.unity",
+                "Assets/_Project/Scenes/Scene_Desert.unity",
+                "Assets/_Project/Scenes/Scene_Credits.unity",
+            };
+        }
 
         [MenuItem("Afterhumans/Build macOS (Apple Silicon)")]
         public static void BuildMacOS()
@@ -45,7 +67,7 @@ namespace Afterhumans.EditorTools
 
             var options = new BuildPlayerOptions
             {
-                scenes = Scenes,
+                scenes = GetScenes(),
                 locationPathName = outputPath,
                 target = BuildTarget.StandaloneOSX,
                 options = BuildOptions.None
