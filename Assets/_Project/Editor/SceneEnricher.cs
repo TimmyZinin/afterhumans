@@ -25,10 +25,12 @@ namespace Afterhumans.EditorTools
     {
         private const string ScenesDir = "Assets/_Project/Scenes";
 
+        // NPC knot MUST be a top-level knot (=== name ===) in dataland.ink, not a stitch (= name).
+        // Ink.Story.ChoosePathString() only resolves top-level paths.
         private static readonly (string scene, string npcKnot, string npcName)[] GameScenes = new[]
         {
-            ("Scene_Botanika", "sasha_first", "Placeholder_NPC_Sasha"),
-            ("Scene_City", "dmitriy_first", "Placeholder_NPC_Dmitriy"),
+            ("Scene_Botanika", "sasha", "Placeholder_NPC_Sasha"),
+            ("Scene_City", "dmitriy", "Placeholder_NPC_Dmitriy"),
             ("Scene_Desert", "cursor", "Placeholder_Cursor"),
         };
 
@@ -102,7 +104,9 @@ namespace Afterhumans.EditorTools
                 player.tag = "Player";
             }
 
-            player.transform.position = new Vector3(0f, 1.1f, -3f);
+            // Spawn 2m in front of the placeholder NPC (which sits at (2, 1, 3))
+            // so the player can see and reach it immediately in the walking skeleton.
+            player.transform.position = new Vector3(2f, 1.1f, 0f);
             player.transform.rotation = Quaternion.identity;
 
             // CharacterController — use Undo.AddComponent for proper Editor serialization
@@ -171,6 +175,30 @@ namespace Afterhumans.EditorTools
             {
                 camGO.AddComponent<AudioListener>();
             }
+
+            // PlayerInteraction — raycasts from camera forward, listens for E press
+            var interaction = player.GetComponent<PlayerInteraction>();
+            if (interaction == null)
+            {
+                interaction = Undo.AddComponent<PlayerInteraction>(player);
+            }
+            if (interaction != null)
+            {
+                var soInt = new SerializedObject(interaction);
+                var camProp = soInt.FindProperty("playerCamera");
+                if (camProp != null) camProp.objectReferenceValue = cam;
+                var distProp = soInt.FindProperty("maxDistance");
+                if (distProp != null) distProp.floatValue = 5f;
+                var hudProp = soInt.FindProperty("showDebugHud");
+                if (hudProp != null) hudProp.boolValue = true;
+                soInt.ApplyModifiedPropertiesWithoutUndo();
+                Debug.Log($"[SceneEnricher] Wired PlayerInteraction in {sceneName} (cam+maxDistance=5+HUD)");
+            }
+            else
+            {
+                Debug.LogError($"[SceneEnricher] FAILED to add PlayerInteraction in {sceneName}");
+            }
+            EditorUtility.SetDirty(player);
 
             // Walls around 50×50 ground to prevent falling off
             CreateBoundaryWalls(sceneName);

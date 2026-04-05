@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Ink.Runtime;
 using TMPro;
 using UnityEngine;
-using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Afterhumans.Dialogue
@@ -22,50 +21,49 @@ namespace Afterhumans.Dialogue
 
         [Header("Typewriter")]
         [SerializeField] private float charsPerSecond = 30f;
-        [SerializeField] private InputActionReference continueAction;
-        [SerializeField] private InputActionReference skipAction;
 
         private Coroutine _typingCoroutine;
         private string _fullLine;
         private bool _isTyping;
         private List<Button> _activeChoices = new List<Button>();
+        private bool _subscribed;
 
         private void Awake()
         {
             if (panel != null) panel.SetActive(false);
         }
 
-        private void OnEnable()
+        private void Start()
         {
-            if (DialogueManager.Instance != null)
-            {
-                DialogueManager.Instance.OnDialogueLine += HandleLine;
-                DialogueManager.Instance.OnDialogueChoices += HandleChoices;
-                DialogueManager.Instance.OnDialogueEnd += HandleEnd;
-            }
+            TrySubscribe();
+        }
 
-            if (continueAction != null)
-            {
-                continueAction.action.performed += OnContinue;
-                continueAction.action.Enable();
-            }
-            if (skipAction != null)
-            {
-                skipAction.action.performed += OnSkip;
-                skipAction.action.Enable();
-            }
+        private void Update()
+        {
+            // Lazy subscribe in case DialogueManager wasn't ready at Start.
+            if (!_subscribed) TrySubscribe();
+        }
+
+        private void TrySubscribe()
+        {
+            if (_subscribed) return;
+            if (DialogueManager.Instance == null) return;
+            DialogueManager.Instance.OnDialogueLine += HandleLine;
+            DialogueManager.Instance.OnDialogueChoices += HandleChoices;
+            DialogueManager.Instance.OnDialogueEnd += HandleEnd;
+            _subscribed = true;
+            Debug.Log("[DialogueUI] Subscribed to DialogueManager events");
         }
 
         private void OnDisable()
         {
-            if (DialogueManager.Instance != null)
+            if (_subscribed && DialogueManager.Instance != null)
             {
                 DialogueManager.Instance.OnDialogueLine -= HandleLine;
                 DialogueManager.Instance.OnDialogueChoices -= HandleChoices;
                 DialogueManager.Instance.OnDialogueEnd -= HandleEnd;
+                _subscribed = false;
             }
-            if (continueAction != null) continueAction.action.performed -= OnContinue;
-            if (skipAction != null) skipAction.action.performed -= OnSkip;
         }
 
         private void HandleLine(string line)
@@ -74,7 +72,8 @@ namespace Afterhumans.Dialogue
             ClearChoices();
             _fullLine = line;
             if (_typingCoroutine != null) StopCoroutine(_typingCoroutine);
-            _typingCoroutine = StartCoroutine(TypeLine(line));
+            if (isActiveAndEnabled)
+                _typingCoroutine = StartCoroutine(TypeLine(line));
         }
 
         private IEnumerator TypeLine(string text)
@@ -133,12 +132,15 @@ namespace Afterhumans.Dialogue
             if (panel != null) panel.SetActive(false);
         }
 
-        private void OnContinue(InputAction.CallbackContext ctx)
+        /// <summary>
+        /// Called from PlayerInteraction when E/Space is pressed during dialogue.
+        /// If typing, finish the line immediately. Otherwise advance story.
+        /// </summary>
+        public void RequestContinue()
         {
             if (DialogueManager.Instance == null || !DialogueManager.Instance.IsDialogueActive) return;
             if (_isTyping)
             {
-                // Skip typewriter — show full line
                 if (_typingCoroutine != null) StopCoroutine(_typingCoroutine);
                 if (lineText != null) lineText.text = _fullLine;
                 _isTyping = false;
@@ -147,11 +149,6 @@ namespace Afterhumans.Dialogue
             {
                 DialogueManager.Instance.ContinueStory();
             }
-        }
-
-        private void OnSkip(InputAction.CallbackContext ctx)
-        {
-            OnContinue(ctx);
         }
     }
 }

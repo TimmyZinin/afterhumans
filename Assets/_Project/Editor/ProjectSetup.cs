@@ -31,6 +31,53 @@ namespace Afterhumans.EditorTools
         private const string ScenesDir = "Assets/_Project/Scenes";
 
         /// <summary>
+        /// Import TMP Essential Resources (font asset, shaders, default material).
+        /// Without this, any TextMeshProUGUI component crashes with NullReferenceException
+        /// in OnEnable because its m_fontAsset is null.
+        ///
+        /// Call via Unity CLI batchmode:
+        ///   Unity -batchmode -nographics -quit -projectPath ~/afterhumans \
+        ///     -executeMethod Afterhumans.EditorTools.ProjectSetup.ImportTmpEssentials
+        /// </summary>
+        [MenuItem("Afterhumans/Setup/Import TMP Essentials")]
+        public static void ImportTmpEssentials()
+        {
+            // Try ugui package location first (Unity 6)
+            string[] candidates = {
+                "Packages/com.unity.ugui/Package Resources/TMP Essential Resources.unitypackage",
+                "Library/PackageCache/com.unity.ugui@47e51ce530b9/Package Resources/TMP Essential Resources.unitypackage",
+            };
+
+            string found = null;
+            foreach (var c in candidates)
+            {
+                if (File.Exists(c))
+                {
+                    found = c;
+                    break;
+                }
+            }
+
+            // Fallback: search the whole PackageCache
+            if (found == null)
+            {
+                var matches = Directory.GetFiles("Library/PackageCache", "TMP Essential Resources.unitypackage", SearchOption.AllDirectories);
+                if (matches.Length > 0) found = matches[0];
+            }
+
+            if (found == null)
+            {
+                Debug.LogError("[ProjectSetup] TMP Essential Resources.unitypackage not found");
+                return;
+            }
+
+            Debug.Log($"[ProjectSetup] Importing {found}");
+            AssetDatabase.ImportPackage(found, interactive: false);
+            AssetDatabase.Refresh(ImportAssetOptions.ForceSynchronousImport);
+            Debug.Log("[ProjectSetup] ImportPackage call issued");
+        }
+
+        /// <summary>
         /// Compile dataland.ink → dataland.json directly via Ink Compiler API.
         /// Bypasses Ink Unity Integration postprocessor which doesn't fire in batchmode.
         /// </summary>
