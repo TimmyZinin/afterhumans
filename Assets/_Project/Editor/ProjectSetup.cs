@@ -31,6 +31,75 @@ namespace Afterhumans.EditorTools
         private const string ScenesDir = "Assets/_Project/Scenes";
 
         /// <summary>
+        /// Compile dataland.ink → dataland.json directly via Ink Compiler API.
+        /// Bypasses Ink Unity Integration postprocessor which doesn't fire in batchmode.
+        /// </summary>
+        [MenuItem("Afterhumans/Setup/Force Ink Compile")]
+        public static void ForceInkCompile()
+        {
+            const string inkPath = "Assets/Dialogues/dataland.ink";
+            const string jsonPath = "Assets/Dialogues/dataland.json";
+
+            if (!File.Exists(inkPath))
+            {
+                Debug.LogError($"[ProjectSetup] Ink file not found: {inkPath}");
+                return;
+            }
+
+            try
+            {
+                Debug.Log($"[ProjectSetup] Reading Ink source from {inkPath}...");
+                string inkSource = File.ReadAllText(inkPath);
+
+                Debug.Log($"[ProjectSetup] Compiling via Ink.Compiler (warnings as warnings)...");
+                int warningCount = 0;
+                int errorCount = 0;
+                var options = new Ink.Compiler.Options
+                {
+                    sourceFilename = "dataland.ink",
+                    errorHandler = (string message, Ink.ErrorType errorType) =>
+                    {
+                        if (errorType == Ink.ErrorType.Warning)
+                        {
+                            warningCount++;
+                            Debug.LogWarning($"[Ink warning] {message}");
+                        }
+                        else if (errorType == Ink.ErrorType.Error)
+                        {
+                            errorCount++;
+                            Debug.LogError($"[Ink error] {message}");
+                        }
+                        else
+                        {
+                            Debug.Log($"[Ink info] {message}");
+                        }
+                    }
+                };
+
+                var compiler = new Ink.Compiler(inkSource, options);
+                var story = compiler.Compile();
+
+                if (story == null || errorCount > 0)
+                {
+                    Debug.LogError($"[ProjectSetup] Ink compile failed with {errorCount} errors, {warningCount} warnings");
+                    return;
+                }
+
+                string json = story.ToJson();
+                File.WriteAllText(jsonPath, json);
+                AssetDatabase.ImportAsset(jsonPath, ImportAssetOptions.ForceSynchronousImport);
+                AssetDatabase.SaveAssets();
+
+                var jsonSize = new FileInfo(jsonPath).Length;
+                Debug.Log($"[ProjectSetup] Ink compile SUCCEEDED: {jsonPath} ({jsonSize} bytes), {warningCount} warnings");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[ProjectSetup] Ink compile EXCEPTION: {e.Message}\n{e.StackTrace}");
+            }
+        }
+
+        /// <summary>
         /// Reorder BuildSettings so Scene_Botanika is loaded first when .app starts.
         /// Used for walking skeleton testing — MainMenu scene is empty without UI yet.
         /// </summary>
