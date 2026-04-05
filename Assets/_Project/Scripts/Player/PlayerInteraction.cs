@@ -42,13 +42,23 @@ namespace Afterhumans.Player
             var dm = DialogueManager.Instance;
 
             // While dialogue is active, E/Space advances dialogue, no world scan.
+            // BOT-N07: route through DialogueUI.RequestContinue for typewriter
+            // skip-on-first-press + advance-on-second semantics. Direct
+            // ContinueStory() was skipping lines mid-typing without showing them.
             if (dm != null && dm.IsDialogueActive)
             {
                 _currentTarget = null;
                 if (Input.GetKeyDown(interactKey) || Input.GetKeyDown(continueKey))
                 {
                     _lastEvent = "Continue pressed";
-                    dm.ContinueStory();
+                    if (DialogueUI.Instance != null)
+                    {
+                        DialogueUI.Instance.RequestContinue();
+                    }
+                    else
+                    {
+                        dm.ContinueStory();  // fallback if UI not found
+                    }
                 }
                 return;
             }

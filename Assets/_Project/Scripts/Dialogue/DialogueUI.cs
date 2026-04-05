@@ -10,17 +10,24 @@ namespace Afterhumans.Dialogue
     /// <summary>
     /// Canvas-based dialogue UI. Subscribes to DialogueManager events to display
     /// typewriter text, choices, and hide when dialogue ends.
+    ///
+    /// BOT-N06: speaker name prefix — parses "Name: text" pattern at start of
+    /// each line. If present, shows Name in speakerText TMP with accent color.
+    /// BOT-N07: typewriter 22 cps + skip-on-E via RequestContinue().
     /// </summary>
     public class DialogueUI : MonoBehaviour
     {
+        public static DialogueUI Instance { get; private set; }
+
         [Header("UI Refs")]
         [SerializeField] private GameObject panel;
         [SerializeField] private TextMeshProUGUI lineText;
+        [SerializeField] private TextMeshProUGUI speakerText;  // BOT-N06
         [SerializeField] private Transform choicesContainer;
         [SerializeField] private Button choiceButtonPrefab;
 
         [Header("Typewriter")]
-        [SerializeField] private float charsPerSecond = 30f;
+        [SerializeField] private float charsPerSecond = 22f;  // BOT-N07: was 30
 
         private Coroutine _typingCoroutine;
         private string _fullLine;
@@ -30,7 +37,13 @@ namespace Afterhumans.Dialogue
 
         private void Awake()
         {
+            if (Instance == null) Instance = this;
             if (panel != null) panel.SetActive(false);
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
         }
 
         private void Start()
@@ -70,10 +83,44 @@ namespace Afterhumans.Dialogue
         {
             if (panel != null) panel.SetActive(true);
             ClearChoices();
-            _fullLine = line;
+
+            // BOT-N06: parse "Name: text" speaker prefix (handles Cyrillic names)
+            string speaker = null;
+            string content = line;
+            int colonIdx = line.IndexOf(':');
+            if (colonIdx > 0 && colonIdx < 30)
+            {
+                string candidate = line.Substring(0, colonIdx).Trim();
+                // Validate: speaker name contains only letters/spaces (no URLs, no numbers)
+                bool valid = true;
+                foreach (char c in candidate)
+                {
+                    if (!char.IsLetter(c) && c != ' ' && c != '-') { valid = false; break; }
+                }
+                if (valid && candidate.Length >= 2)
+                {
+                    speaker = candidate;
+                    content = line.Substring(colonIdx + 1).TrimStart();
+                }
+            }
+
+            if (speakerText != null)
+            {
+                if (speaker != null)
+                {
+                    speakerText.text = speaker;
+                    speakerText.gameObject.SetActive(true);
+                }
+                else
+                {
+                    speakerText.gameObject.SetActive(false);
+                }
+            }
+
+            _fullLine = content;
             if (_typingCoroutine != null) StopCoroutine(_typingCoroutine);
             if (isActiveAndEnabled)
-                _typingCoroutine = StartCoroutine(TypeLine(line));
+                _typingCoroutine = StartCoroutine(TypeLine(content));
         }
 
         private IEnumerator TypeLine(string text)

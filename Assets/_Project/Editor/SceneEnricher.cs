@@ -309,12 +309,29 @@ namespace Afterhumans.EditorTools
             panelImg.color = new Color(0f, 0f, 0f, 0.7f);
             panelGO.SetActive(false); // hidden until dialogue starts
 
+            // BOT-N06: Speaker name label at top of panel
+            var speakerGO = new GameObject("SpeakerText");
+            speakerGO.transform.SetParent(panelGO.transform, worldPositionStays: false);
+            var speakerRect = Undo.AddComponent<RectTransform>(speakerGO);
+            speakerRect.anchorMin = new Vector2(0.1f, 0.85f);
+            speakerRect.anchorMax = new Vector2(0.5f, 1.0f);
+            speakerRect.offsetMin = Vector2.zero;
+            speakerRect.offsetMax = Vector2.zero;
+            var speakerText = Undo.AddComponent<TextMeshProUGUI>(speakerGO);
+            speakerText.text = "";
+            speakerText.fontSize = 24;
+            speakerText.color = new Color(0.91f, 0.65f, 0.36f);  // ART_BIBLE §3.1 primary amber
+            speakerText.fontStyle = FontStyles.Bold;
+            speakerText.alignment = TextAlignmentOptions.BottomLeft;
+            speakerText.textWrappingMode = TextWrappingModes.NoWrap;
+            speakerGO.SetActive(false);  // hidden until dialogue line has speaker prefix
+
             // Line text (TextMeshProUGUI)
             var textGO = new GameObject("LineText");
             textGO.transform.SetParent(panelGO.transform, worldPositionStays: false);
             var textRect = Undo.AddComponent<RectTransform>(textGO);
             textRect.anchorMin = new Vector2(0.1f, 0.4f);
-            textRect.anchorMax = new Vector2(0.9f, 0.95f);
+            textRect.anchorMax = new Vector2(0.9f, 0.85f);  // below speaker
             textRect.offsetMin = Vector2.zero;
             textRect.offsetMax = Vector2.zero;
             var lineText = Undo.AddComponent<TextMeshProUGUI>(textGO);
@@ -322,7 +339,7 @@ namespace Afterhumans.EditorTools
             lineText.fontSize = 28;
             lineText.color = Color.white;
             lineText.alignment = TextAlignmentOptions.TopLeft;
-            lineText.enableWordWrapping = true;
+            lineText.textWrappingMode = TextWrappingModes.Normal;
 
             // Choices container (vertical layout)
             var choicesGO = new GameObject("ChoicesContainer");
@@ -368,6 +385,8 @@ namespace Afterhumans.EditorTools
             if (panelProp != null) panelProp.objectReferenceValue = panelGO;
             var lineProp = soDui.FindProperty("lineText");
             if (lineProp != null) lineProp.objectReferenceValue = lineText;
+            var speakerProp = soDui.FindProperty("speakerText");
+            if (speakerProp != null) speakerProp.objectReferenceValue = speakerText;
             var choicesProp = soDui.FindProperty("choicesContainer");
             if (choicesProp != null) choicesProp.objectReferenceValue = choicesGO.transform;
             var btnPrefabProp = soDui.FindProperty("choiceButtonPrefab");

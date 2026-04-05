@@ -414,6 +414,9 @@ namespace Afterhumans.EditorTools
             // BOT-A04: volumetric atmosphere (glass ceiling + dust motes + window accents)
             BotanikaAtmosphere.Apply(propsRoot);
 
+            // BOT-N01/02/03/08: 5 humanoid NPCs with procedural idle + facing
+            BotanikaNpcPopulator.Apply(propsRoot);
+
             EditorSceneManager.MarkSceneDirty(scene);
             bool saved = EditorSceneManager.SaveScene(scene, ScenePath);
             if (saved)
