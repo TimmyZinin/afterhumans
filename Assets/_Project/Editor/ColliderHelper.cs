@@ -46,6 +46,31 @@ namespace Afterhumans.EditorTools
         }
 
         /// <summary>
+        /// BOT-F10 verification menu: counts static-marked GameObjects в открытой
+        /// сцене и логгирует sum для validation что batching setup работает.
+        /// Complement to Frame Debugger runtime check.
+        /// </summary>
+        [MenuItem("Afterhumans/Debug/Verify Static Flags")]
+        public static void VerifyStaticFlags()
+        {
+            int total = 0;
+            int batching = 0;
+            int occluder = 0;
+            int contributeGI = 0;
+            var all = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+            foreach (var go in all)
+            {
+                if (go.scene.IsValid() == false) continue;
+                var flags = GameObjectUtility.GetStaticEditorFlags(go);
+                total++;
+                if ((flags & StaticEditorFlags.BatchingStatic) != 0) batching++;
+                if ((flags & StaticEditorFlags.OccluderStatic) != 0) occluder++;
+                if ((flags & StaticEditorFlags.ContributeGI) != 0) contributeGI++;
+            }
+            Debug.Log($"[ColliderHelper.VerifyStaticFlags] total GO in scene: {total} | BatchingStatic: {batching} | OccluderStatic: {occluder} | ContributeGI: {contributeGI}");
+        }
+
+        /// <summary>
         /// Adds a BoxCollider sized to the combined renderer bounds of the instance.
         /// Skips decorative props (grass, flowers, small plants) — no collider at all.
         /// If instance already has a collider, does nothing.

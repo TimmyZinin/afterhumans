@@ -102,7 +102,14 @@ namespace Afterhumans.EditorTools
             }
 
             Debug.Log($"[UrpActivation] URP pipeline: {GraphicsSettings.currentRenderPipeline?.name ?? "null"}");
-            Debug.Log("[UrpActivation] === Done. Next step: run ConvertMaterialsToUrp to fix magenta. ===");
+
+            // mm-review polish: auto-chain material conversion чтобы Activate() был
+            // self-sufficient (раньше юзер должен был запустить ConvertMaterialsToUrp
+            // отдельно, что легко забыть и остаться с magenta materials).
+            Debug.Log("[UrpActivation] Auto-running ConvertMaterialsToUrp step 2...");
+            ConvertMaterialsToUrp();
+
+            Debug.Log("[UrpActivation] === Done. URP active + materials converted. ===");
         }
 
         /// <summary>

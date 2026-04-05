@@ -93,14 +93,16 @@ namespace Afterhumans.Art
             volume.priority = 0f;
         }
 
-        // mm-review HIGH fix: clear SceneTheme.Active static ref on scene unload
-        // to avoid stale reference через Editor domain reload + scene transitions.
+        // mm-review polish pass: explicitly clear SceneTheme.Active static ref
+        // if our theme still points to it. Next scene's ThemeLoader.Awake will
+        // MakeActive its own theme на загрузке, но в window между scene unload
+        // и new Awake — Active должен быть null чтобы detection static ref
+        // leaks работал правильно (и чтобы Editor domain reload давал clean state).
         private void OnDestroy()
         {
             if (theme != null && SceneTheme.Active == theme)
             {
-                // Don't null out entirely — next scene's ThemeLoader will MakeActive
-                // its own theme. But clear reference if we are the last known active.
+                SceneTheme.ClearActive();
             }
         }
     }

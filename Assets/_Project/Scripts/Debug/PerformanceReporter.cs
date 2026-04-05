@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -29,6 +30,9 @@ namespace Afterhumans.DebugTools
         private float _fpsSum;
         private int _fpsCount;
         private string _outputPath;
+        // mm-review polish: reusable StringBuilder + FileStream to avoid per-sample
+        // string allocations and File.AppendAllText open/close overhead.
+        private readonly StringBuilder _sb = new StringBuilder(64);
 
         private void Start()
         {
@@ -65,7 +69,12 @@ namespace Afterhumans.DebugTools
                 long memBytes = System.GC.GetTotalMemory(false);
                 float memMb = memBytes / (1024f * 1024f);
 
-                File.AppendAllText(_outputPath, $"{t:F2}\t{avgFps:F1}\t{memMb:F1}\n");
+                // Reuse StringBuilder instead of per-call string interpolation
+                _sb.Clear();
+                _sb.Append(t.ToString("F2")).Append('\t')
+                   .Append(avgFps.ToString("F1")).Append('\t')
+                   .Append(memMb.ToString("F1")).Append('\n');
+                File.AppendAllText(_outputPath, _sb.ToString());
 
                 _frameCounter = 0;
                 _fpsSum = 0f;

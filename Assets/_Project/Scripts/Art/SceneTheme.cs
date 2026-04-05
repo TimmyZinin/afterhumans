@@ -92,5 +92,15 @@ namespace Afterhumans.Art
         {
             Active = this;
         }
+
+        /// <summary>
+        /// mm-review polish: clear static Active reference on scene unload so
+        /// Editor domain reload + scene transitions don't leave stale references.
+        /// Called from ThemeLoader.OnDestroy when owning theme matches Active.
+        /// </summary>
+        public static void ClearActive()
+        {
+            Active = null;
+        }
     }
 }
