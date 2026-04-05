@@ -36,11 +36,29 @@ namespace Afterhumans.Art
         private void Awake()
         {
             _light = GetComponent<Light>();
+            // mm-review MEDIUM fix: sanitize inverted min/max range to avoid
+            // silent wrong-direction oscillation. Swap values if user set them
+            // inverted in inspector — better to fix at runtime than to render
+            // wrong for hours before noticing.
+            if (minIntensity > maxIntensity)
+            {
+                float tmp = minIntensity;
+                minIntensity = maxIntensity;
+                maxIntensity = tmp;
+                Debug.LogWarning($"[BlinkingLight] {gameObject.name}: min>max intensity swapped to {minIntensity}..{maxIntensity}");
+            }
         }
 
         private void Update()
         {
-            if (_light == null) return;
+            // mm-review HIGH safety: if Light destroyed at runtime (scene unload,
+            // object pool recycle), _light becomes null reference — skip silently.
+            if (_light == null)
+            {
+                // Try to re-acquire in case Awake ran before Light was added
+                _light = GetComponent<Light>();
+                if (_light == null) return;
+            }
             if (cyclePeriod <= 0.01f) return;
 
             float t = (Time.time / cyclePeriod) + phase;

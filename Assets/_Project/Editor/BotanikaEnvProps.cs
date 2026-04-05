@@ -53,7 +53,18 @@ namespace Afterhumans.EditorTools
 
             InitAccentMaterials();
 
-            // Parent subgroup to keep scene hierarchy tidy
+            // mm-review CRITICAL fix: idempotent parent — if Env_StoryProps
+            // exists from a previous Apply call without BotanikaDresser cleanup,
+            // destroy it first to prevent duplicate "ServerRack (1)" siblings.
+            // Defensive: BotanikaDresser already clears Botanika_Props root each
+            // Dress() call, but direct calls to Apply() or cleanup failures
+            // would still leak without this check.
+            var existingEnv = propsRoot.transform.Find("Env_StoryProps");
+            if (existingEnv != null)
+            {
+                Object.DestroyImmediate(existingEnv.gameObject);
+            }
+
             var envRoot = new GameObject("Env_StoryProps");
             envRoot.transform.SetParent(propsRoot.transform, worldPositionStays: false);
 
@@ -179,6 +190,19 @@ namespace Afterhumans.EditorTools
             tmp.alignment = TextAlignmentOptions.Center;
             tmp.fontStyle = FontStyles.Bold;
             tmp.textWrappingMode = TextWrappingModes.NoWrap;
+            // mm-review MEDIUM fix: explicitly bind default TMP font asset so
+            // the graffiti mesh renders even if TMP_Settings.defaultFontAsset
+            // is unset or Essentials missing. LiberationSans SDF ships with TMP.
+            if (tmp.font == null)
+            {
+                var defaultFont = TMP_Settings.defaultFontAsset;
+                if (defaultFont == null)
+                {
+                    defaultFont = Resources.Load<TMP_FontAsset>("Fonts & Materials/LiberationSans SDF");
+                }
+                if (defaultFont != null) tmp.font = defaultFont;
+                else Debug.LogWarning("[BotanikaEnvProps] No TMP font asset available for Graffiti_Segfault — text may not render.");
+            }
             // Bounding rect so text has width — TMP 3D sizes by rect transform
             var rect = go.GetComponent<RectTransform>();
             if (rect != null) rect.sizeDelta = new Vector2(3.5f, 1.0f);
@@ -326,6 +350,16 @@ namespace Afterhumans.EditorTools
             ColliderHelper.MarkStaticProp(instance);
         }
 
+        /// <summary>
+        /// Uniform-tint material assignment (matches base BotanikaDresser pattern).
+        ///
+        /// mm-review MEDIUM context: this overwrites ALL submesh material slots
+        /// with a single material. This is INTENTIONAL for our stylized look —
+        /// Kenney FBX don't bundle textures, so multi-submesh models need uniform
+        /// tint to appear as one coherent material rather than hot-pink missing-mat.
+        /// If a future prop needs per-submesh materials, add a dedicated assignment
+        /// helper alongside this one rather than extending AssignMaterial.
+        /// </summary>
         private static void AssignMaterial(GameObject go, Material mat)
         {
             if (go == null || mat == null) return;
