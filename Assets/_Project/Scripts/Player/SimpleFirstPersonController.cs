@@ -53,8 +53,8 @@ namespace Afterhumans.Player
         private void Start()
         {
             // Lock cursor and hide — first-person standard
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            UnityEngine.Cursor.lockState = CursorLockMode.Locked;
+            UnityEngine.Cursor.visible = false;
         }
 
         private void Update()
@@ -127,8 +127,8 @@ namespace Afterhumans.Player
             // Escape unlocks cursor (for dev / debugging)
             if (Input.GetKeyDown(KeyCode.Escape))
             {
-                Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
+                UnityEngine.Cursor.lockState = CursorLockMode.None;
+                UnityEngine.Cursor.visible = true;
             }
         }
     }
