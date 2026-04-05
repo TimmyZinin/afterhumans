@@ -70,7 +70,7 @@ namespace Afterhumans.Kafka
         private void DisplaySubtitle(string text)
         {
             // Hook into DialogueManager line event so subtitles appear in the same UI
-            DialogueManager.Instance?.OnDialogueLine?.Invoke($"<i>{text}</i>");
+            DialogueManager.Instance?.EmitLine($"<i>{text}</i>");
         }
 
         private void TriggerRandomAnimation()

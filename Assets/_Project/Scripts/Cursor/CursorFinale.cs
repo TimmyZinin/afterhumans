@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using Afterhumans.Dialogue;
+using Afterhumans.Scenes;
 
 namespace Afterhumans.Cursor
 {
@@ -21,7 +22,6 @@ namespace Afterhumans.Cursor
         [SerializeField] private Camera playerCamera;
         [SerializeField] private float baseFov = 65f;
         [SerializeField] private float focusFov = 50f;
-        [SerializeField] private float zoomDuration = 3f;
 
         [Header("Cursor Visuals")]
         [SerializeField] private float blinkInterval = 1f;

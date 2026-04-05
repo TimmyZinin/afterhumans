@@ -124,6 +124,15 @@ namespace Afterhumans.Dialogue
         }
 
         /// <summary>
+        /// Emit a line to the dialogue UI without going through Ink.
+        /// Used by Kafka reactions and other standalone subtitle sources.
+        /// </summary>
+        public void EmitLine(string line)
+        {
+            OnDialogueLine?.Invoke(line);
+        }
+
+        /// <summary>
         /// Get a boolean variable from the Ink story state (for gate logic etc).
         /// </summary>
         public bool GetBoolVar(string name)

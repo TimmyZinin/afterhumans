@@ -3,6 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using Afterhumans.Scenes;
+using Afterhumans.Managers;
 
 namespace Afterhumans.UI
 {
