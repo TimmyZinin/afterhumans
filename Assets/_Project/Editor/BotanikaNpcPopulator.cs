@@ -1,3 +1,4 @@
+using TMPro;
 using UnityEditor;
 using UnityEngine;
 using Afterhumans.Art;
@@ -179,7 +180,44 @@ namespace Afterhumans.EditorTools
                 facing.turnOnInteract = true;
             }
 
+            // BOT-N05: worldspace hover prompt «[E] говорить»
+            SpawnPrompt(instance, spec.promptText, spec.interactRadius);
+
             return true;
+        }
+
+        private static void SpawnPrompt(GameObject npc, string text, float radius)
+        {
+            var promptGo = new GameObject("InteractionPrompt");
+            promptGo.transform.SetParent(npc.transform, worldPositionStays: false);
+            promptGo.transform.localPosition = new Vector3(0f, 2.2f, 0f);  // above head
+
+            var canvas = promptGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.sortingOrder = 50;
+            var rect = promptGo.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(2f, 0.5f);
+            rect.localScale = Vector3.one * 0.01f;  // world-space 1px = 0.01 units
+
+            var textGo = new GameObject("PromptText");
+            textGo.transform.SetParent(promptGo.transform, worldPositionStays: false);
+            var textRect = textGo.AddComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
+
+            var tmp = textGo.AddComponent<TextMeshProUGUI>();
+            tmp.text = $"[E] {text}";
+            tmp.fontSize = 28;
+            tmp.color = new Color(1f, 0.92f, 0.7f);  // warm cream
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.fontStyle = FontStyles.Bold;
+            tmp.textWrappingMode = TextWrappingModes.NoWrap;
+
+            var prompt = promptGo.AddComponent<InteractionPromptUI>();
+            prompt.showRadius = radius + 1f;  // show slightly before interact range
+            prompt.fadeSpeed = 5f;
         }
 
         /// <summary>
