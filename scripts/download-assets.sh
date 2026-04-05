@@ -50,6 +50,13 @@ download \
     "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/rogland_sunset_2k.hdr" \
     "$VENDOR/PolyHaven/rogland_sunset_2k.hdr"
 
+# Poly Haven HDRI (CC0) — Botanika golden hour (BOT-A02)
+# Matches STORY §3.1 "тихий оазис, afternoon sun". Alternative more dramatic:
+# the_sky_is_on_fire_2k.hdr, venice_sunset_2k.hdr
+download \
+    "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/2k/kloppenheim_06_puresky_2k.hdr" \
+    "$VENDOR/PolyHaven/kloppenheim_06_puresky_2k.hdr"
+
 # Extract Kenney zips
 echo ""
 echo "=== Extract Kenney packs ==="
