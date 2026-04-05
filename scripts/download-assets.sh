@@ -29,7 +29,9 @@ download() {
         return 0
     fi
     echo "DOWNLOAD: $(basename "$out")"
-    curl -sL -o "$out" "$url" && echo "  OK ($(ls -lh "$out" | awk '{print $5}'))" || echo "  FAIL"
+    # User-Agent required — Poly Haven CDN rejects empty/curl UA (mm-review HIGH fix)
+    curl -sL -A "Mozilla/5.0 (afterhumans asset bootstrap)" -o "$out" "$url" \
+        && echo "  OK ($(ls -lh "$out" | awk '{print $5}'))" || echo "  FAIL"
 }
 
 # Kenney packs (CC0)

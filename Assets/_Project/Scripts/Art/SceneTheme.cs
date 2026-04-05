@@ -48,6 +48,13 @@ namespace Afterhumans.Art
         [Header("Ambient")]
         public Color ambientLight = new Color(0.58f, 0.48f, 0.34f);
         public float ambientIntensity = 1.25f;
+        // AmbientMode.Flat (vs Skybox) is intentional choice for stylized control:
+        // `game-art` §4.1 — we want warm ambient glow from a palette-driven color,
+        // NOT HDRI-derived sky contribution which would cool the scene at dusk/dawn.
+        // For Botanika: golden-hour HDRI in skybox is VISUAL ONLY (through windows),
+        // while ambient glow is artist-tuned via SceneTheme.ambientLight.
+        // If baked GI (BOT-A09) is added later, lightmap bounce will carry warm tint
+        // from materials, not skybox — so Flat stays correct even with GI.
         public AmbientMode ambientMode = AmbientMode.Flat;
 
         [Header("Fog (ART_BIBLE §4.1)")]
@@ -59,6 +66,10 @@ namespace Afterhumans.Art
         [Header("Sky")]
         [Tooltip("Skybox material; if null, camera clearColor = fogColor")]
         public Material skyboxMaterial;
+        [Tooltip("Yaw rotation of skybox in degrees (0..360). Controls where the sun appears relative to scene axes.")]
+        [Range(0f, 360f)] public float skyboxRotation = 0f;
+        [Tooltip("HDR exposure multiplier for skybox. 1.0 = neutral. Use >1 to lift warmth for golden hour scenes.")]
+        [Range(0f, 8f)] public float skyboxExposure = 1f;
 
         [Header("Camera")]
         [Tooltip("Default camera FOV for this scene")]
