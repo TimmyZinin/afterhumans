@@ -82,6 +82,14 @@ Icon?
 # Downloaded asset archives (too big for git)
 Assets/Vendor/downloads/
 
+# External vendor assets (each developer downloads via scripts/download-assets.sh)
+Assets/_Project/Vendor/Kenney/
+Assets/_Project/Vendor/PolyHaven/
+Assets/_Project/Vendor/Mixamo/
+Assets/_Project/Vendor/Sketchfab/
+Assets/_Project/Vendor/Quaternius/
+Assets/_Project/Vendor/Megascans/
+
 # Env / secrets
 .env
 .env.local
