@@ -8,6 +8,7 @@ using TMPro;
 using Afterhumans.Player;
 using Afterhumans.Dialogue;
 using Afterhumans.Kafka;
+using Afterhumans.Scenes;
 
 namespace Afterhumans.EditorTools
 {
@@ -28,11 +29,12 @@ namespace Afterhumans.EditorTools
 
         // NPC knot MUST be a top-level knot (=== name ===) in dataland.ink, not a stitch (= name).
         // Ink.Story.ChoosePathString() only resolves top-level paths.
-        private static readonly (string scene, string npcKnot, string npcName)[] GameScenes = new[]
+        // targetScene is the next scene the exit trigger should load (null = no trigger).
+        private static readonly (string scene, string npcKnot, string npcName, string targetScene, Vector3 exitPos)[] GameScenes = new[]
         {
-            ("Scene_Botanika", "sasha", "Placeholder_NPC_Sasha"),
-            ("Scene_City", "dmitriy", "Placeholder_NPC_Dmitriy"),
-            ("Scene_Desert", "cursor", "Placeholder_Cursor"),
+            ("Scene_Botanika", "sasha",   "Placeholder_NPC_Sasha",    "Scene_City",    new Vector3(0f, 1f, 12f)),
+            ("Scene_City",     "dmitriy", "Placeholder_NPC_Dmitriy",  "Scene_Desert",  new Vector3(0f, 1f, 14f)),
+            ("Scene_Desert",   "cursor",  "Placeholder_Cursor",       "Scene_Credits", new Vector3(0f, 1f, 16f)),
         };
 
         [MenuItem("Afterhumans/Setup/Enrich All Scenes")]
@@ -40,7 +42,7 @@ namespace Afterhumans.EditorTools
         {
             Debug.Log("[SceneEnricher] Starting enrichment...");
 
-            foreach (var (scene, npcKnot, npcName) in GameScenes)
+            foreach (var (scene, npcKnot, npcName, targetScene, exitPos) in GameScenes)
             {
                 string path = $"{ScenesDir}/{scene}.unity";
                 if (!File.Exists(path))
@@ -52,7 +54,7 @@ namespace Afterhumans.EditorTools
                 Debug.Log($"[SceneEnricher] Opening {scene}...");
                 var sceneObj = EditorSceneManager.OpenScene(path, OpenSceneMode.Single);
 
-                EnrichScene(sceneObj, scene, npcKnot, npcName);
+                EnrichScene(sceneObj, scene, npcKnot, npcName, targetScene, exitPos);
 
                 // Force flush all changes before save
                 EditorSceneManager.MarkSceneDirty(sceneObj);
@@ -85,7 +87,7 @@ namespace Afterhumans.EditorTools
             Debug.Log("[SceneEnricher] Done.");
         }
 
-        private static void EnrichScene(Scene scene, string sceneName, string npcKnot, string npcName)
+        private static void EnrichScene(Scene scene, string sceneName, string npcKnot, string npcName, string targetScene, Vector3 exitPos)
         {
             // Remove stock Main Camera — we'll create our own on the Player
             foreach (var root in scene.GetRootGameObjects())
@@ -212,6 +214,9 @@ namespace Afterhumans.EditorTools
 
             // Dialogue system: DialogueManager singleton + Canvas UI
             CreateDialogueSystem();
+
+            // Scene transition fade overlay + exit trigger to next scene
+            CreateSceneTransitionAndExit(targetScene, exitPos);
 
             EditorSceneManager.MarkSceneDirty(scene);
         }
@@ -396,6 +401,65 @@ namespace Afterhumans.EditorTools
                     mat.color = new Color(0.2f, 0.2f, 0.2f, 1f);
                     rend.sharedMaterial = mat;
                 }
+            }
+        }
+
+        private static void CreateSceneTransitionAndExit(string targetScene, Vector3 exitPos)
+        {
+            // --- 1. SceneTransition GameObject with its own Canvas + fade Image
+            var existingTransition = GameObject.Find("SceneTransition");
+            if (existingTransition != null) Object.DestroyImmediate(existingTransition);
+
+            var transitionGO = new GameObject("SceneTransition");
+            var canvasGO = new GameObject("FadeCanvas");
+            canvasGO.transform.SetParent(transitionGO.transform, worldPositionStays: false);
+            var canvas = Undo.AddComponent<Canvas>(canvasGO);
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 500; // above dialogue UI
+            Undo.AddComponent<CanvasScaler>(canvasGO).uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            canvasGO.GetComponent<CanvasScaler>().referenceResolution = new Vector2(1920, 1080);
+            Undo.AddComponent<GraphicRaycaster>(canvasGO);
+
+            var fadeGO = new GameObject("FadeImage");
+            fadeGO.transform.SetParent(canvasGO.transform, worldPositionStays: false);
+            var fadeRect = Undo.AddComponent<RectTransform>(fadeGO);
+            fadeRect.anchorMin = Vector2.zero;
+            fadeRect.anchorMax = Vector2.one;
+            fadeRect.offsetMin = Vector2.zero;
+            fadeRect.offsetMax = Vector2.zero;
+            var fadeImg = Undo.AddComponent<Image>(fadeGO);
+            fadeImg.color = new Color(0f, 0f, 0f, 0f);
+            fadeImg.raycastTarget = false;
+
+            var transition = Undo.AddComponent<SceneTransition>(transitionGO);
+            var so = new SerializedObject(transition);
+            var fadeProp = so.FindProperty("fadeOverlay");
+            if (fadeProp != null)
+            {
+                fadeProp.objectReferenceValue = fadeImg;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            // --- 2. Exit trigger box placed near the scene's forward edge
+            if (!string.IsNullOrEmpty(targetScene))
+            {
+                var existingExit = GameObject.Find("Scene_Exit_Trigger");
+                if (existingExit != null) Object.DestroyImmediate(existingExit);
+
+                var exit = new GameObject("Scene_Exit_Trigger");
+                exit.transform.position = exitPos;
+                var box = Undo.AddComponent<BoxCollider>(exit);
+                box.isTrigger = true;
+                box.size = new Vector3(6f, 3f, 2f); // wide enough the player can't miss it
+                var trigger = Undo.AddComponent<SceneExitTrigger>(exit);
+                var soTrig = new SerializedObject(trigger);
+                var tsProp = soTrig.FindProperty("targetScene");
+                if (tsProp != null)
+                {
+                    tsProp.stringValue = targetScene;
+                    soTrig.ApplyModifiedPropertiesWithoutUndo();
+                }
+                Debug.Log($"[SceneEnricher] Exit trigger → {targetScene} at {exitPos}");
             }
         }
 

@@ -159,6 +159,12 @@ namespace Afterhumans.EditorTools
         [MenuItem("Afterhumans/Setup/Set Desert First For Testing")]
         public static void SetDesertFirstForTesting() => SetSceneFirst("Scene_Desert");
 
+        [MenuItem("Afterhumans/Setup/Set MainMenu First For Testing")]
+        public static void SetMainMenuFirstForTesting() => SetSceneFirst("Scene_MainMenu");
+
+        [MenuItem("Afterhumans/Setup/Set Credits First For Testing")]
+        public static void SetCreditsFirstForTesting() => SetSceneFirst("Scene_Credits");
+
         private static void SetSceneFirst(string sceneNameSubstring)
         {
             var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
