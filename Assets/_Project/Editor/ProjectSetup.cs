@@ -30,6 +30,32 @@ namespace Afterhumans.EditorTools
 
         private const string ScenesDir = "Assets/_Project/Scenes";
 
+        /// <summary>
+        /// Reorder BuildSettings so Scene_Botanika is loaded first when .app starts.
+        /// Used for walking skeleton testing — MainMenu scene is empty without UI yet.
+        /// </summary>
+        [MenuItem("Afterhumans/Setup/Set Botanika First For Testing")]
+        public static void SetBotanikaFirstForTesting()
+        {
+            var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+            var botanika = scenes.Find(s => s.path.Contains("Scene_Botanika"));
+            if (botanika == null)
+            {
+                Debug.LogError("[ProjectSetup] Scene_Botanika not found in build settings");
+                return;
+            }
+            scenes.Remove(botanika);
+            scenes.Insert(0, botanika);
+            EditorBuildSettings.scenes = scenes.ToArray();
+            AssetDatabase.SaveAssets();
+
+            Debug.Log("[ProjectSetup] Scene order updated. New order:");
+            foreach (var s in EditorBuildSettings.scenes)
+            {
+                Debug.Log($"  - {s.path}");
+            }
+        }
+
         [MenuItem("Afterhumans/Setup/Create Initial Scenes")]
         public static void CreateInitialScenes()
         {
