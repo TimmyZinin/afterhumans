@@ -56,7 +56,7 @@ namespace Afterhumans.EditorTools
             BuildInteriorAccentLights(root);   // BOT-A06
             BuildWindowGlassOverlays(root);    // BOT-A07
 
-            Debug.Log("[BotanikaAtmosphere] DONE — glass ceiling + dust motes + 2 window accents + 3 interior accents + 8 window overlays.");
+            Debug.Log("[BotanikaAtmosphere] DONE — glass ceiling + dust motes + 2 window accents + 3 interior accents + 11 window overlays.");
         }
 
         // ---------- BOT-A06: interior warm accent lights ----------
@@ -66,13 +66,23 @@ namespace Afterhumans.EditorTools
             // «islands of warmth» эффекта (ART_BIBLE §4.1 — warm pools of light
             // между cool shadows). Server rack уже имеет 3 cool blinking LEDs
             // как contrasting accent, поэтому здесь только warm interior pools.
-            var warmColor = new Color(1.0f, 0.82f, 0.52f);  // accent1 direction
+            //
+            // mm-review MEDIUM fix: all light colors now palette-driven from
+            // Botanika SceneTheme instead of hardcoded (BOT-A08 discipline).
+            var theme = AssetDatabase.LoadAssetAtPath<Afterhumans.Art.SceneTheme>(
+                "Assets/_Project/Art/Themes/Botanika.asset");
+            Color warmColor = theme != null ? theme.accent1 : new Color(1.0f, 0.82f, 0.52f);
+            // Kitchen slightly warmer/orange — blend accent1 with accent2
+            Color kitchenColor = theme != null
+                ? Color.Lerp(theme.accent1, theme.accent2, 0.35f)
+                : new Color(1.0f, 0.78f, 0.48f);
+
             CreatePointLight(parent, "Accent_CoffeeTable", new Vector3(0f, 2.0f, 1.8f),
                 warmColor, 1.8f, 5f);
             CreatePointLight(parent, "Accent_NikolaiCorner", new Vector3(-4.2f, 2.5f, 4.3f),
                 warmColor, 1.4f, 4f);
             CreatePointLight(parent, "Accent_KirillKitchen", new Vector3(3.8f, 2.3f, 2.2f),
-                new Color(1.0f, 0.78f, 0.48f), 1.3f, 3.5f);  // slightly more orange (kitchen)
+                kitchenColor, 1.3f, 3.5f);
         }
 
         // ---------- BOT-A07: window glass overlays ----------
@@ -81,27 +91,37 @@ namespace Afterhumans.EditorTools
             // Place thin glass quads in front of each wallWindow tile so the
             // greenhouse has actual visible transparent glass, not just opaque
             // walls with window-shaped openings. Mirrors greenhouseShell window
-            // slots from BotanikaDresser.BuildGreenhouseShell: pattern every 3rd
-            // tile in each wall axis, offset (+5, +5, -5, -5) from origin.
+            // slots from BotanikaDresser.BuildGreenhouseShell.
+            //
+            // mm-review CRITICAL fix: rotation scheme was inverted. Quad default
+            // normal is +Z; each wall's overlay must face INTO the room:
+            //   North wall z=+5.5 → player looks at quad from -Z → normal = -Z
+            //     → Euler(0, 180, 0) (+Z rotated Y=180° → -Z)
+            //   East wall  x=+5.5 → player looks from -X → normal = -X
+            //     → Euler(0, -90, 0) (+Z rotated Y=-90° → -X)
+            //   West wall  x=-5.5 → player looks from +X → normal = +X
+            //     → Euler(0, 90, 0) (+Z rotated Y=+90° → +X)
+            //
+            // mm-review MEDIUM fix: WestWindow_z5 was missing per pattern
+            // (z+5)%3==1 → z=5 is a valid match.
             var glassMat = GetOrCreateGlassMaterial();
 
-            // North wall (z=+5.5), faces south (-Z), windows at x where (x+5)%3==1
-            // x ∈ [-5,5] integers → windows at x=-4, -1, 2, 5
-            PlaceWindowOverlay(parent, glassMat, "NorthWindow_xneg4", new Vector3(-4f, 1.5f, 5.4f), Quaternion.Euler(0f, 0f, 0f));
-            PlaceWindowOverlay(parent, glassMat, "NorthWindow_xneg1", new Vector3(-1f, 1.5f, 5.4f), Quaternion.Euler(0f, 0f, 0f));
-            PlaceWindowOverlay(parent, glassMat, "NorthWindow_x2",    new Vector3(2f,  1.5f, 5.4f), Quaternion.Euler(0f, 0f, 0f));
-            PlaceWindowOverlay(parent, glassMat, "NorthWindow_x5",    new Vector3(5f,  1.5f, 5.4f), Quaternion.Euler(0f, 0f, 0f));
+            // North wall (z=+5.5), normal must face -Z (into room)
+            PlaceWindowOverlay(parent, glassMat, "NorthWindow_xneg4", new Vector3(-4f, 1.5f, 5.4f), Quaternion.Euler(0f, 180f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "NorthWindow_xneg1", new Vector3(-1f, 1.5f, 5.4f), Quaternion.Euler(0f, 180f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "NorthWindow_x2",    new Vector3(2f,  1.5f, 5.4f), Quaternion.Euler(0f, 180f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "NorthWindow_x5",    new Vector3(5f,  1.5f, 5.4f), Quaternion.Euler(0f, 180f, 0f));
 
-            // East wall (x=+5.5), faces west (-X), windows at z where (z+5)%3==2
-            // z ∈ [-5,5] → windows at z=-3, 0, 3
-            PlaceWindowOverlay(parent, glassMat, "EastWindow_zneg3", new Vector3(5.4f, 1.5f, -3f), Quaternion.Euler(0f, 90f, 0f));
-            PlaceWindowOverlay(parent, glassMat, "EastWindow_z0",    new Vector3(5.4f, 1.5f,  0f), Quaternion.Euler(0f, 90f, 0f));
-            PlaceWindowOverlay(parent, glassMat, "EastWindow_z3",    new Vector3(5.4f, 1.5f,  3f), Quaternion.Euler(0f, 90f, 0f));
+            // East wall (x=+5.5), normal must face -X (into room)
+            PlaceWindowOverlay(parent, glassMat, "EastWindow_zneg3", new Vector3(5.4f, 1.5f, -3f), Quaternion.Euler(0f, -90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "EastWindow_z0",    new Vector3(5.4f, 1.5f,  0f), Quaternion.Euler(0f, -90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "EastWindow_z3",    new Vector3(5.4f, 1.5f,  3f), Quaternion.Euler(0f, -90f, 0f));
 
-            // West wall (x=-5.5), windows at z where (z+5)%3==1 → z=-4, -1, 2, 5
-            PlaceWindowOverlay(parent, glassMat, "WestWindow_zneg4", new Vector3(-5.4f, 1.5f, -4f), Quaternion.Euler(0f, -90f, 0f));
-            PlaceWindowOverlay(parent, glassMat, "WestWindow_zneg1", new Vector3(-5.4f, 1.5f, -1f), Quaternion.Euler(0f, -90f, 0f));
-            PlaceWindowOverlay(parent, glassMat, "WestWindow_z2",    new Vector3(-5.4f, 1.5f,  2f), Quaternion.Euler(0f, -90f, 0f));
+            // West wall (x=-5.5), normal must face +X (into room)
+            PlaceWindowOverlay(parent, glassMat, "WestWindow_zneg4", new Vector3(-5.4f, 1.5f, -4f), Quaternion.Euler(0f, 90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "WestWindow_zneg1", new Vector3(-5.4f, 1.5f, -1f), Quaternion.Euler(0f, 90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "WestWindow_z2",    new Vector3(-5.4f, 1.5f,  2f), Quaternion.Euler(0f, 90f, 0f));
+            PlaceWindowOverlay(parent, glassMat, "WestWindow_z5",    new Vector3(-5.4f, 1.5f,  5f), Quaternion.Euler(0f, 90f, 0f));
         }
 
         private static void PlaceWindowOverlay(GameObject parent, Material glassMat, string name,
@@ -383,9 +403,9 @@ namespace Afterhumans.EditorTools
                     if (go.name.StartsWith(p)) { overlayCount++; break; }
                 }
             }
-            if (overlayCount < 10)
+            if (overlayCount < 11)
             {
-                reason = $"Window glass overlays count={overlayCount} expected >=10";
+                reason = $"Window glass overlays count={overlayCount} expected >=11 (4 north + 3 east + 4 west)";
                 return false;
             }
 
