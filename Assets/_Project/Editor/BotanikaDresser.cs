@@ -366,6 +366,10 @@ namespace Afterhumans.EditorTools
                 Debug.Log("[BotanikaDresser] Hid boundary wall renderers (colliders kept)");
             }
 
+            // BOT-A03: environmental storytelling props layer
+            // (server rack, graffiti, NPC stations, foil hat, extra books)
+            BotanikaEnvProps.Apply(propsRoot);
+
             EditorSceneManager.MarkSceneDirty(scene);
             bool saved = EditorSceneManager.SaveScene(scene, ScenePath);
             if (saved)
