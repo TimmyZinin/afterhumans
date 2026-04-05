@@ -22,8 +22,8 @@ namespace Afterhumans.Player
         [SerializeField] private KeyCode continueKey = KeyCode.Space;
 
         [Header("Debug HUD")]
-        [Tooltip("Draws on-screen debug info via OnGUI. Disable for final build.")]
-        [SerializeField] private bool showDebugHud = true;
+        [Tooltip("BOT-F09: off by default in production. Use Afterhumans/Debug/Toggle PlayerInteraction HUD to enable for QA.")]
+        [SerializeField] private bool showDebugHud = false;
 
         private Interactable _currentTarget;
         private float _currentDistance = Mathf.Infinity;
@@ -53,23 +53,26 @@ namespace Afterhumans.Player
                 return;
             }
 
-            // Distance scan: find closest Interactable within maxDistance
+            // BOT-F08: use static cached list (Interactable.All) вместо FindObjectsByType
+            // каждый кадр. Skill game-development anti-pattern «update everything every frame».
             Interactable closest = null;
-            float closestDist = maxDistance;
-            var all = FindObjectsByType<Interactable>(FindObjectsSortMode.None);
-            foreach (var it in all)
+            float closestDistSq = maxDistance * maxDistance;
+            var playerPos = transform.position;
+            var all = Interactable.All;
+            for (int i = 0; i < all.Count; i++)
             {
+                var it = all[i];
                 if (it == null || !it.IsAvailable) continue;
-                float d = Vector3.Distance(transform.position, it.transform.position);
-                if (d <= closestDist)
+                float dSq = (it.transform.position - playerPos).sqrMagnitude;
+                if (dSq <= closestDistSq)
                 {
-                    closestDist = d;
+                    closestDistSq = dSq;
                     closest = it;
                 }
             }
 
             _currentTarget = closest;
-            _currentDistance = closest != null ? closestDist : Mathf.Infinity;
+            _currentDistance = closest != null ? Mathf.Sqrt(closestDistSq) : Mathf.Infinity;
 
             if (_currentTarget != null && Input.GetKeyDown(interactKey))
             {

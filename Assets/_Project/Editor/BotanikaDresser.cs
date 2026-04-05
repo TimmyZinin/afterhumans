@@ -186,15 +186,10 @@ namespace Afterhumans.EditorTools
                 for (int i = 0; i < count; i++) mats[i] = forcedMat;
                 r.sharedMaterials = mats;
             }
-            if (instance.GetComponent<Collider>() == null)
-            {
-                var mf = instance.GetComponentInChildren<MeshFilter>();
-                if (mf != null)
-                {
-                    var mc = instance.AddComponent<MeshCollider>();
-                    mc.sharedMesh = mf.sharedMesh;
-                }
-            }
+            // BOT-F05: use BoxCollider helper вместо MeshCollider (skill 3d-games anti-pattern)
+            ColliderHelper.AddSimpleCollider(instance);
+            // BOT-F10: mark static для batching / baked GI / occlusion culling
+            ColliderHelper.MarkStaticProp(instance);
         }
 
         private static Material PickMaterial(string assetName)
@@ -417,17 +412,9 @@ namespace Afterhumans.EditorTools
                 r.sharedMaterials = mats;
             }
 
-            // Give it a collider so the player can't walk through furniture
-            if (instance.GetComponent<Collider>() == null)
-            {
-                var meshFilter = instance.GetComponentInChildren<MeshFilter>();
-                if (meshFilter != null)
-                {
-                    var mc = instance.AddComponent<MeshCollider>();
-                    mc.sharedMesh = meshFilter.sharedMesh;
-                    mc.convex = false;
-                }
-            }
+            // BOT-F05 + F10
+            ColliderHelper.AddSimpleCollider(instance);
+            ColliderHelper.MarkStaticProp(instance);
         }
     }
 }

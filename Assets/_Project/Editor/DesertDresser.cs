@@ -182,16 +182,9 @@ namespace Afterhumans.EditorTools
                 r.sharedMaterials = mats;
             }
 
-            if (instance.GetComponent<Collider>() == null)
-            {
-                var meshFilter = instance.GetComponentInChildren<MeshFilter>();
-                if (meshFilter != null)
-                {
-                    var mc = instance.AddComponent<MeshCollider>();
-                    mc.sharedMesh = meshFilter.sharedMesh;
-                    mc.convex = false;
-                }
-            }
+            // BOT-F05 + F10
+            ColliderHelper.AddSimpleCollider(instance);
+            ColliderHelper.MarkStaticProp(instance);
         }
     }
 }
