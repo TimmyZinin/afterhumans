@@ -151,17 +151,25 @@ namespace Afterhumans.EditorTools
         /// Used for walking skeleton testing — MainMenu scene is empty without UI yet.
         /// </summary>
         [MenuItem("Afterhumans/Setup/Set Botanika First For Testing")]
-        public static void SetBotanikaFirstForTesting()
+        public static void SetBotanikaFirstForTesting() => SetSceneFirst("Scene_Botanika");
+
+        [MenuItem("Afterhumans/Setup/Set City First For Testing")]
+        public static void SetCityFirstForTesting() => SetSceneFirst("Scene_City");
+
+        [MenuItem("Afterhumans/Setup/Set Desert First For Testing")]
+        public static void SetDesertFirstForTesting() => SetSceneFirst("Scene_Desert");
+
+        private static void SetSceneFirst(string sceneNameSubstring)
         {
             var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-            var botanika = scenes.Find(s => s.path.Contains("Scene_Botanika"));
-            if (botanika == null)
+            var target = scenes.Find(s => s.path.Contains(sceneNameSubstring));
+            if (target == null)
             {
-                Debug.LogError("[ProjectSetup] Scene_Botanika not found in build settings");
+                Debug.LogError($"[ProjectSetup] {sceneNameSubstring} not found in build settings");
                 return;
             }
-            scenes.Remove(botanika);
-            scenes.Insert(0, botanika);
+            scenes.Remove(target);
+            scenes.Insert(0, target);
             EditorBuildSettings.scenes = scenes.ToArray();
             AssetDatabase.SaveAssets();
 
