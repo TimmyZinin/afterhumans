@@ -55,6 +55,8 @@ namespace Afterhumans.EditorTools
             Debug.Log("[CityDresser] Opening Scene_City...");
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
+            LightingSetup.Apply(LightingSetup.Preset.City);
+
             _matConcrete = LoadOrCreateLit("Tint_Concrete", new Color(0.82f, 0.84f, 0.87f), 0.3f);
             _matGlass = LoadOrCreateLit("Tint_Glass", new Color(0.65f, 0.78f, 0.90f), 0.8f);
             _matAsphalt = LoadOrCreateLit("Tint_Asphalt", new Color(0.35f, 0.35f, 0.37f), 0.2f);

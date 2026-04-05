@@ -114,6 +114,7 @@ namespace Afterhumans.EditorTools
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
             InitMaterials();
+            LightingSetup.Apply(LightingSetup.Preset.Botanika);
 
             // Clear any previous dressing so re-running is idempotent
             var existing = GameObject.Find(PropsRootName);

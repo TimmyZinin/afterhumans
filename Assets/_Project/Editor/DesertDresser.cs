@@ -55,6 +55,8 @@ namespace Afterhumans.EditorTools
             Debug.Log("[DesertDresser] Opening Scene_Desert...");
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
+            LightingSetup.Apply(LightingSetup.Preset.Desert);
+
             _matSand = LoadOrCreateLit("Tint_Sand", new Color(0.82f, 0.66f, 0.42f), 0.1f);
             _matRock = LoadOrCreateLit("Tint_Rock", new Color(0.56f, 0.40f, 0.28f), 0.15f);
             _matCactus = LoadOrCreateLit("Tint_Cactus", new Color(0.34f, 0.45f, 0.22f), 0.2f);

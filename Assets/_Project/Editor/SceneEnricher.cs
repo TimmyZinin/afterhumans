@@ -7,6 +7,7 @@ using UnityEngine.UI;
 using TMPro;
 using Afterhumans.Player;
 using Afterhumans.Dialogue;
+using Afterhumans.Kafka;
 
 namespace Afterhumans.EditorTools
 {
@@ -206,6 +207,9 @@ namespace Afterhumans.EditorTools
             // Placeholder NPC (a cube with an Interactable)
             CreatePlaceholderNpc(sceneName, npcKnot, npcName);
 
+            // Kafka the corgi — placeholder black/white stretched cube
+            CreateKafkaPlaceholder(player);
+
             // Dialogue system: DialogueManager singleton + Canvas UI
             CreateDialogueSystem();
 
@@ -393,6 +397,62 @@ namespace Afterhumans.EditorTools
                     rend.sharedMaterial = mat;
                 }
             }
+        }
+
+        private static void CreateKafkaPlaceholder(GameObject player)
+        {
+            // Already exists (re-run) — leave it
+            var existing = GameObject.Find("Kafka");
+            if (existing != null) return;
+
+            var kafka = new GameObject("Kafka");
+            kafka.tag = "Untagged";
+
+            // Body: low wide box tinted black-white corgi-ish via simple dark grey tint.
+            // Real corgi mesh will replace this later.
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "KafkaBody";
+            body.transform.SetParent(kafka.transform, worldPositionStays: false);
+            body.transform.localPosition = Vector3.zero;
+            body.transform.localScale = new Vector3(0.35f, 0.25f, 0.55f); // corgi-proportioned stub
+            var bodyRend = body.GetComponent<Renderer>();
+            if (bodyRend != null && bodyRend.sharedMaterial != null)
+            {
+                var mat = new Material(bodyRend.sharedMaterial);
+                mat.color = new Color(0.18f, 0.18f, 0.20f); // almost black
+                bodyRend.sharedMaterial = mat;
+            }
+
+            // White chest/collar stripe
+            var chest = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            chest.name = "KafkaChest";
+            chest.transform.SetParent(kafka.transform, worldPositionStays: false);
+            chest.transform.localPosition = new Vector3(0f, -0.02f, 0.20f);
+            chest.transform.localScale = new Vector3(0.36f, 0.20f, 0.16f);
+            var chestRend = chest.GetComponent<Renderer>();
+            if (chestRend != null && chestRend.sharedMaterial != null)
+            {
+                var mat = new Material(chestRend.sharedMaterial);
+                mat.color = new Color(0.95f, 0.95f, 0.93f); // off-white
+                chestRend.sharedMaterial = mat;
+            }
+            // Disable child colliders — only Kafka root needs one for physics sanity
+            Object.DestroyImmediate(chest.GetComponent<Collider>());
+            Object.DestroyImmediate(body.GetComponent<Collider>());
+
+            // Position Kafka at player's feet + 1m to the right
+            if (player != null)
+            {
+                kafka.transform.position = player.transform.position + new Vector3(1.2f, -0.9f, 0.3f);
+            }
+            else
+            {
+                kafka.transform.position = new Vector3(1.2f, 0.2f, 0.3f);
+            }
+
+            // Behaviour
+            var follow = Undo.AddComponent<KafkaFollowSimple>(kafka);
+            Debug.Log($"[SceneEnricher] Kafka placeholder added ({kafka.name}, follow={follow != null})");
         }
 
         private static void CreatePlaceholderNpc(string sceneName, string npcKnot, string npcName)
