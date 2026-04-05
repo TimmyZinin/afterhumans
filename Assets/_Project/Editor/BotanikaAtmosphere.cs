@@ -33,6 +33,7 @@ namespace Afterhumans.EditorTools
     {
         private const string GroupName = "Botanika_Atmosphere";
         private const string GlassMatPath = "Assets/_Project/Materials/Skyboxes/Glass_Greenhouse.mat";
+        private const string DustMatPath = "Assets/_Project/Materials/Skyboxes/DustMote.mat";
 
         public static void Apply(GameObject propsRoot)
         {
@@ -111,8 +112,13 @@ namespace Afterhumans.EditorTools
             var glass = GameObject.CreatePrimitive(PrimitiveType.Quad);
             glass.name = "GlassCeiling";
             glass.transform.SetParent(parent.transform, false);
-            // Quad default faces +Z. Rotate 90° on X so it faces down (+Y normal).
-            glass.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+            // mm-review HIGH fix: Unity Quad default normal +Z. Rotation Euler(90,0,0)
+            // in Unity's left-handed system tilts it face-up (floor orientation —
+            // normal +Y). For a ceiling visible from BELOW (player looking up), we
+            // need face-down (normal -Y), which is Euler(-90, 0, 0). With Cull=Off
+            // the back side would render too but lighting on the wrong-facing side
+            // would be broken. Correct rotation is -90°.
+            glass.transform.rotation = Quaternion.Euler(-90f, 0f, 0f);
             glass.transform.position = new Vector3(0f, 3.2f, 0f);
             glass.transform.localScale = new Vector3(12f, 12f, 1f);  // 11x11 floor + overhang
 
@@ -196,29 +202,53 @@ namespace Afterhumans.EditorTools
             );
             sol.size = new ParticleSystem.MinMaxCurve(1f, sizeCurve);
 
-            // Renderer — unlit, additive for glow
+            // Renderer — unlit particle material persisted as asset to prevent
+            // memory leak on repeat Dress() runs (mm-review MEDIUM fix).
             var renderer = ps.GetComponent<ParticleSystemRenderer>();
             if (renderer != null)
             {
                 renderer.renderMode = ParticleSystemRenderMode.Billboard;
-                // Use a simple unlit particle shader
-                var particleShader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
-                if (particleShader == null)
-                {
-                    particleShader = Shader.Find("Sprites/Default");
-                }
-                if (particleShader != null)
-                {
-                    var pmat = new Material(particleShader) { name = "DustMote" };
-                    if (pmat.HasProperty("_BaseColor"))
-                        pmat.SetColor("_BaseColor", new Color(1f, 0.9f, 0.7f, 0.5f));
-                    if (pmat.HasProperty("_Surface")) pmat.SetFloat("_Surface", 1f);
-                    renderer.sharedMaterial = pmat;
-                }
+                renderer.sharedMaterial = GetOrCreateDustMoteMaterial();
                 renderer.sortingFudge = -4f;  // render behind transparent glass
             }
 
             ps.Play();
+        }
+
+        /// <summary>
+        /// mm-review MEDIUM fix: persist DustMote particle material as project
+        /// asset so repeat Dress() runs reuse it instead of leaking fresh runtime
+        /// Materials into scene serialization.
+        /// </summary>
+        private static Material GetOrCreateDustMoteMaterial()
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(DustMatPath);
+            var shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
+            if (shader == null) shader = Shader.Find("Sprites/Default");
+            if (shader == null)
+            {
+                Debug.LogError("[BotanikaAtmosphere] No particle shader available for DustMote.");
+                return null;
+            }
+            if (mat == null)
+            {
+                mat = new Material(shader) { name = "DustMote" };
+                AssetDatabase.CreateAsset(mat, DustMatPath);
+            }
+            else
+            {
+                mat.shader = shader;
+            }
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", new Color(1f, 0.9f, 0.7f, 0.5f));
+            if (mat.HasProperty("_Color"))
+                mat.SetColor("_Color", new Color(1f, 0.9f, 0.7f, 0.5f));
+            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f);
+            if (mat.HasProperty("_Blend")) mat.SetFloat("_Blend", 0f);
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            EditorUtility.SetDirty(mat);
+            AssetDatabase.SaveAssets();
+            return mat;
         }
 
         private static void BuildWindowAccentLights(GameObject parent)
