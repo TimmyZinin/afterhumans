@@ -62,6 +62,14 @@ namespace Afterhumans.EditorTools
             // Apple Silicon native
             PlayerSettings.SetArchitecture(NamedBuildTarget.Standalone, 2); // 2 = ARM64 / Apple Silicon
 
+            // QA Bug 4 fix: default to windowed mode so screen capture tools work.
+            // Metal exclusive fullscreen blocks macOS compositor → screencapture
+            // and Computer Use MCP return black/empty frames.
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.defaultScreenWidth = 1280;
+            PlayerSettings.defaultScreenHeight = 720;
+            PlayerSettings.resizableWindow = true;
+
             // Reduce build size, acceptable for macOS standalone
             PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.Standalone, ManagedStrippingLevel.Low);
 

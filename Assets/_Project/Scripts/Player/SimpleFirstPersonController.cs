@@ -124,11 +124,26 @@ namespace Afterhumans.Player
                 }
             }
 
-            // Escape unlocks cursor (for dev / debugging)
+            // Escape toggles cursor lock (re-lock on left click)
             if (Input.GetKeyDown(KeyCode.Escape))
             {
                 UnityEngine.Cursor.lockState = CursorLockMode.None;
                 UnityEngine.Cursor.visible = true;
+            }
+            if (UnityEngine.Cursor.lockState == CursorLockMode.None && Input.GetMouseButtonDown(0))
+            {
+                UnityEngine.Cursor.lockState = CursorLockMode.Locked;
+                UnityEngine.Cursor.visible = false;
+            }
+        }
+
+        // Re-lock cursor when window regains focus
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus && enabled)
+            {
+                UnityEngine.Cursor.lockState = CursorLockMode.Locked;
+                UnityEngine.Cursor.visible = false;
             }
         }
     }

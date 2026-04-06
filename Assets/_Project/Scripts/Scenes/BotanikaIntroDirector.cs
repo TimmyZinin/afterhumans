@@ -71,9 +71,11 @@ namespace Afterhumans.Scenes
                 return;
             }
 
-            // Save final camera position (where player will be after cinematic)
-            _finalCamPos = playerCamera.transform.position;
-            _finalCamRot = playerCamera.transform.rotation;
+            // QA Bug 3 fix: explicitly set final camera orientation facing into
+            // the room (toward +Z, slightly down) instead of inheriting whatever
+            // rotation the camera had at scene load — which often looks at skybox.
+            _finalCamPos = playerTransform.position + new Vector3(0f, 1.65f, 0f);
+            _finalCamRot = Quaternion.Euler(5f, 0f, 0f);  // slightly down, into room
 
             // Disable player controls during cinematic
             _fpsController = playerTransform.GetComponent("SimpleFirstPersonController") as MonoBehaviour;
