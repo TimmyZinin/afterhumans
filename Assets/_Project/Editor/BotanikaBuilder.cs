@@ -2,6 +2,8 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using TMPro;
 
 namespace Afterhumans.EditorTools
 {
@@ -115,6 +117,248 @@ namespace Afterhumans.EditorTools
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
             Debug.Log("[BotanikaBuilder] Sprint 1 GREYBOX done — floor, walls, furniture blocks, player");
+        }
+
+        // ============================================================
+        // SPRINT 2: GAMEPLAY
+        // NPC capsules + Kafka + Dialogue + Interaction + Door gate
+        // Goal: walk up to NPC, press E, read dialogue, Kafka follows
+        // ============================================================
+
+        [MenuItem("Afterhumans/v2/Sprint 2 — Gameplay")]
+        public static void Sprint2_Gameplay()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            ClearRoot("Botanika_Gameplay");
+
+            var root = new GameObject("Botanika_Gameplay");
+
+            // --- PLAYER INTERACTION ---
+            var player = GameObject.FindWithTag("Player");
+            if (player != null)
+            {
+                var pi = player.GetComponent<Afterhumans.Player.PlayerInteraction>();
+                if (pi == null) pi = player.AddComponent<Afterhumans.Player.PlayerInteraction>();
+                // Enable debug HUD so Tim can see interaction status
+                var piSo = new SerializedObject(pi);
+                var debugProp = piSo.FindProperty("showDebugHud");
+                if (debugProp != null) { debugProp.boolValue = true; piSo.ApplyModifiedPropertiesWithoutUndo(); }
+                // Set maxDistance
+                var distProp = piSo.FindProperty("maxDistance");
+                if (distProp != null) { distProp.floatValue = 5f; piSo.ApplyModifiedPropertiesWithoutUndo(); }
+            }
+
+            // --- DIALOGUE SYSTEM ---
+            SetupDialogueSystem(root);
+
+            // --- 5 NPCs ---
+            var npcYellow = MakeMaterial("NPC_Yellow", new Color(0.85f, 0.75f, 0.3f));
+            var npcBlue   = MakeMaterial("NPC_Blue", new Color(0.3f, 0.5f, 0.8f));
+            var npcRed    = MakeMaterial("NPC_Red", new Color(0.8f, 0.3f, 0.25f));
+            var npcPurple = MakeMaterial("NPC_Purple", new Color(0.6f, 0.3f, 0.7f));
+            var npcGreen  = MakeMaterial("NPC_Green", new Color(0.3f, 0.65f, 0.35f));
+
+            // NPC positions: clearly IN FRONT of furniture, 1m+ clearance
+            SpawnNpc(root, "Sasha",   new Vector3(0, 0, 2.0f),     180, "sasha",   3.0f, npcYellow);    // in front of sofa
+            SpawnNpc(root, "Mila",    new Vector3(-2.5f, 0, 1.5f),  90, "mila",    2.5f, npcBlue);      // in front of desk
+            SpawnNpc(root, "Kirill",  new Vector3(3.0f, 0, -2.5f), -90, "kirill",  2.5f, npcRed);       // in front of kitchen
+            SpawnNpc(root, "Nikolai", new Vector3(-3.0f, 0, 3.5f), 135, "nikolai", 2.5f, npcPurple);    // in front of corner table
+            SpawnNpc(root, "Stas",    new Vector3(1.5f, 0, -4f),     0, "stas",    2.5f, npcGreen);     // near door
+
+            // --- KAFKA ---
+            SetupKafka(root);
+
+            // --- DOOR GATE ---
+            var door = new GameObject("DoorGate");
+            door.transform.SetParent(root.transform);
+            door.transform.position = new Vector3(0, 1, -5.2f);
+            var doorCol = door.AddComponent<BoxCollider>();
+            doorCol.isTrigger = true;
+            doorCol.size = new Vector3(3, 3, 1);
+            if (player != null)
+            {
+                var cue = door.AddComponent<Afterhumans.UI.DoorCueUI>();
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[BotanikaBuilder] Sprint 2 GAMEPLAY done — 5 NPCs, Kafka, dialogue, door gate");
+        }
+
+        private static void SpawnNpc(GameObject parent, string npcName, Vector3 pos, float yRot,
+            string knotName, float interactRadius, Material mat)
+        {
+            var npc = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            npc.name = $"NPC_{npcName}";
+            npc.transform.SetParent(parent.transform, worldPositionStays: false);
+            npc.transform.position = pos;
+            npc.transform.rotation = Quaternion.Euler(0, yRot, 0);
+            npc.isStatic = false;
+
+            // Material (colored so NPCs are visually distinct)
+            var rend = npc.GetComponent<Renderer>();
+            if (rend != null) rend.sharedMaterial = mat;
+
+            // Collider — replace default with properly sized capsule
+            Object.DestroyImmediate(npc.GetComponent<CapsuleCollider>());
+            var col = npc.AddComponent<CapsuleCollider>();
+            col.radius = 0.35f;
+            col.height = 1.8f;
+            col.center = new Vector3(0, 0.9f, 0);
+
+            // Scale capsule to human height (default capsule is 2m, we want 1.8m)
+            npc.transform.localScale = new Vector3(0.7f, 0.9f, 0.7f);
+
+            // Interactable
+            var interactable = npc.AddComponent<Afterhumans.Dialogue.Interactable>();
+            interactable.knotName = knotName;
+            interactable.promptText = "говорить";
+            interactable.interactRadius = interactRadius;
+
+            // Idle animation
+            npc.AddComponent<Afterhumans.Art.NpcIdleBob>();
+
+            // Interaction prompt: worldspace Canvas + TMP above head
+            var promptRoot = new GameObject($"Prompt_{npcName}");
+            promptRoot.transform.SetParent(npc.transform, worldPositionStays: false);
+            promptRoot.transform.localPosition = new Vector3(0, 2.5f, 0);
+
+            var promptCanvas = promptRoot.AddComponent<Canvas>();
+            promptCanvas.renderMode = RenderMode.WorldSpace;
+            promptCanvas.sortingOrder = 50;
+            var promptRect = promptRoot.GetComponent<RectTransform>();
+            promptRect.sizeDelta = new Vector2(200f, 50f);  // wide enough for text
+            promptRoot.transform.localScale = new Vector3(0.005f, 0.005f, 0.005f);  // scale down to worldspace
+
+            var textGo = new GameObject("PromptText");
+            textGo.transform.SetParent(promptRoot.transform, false);
+            var textRect = textGo.AddComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
+            var tmp = textGo.AddComponent<TextMeshProUGUI>();
+            tmp.text = $"[E] {interactable.promptText}";
+            tmp.fontSize = 36;
+            tmp.color = Color.white;
+            tmp.alignment = TextAlignmentOptions.Center;
+
+            promptRoot.AddComponent<CanvasGroup>();
+            var promptUI = promptRoot.AddComponent<Afterhumans.Art.InteractionPromptUI>();
+            promptUI.showRadius = interactRadius + 1f;
+
+            Debug.Log($"[BotanikaBuilder] NPC {npcName} at {pos}, knot={knotName}");
+        }
+
+        private static void SetupKafka(GameObject parent)
+        {
+            var kafka = new GameObject("Kafka");
+            kafka.transform.SetParent(parent.transform, worldPositionStays: false);
+            kafka.transform.position = new Vector3(1, 0, -2.5f);
+
+            // Visual: simple dark capsule for now (Sprint 4 will replace with corgi model)
+            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            body.name = "KafkaBody";
+            body.transform.SetParent(kafka.transform, worldPositionStays: false);
+            body.transform.localPosition = Vector3.zero;
+            body.transform.localScale = new Vector3(0.25f, 0.2f, 0.4f);
+            body.transform.localRotation = Quaternion.Euler(0, 0, 90); // horizontal
+            var kafkaMat = MakeMaterial("Kafka", new Color(0.15f, 0.13f, 0.12f));
+            body.GetComponent<Renderer>().sharedMaterial = kafkaMat;
+            Object.DestroyImmediate(body.GetComponent<Collider>());
+
+            // Follow behavior
+            kafka.AddComponent<Afterhumans.Kafka.KafkaFollowSimple>();
+
+            Debug.Log("[BotanikaBuilder] Kafka spawned at (1, 0, -2.5)");
+        }
+
+        private static void SetupDialogueSystem(GameObject parent)
+        {
+            // DialogueManager singleton
+            var dmGo = new GameObject("DialogueManager");
+            dmGo.transform.SetParent(parent.transform);
+            var dm = dmGo.AddComponent<Afterhumans.Dialogue.DialogueManager>();
+
+            // Load ink JSON
+            var inkJson = UnityEditor.AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Dialogues/dataland.json");
+            if (inkJson != null)
+            {
+                // Set inkJsonAsset via serialized field
+                var so = new SerializedObject(dm);
+                var prop = so.FindProperty("inkJsonAsset");
+                if (prop != null)
+                {
+                    prop.objectReferenceValue = inkJson;
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                }
+                Debug.Log($"[BotanikaBuilder] DialogueManager wired to dataland.json ({inkJson.text.Length} chars)");
+            }
+            else
+            {
+                Debug.LogError("[BotanikaBuilder] dataland.json NOT FOUND!");
+            }
+
+            // Dialogue UI Canvas
+            var canvasGo = new GameObject("DialogueCanvas");
+            canvasGo.transform.SetParent(parent.transform);
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 100;
+            canvasGo.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            canvasGo.AddComponent<GraphicRaycaster>();
+
+            // Dialogue panel (bottom third)
+            var panelGo = new GameObject("DialoguePanel");
+            panelGo.transform.SetParent(canvasGo.transform, false);
+            var panelRect = panelGo.AddComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0, 0);
+            panelRect.anchorMax = new Vector2(1, 0.35f);
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            var panelImg = panelGo.AddComponent<Image>();
+            panelImg.color = new Color(0, 0, 0, 0.7f);
+            panelGo.SetActive(false); // hidden until dialogue starts
+
+            // Speaker name text
+            var speakerGo = new GameObject("SpeakerText");
+            speakerGo.transform.SetParent(panelGo.transform, false);
+            var speakerRect = speakerGo.AddComponent<RectTransform>();
+            speakerRect.anchorMin = new Vector2(0.05f, 0.7f);
+            speakerRect.anchorMax = new Vector2(0.95f, 0.95f);
+            speakerRect.offsetMin = Vector2.zero;
+            speakerRect.offsetMax = Vector2.zero;
+            var speakerTmp = speakerGo.AddComponent<TextMeshProUGUI>();
+            speakerTmp.fontSize = 22;
+            speakerTmp.fontStyle = FontStyles.Bold;
+            speakerTmp.color = new Color(0.91f, 0.65f, 0.36f); // amber
+
+            // Dialogue line text
+            var lineGo = new GameObject("LineText");
+            lineGo.transform.SetParent(panelGo.transform, false);
+            var lineRect = lineGo.AddComponent<RectTransform>();
+            lineRect.anchorMin = new Vector2(0.05f, 0.05f);
+            lineRect.anchorMax = new Vector2(0.95f, 0.65f);
+            lineRect.offsetMin = Vector2.zero;
+            lineRect.offsetMax = Vector2.zero;
+            var lineTmp = lineGo.AddComponent<TextMeshProUGUI>();
+            lineTmp.fontSize = 20;
+            lineTmp.color = Color.white;
+            lineTmp.enableWordWrapping = true;
+
+            // Wire DialogueUI — field names must match DialogueUI.cs exactly
+            var dui = canvasGo.AddComponent<Afterhumans.Dialogue.DialogueUI>();
+            var duiSo = new SerializedObject(dui);
+            var panelProp = duiSo.FindProperty("panel");
+            if (panelProp != null) panelProp.objectReferenceValue = panelGo;
+            var speakerProp = duiSo.FindProperty("speakerText");
+            if (speakerProp != null) speakerProp.objectReferenceValue = speakerTmp;
+            var lineProp = duiSo.FindProperty("lineText");
+            if (lineProp != null) lineProp.objectReferenceValue = lineTmp;
+            duiSo.ApplyModifiedPropertiesWithoutUndo();
+            Debug.Log($"[BotanikaBuilder] DialogueUI wired: panel={panelProp?.objectReferenceValue != null}, speaker={speakerProp?.objectReferenceValue != null}, line={lineProp?.objectReferenceValue != null}");
+
+            Debug.Log("[BotanikaBuilder] Dialogue system created (Manager + Canvas + UI)");
         }
 
         // ============================================================
