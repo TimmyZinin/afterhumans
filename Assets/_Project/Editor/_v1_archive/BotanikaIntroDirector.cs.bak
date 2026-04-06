@@ -79,7 +79,7 @@ namespace Afterhumans.Scenes
             // Player may be at any Y (depends on BotanikaDresser spawn),
             // so we use player pos + eye offset.
             _finalCamPos = playerTransform.position + new Vector3(0f, 1.65f, 0f);
-            _finalCamRot = Quaternion.Euler(15f, 0f, 0f);  // 15° down — see room clearly
+            _finalCamRot = Quaternion.Euler(5f, 0f, 0f);  // 5° down — almost horizontal, see walls + room
 
             // Disable player controls during cinematic
             // Use generic GetComponent — string reflection fails with namespaced types
@@ -164,8 +164,17 @@ namespace Afterhumans.Scenes
             {
                 _fpsController.enabled = _fpsWasEnabled;
                 var fps = _fpsController as SimpleFirstPersonController;
-                if (fps != null) fps.SetPitch(15f);
-                Debug.Log($"[IntroDirector] FPS controller enabled={_fpsController.enabled}");
+                if (fps != null)
+                {
+                    // Freeze player at exact spawn position facing +Z
+                    // Will unfreeze when player presses WASD or E
+                    fps.FreezeAt(
+                        playerTransform.position,  // current position
+                        Quaternion.identity,        // face +Z (into room)
+                        5f                          // 5° down pitch
+                    );
+                }
+                Debug.Log($"[IntroDirector] FPS controller enabled, FROZEN at {playerTransform.position}");
             }
             else
             {

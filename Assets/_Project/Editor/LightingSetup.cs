@@ -54,11 +54,7 @@ namespace Afterhumans.EditorTools
             {
                 if (preset == Preset.Botanika)
                 {
-                    // Use warm solid color instead of HDRI skybox — the skybox is
-                    // too bright and washes out the room interior. Windows show
-                    // warm amber glow suggesting sunset outside.
-                    playerCam.clearFlags = CameraClearFlags.SolidColor;
-                    playerCam.backgroundColor = new Color(0.85f, 0.65f, 0.40f, 1f); // warm amber sky
+                    playerCam.clearFlags = CameraClearFlags.Skybox;
                 }
                 else
                 {
@@ -82,11 +78,11 @@ namespace Afterhumans.EditorTools
 
         private static void ApplyBotanika()
         {
-            // Interior greenhouse — warm golden hour, high ambient to compete with skybox
+            // Interior greenhouse — warm golden hour, LOW ambient for shadow contrast
             RenderSettings.fogColor = new Color(0.95f, 0.80f, 0.58f, 1f);
-            RenderSettings.fogDensity = 0.008f;
-            RenderSettings.ambientLight = new Color(0.85f, 0.72f, 0.55f);  // brighter warm ambient
-            RenderSettings.ambientIntensity = 2.0f;  // strong fill to match skybox brightness
+            RenderSettings.fogDensity = 0.015f;  // Art Bible: 0.015 (visible haze)
+            RenderSettings.ambientLight = new Color(0.55f, 0.45f, 0.32f);  // warm but dim
+            RenderSettings.ambientIntensity = 0.5f;  // low — let sun create contrast
         }
 
         private static void ApplyCity()
@@ -123,8 +119,8 @@ namespace Afterhumans.EditorTools
             {
                 case Preset.Botanika:
                     sun.color = new Color(1.0f, 0.86f, 0.67f);  // 3200K
-                    sun.intensity = 2.5f;  // strong sun through greenhouse windows
-                    sun.transform.rotation = Quaternion.Euler(35f, -45f, 0f);  // steeper angle for more floor light
+                    sun.intensity = 1.5f;  // Art Bible: 1.2-1.5
+                    sun.transform.rotation = Quaternion.Euler(25f, -45f, 0f);  // Art Bible: 25° above horizon
                     sun.shadows = LightShadows.Soft;
                     break;
                 case Preset.City:

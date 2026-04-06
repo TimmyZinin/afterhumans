@@ -59,16 +59,16 @@ namespace Afterhumans.EditorTools
             t.shadow    = Hex("#3A2819");
             // Lighting
             t.sunTemperatureKelvin = 3200f;
-            t.sunIntensity = 1.4f;
+            t.sunIntensity = 1.5f;
             t.sunRotation = new Vector3(25f, -45f, 0f);
-            t.ambientLight = Hex("#9A7A57");
-            t.ambientIntensity = 1.25f;
+            t.ambientLight = new Color(0.55f, 0.45f, 0.32f); // warm but dim — shadows visible
+            t.ambientIntensity = 0.5f;  // LOW — let sun create contrast and pools of light
             t.ambientMode = AmbientMode.Flat;
-            // Fog — tight interior
+            // Fog — visible warm haze
             t.fogEnabled = true;
             t.fogMode = FogMode.ExponentialSquared;
             t.fogColor = Hex("#F5D8A3");
-            t.fogDensity = 0.008f;
+            t.fogDensity = 0.015f;  // Art Bible: 0.015
             // Dialogue
             t.dialoguePanelColor = new Color(0.227f, 0.157f, 0.098f, 0.85f);
             t.dialogueTextColor = Hex("#F2C084");

@@ -42,6 +42,22 @@ namespace Afterhumans.EditorTools
         private const string MaterialsDir = "Assets/_Project/Materials/Tints";
         private const string BotanikaThemePath = "Assets/_Project/Art/Themes/Botanika.asset";
 
+        private static Shader _urpLit;
+
+        private static Shader GetUrpLit()
+        {
+            if (_urpLit == null)
+            {
+                _urpLit = Shader.Find("Universal Render Pipeline/Lit");
+                if (_urpLit == null)
+                {
+                    Debug.LogWarning("[BotanikaDresser] URP/Lit not found, falling back to Standard");
+                    _urpLit = Shader.Find("Standard");
+                }
+            }
+            return _urpLit;
+        }
+
         private static Material LoadOrCreateLit(string name, Color color, float smoothness = 0.2f)
         {
             if (!Directory.Exists(MaterialsDir))
@@ -51,13 +67,7 @@ namespace Afterhumans.EditorTools
             }
             string path = $"{MaterialsDir}/{name}.mat";
             var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
-            // BOT-F01: URP активен → используем URP/Lit. Fallback на Standard для edge cases.
-            var shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                Debug.LogWarning("[BotanikaDresser] URP/Lit not found — URP not activated? Falling back to Standard");
-                shader = Shader.Find("Standard");
-            }
+            var shader = GetUrpLit();
             if (existing == null)
             {
                 var mat = new Material(shader);
@@ -70,13 +80,42 @@ namespace Afterhumans.EditorTools
                 AssetDatabase.SaveAssets();
                 return mat;
             }
-            // Update existing asset's color in case we tweak the palette
             existing.shader = shader;
             if (existing.HasProperty("_BaseColor")) existing.SetColor("_BaseColor", color);
             if (existing.HasProperty("_Color")) existing.SetColor("_Color", color);
             if (existing.HasProperty("_Smoothness")) existing.SetFloat("_Smoothness", smoothness);
             EditorUtility.SetDirty(existing);
             return existing;
+        }
+
+        /// <summary>Create URP/Lit material WITH a procedural texture (not flat color)</summary>
+        private static Material LoadOrCreateLitTextured(string name, Color tint, Texture2D texture, float smoothness = 0.2f)
+        {
+            if (!Directory.Exists(MaterialsDir))
+            {
+                Directory.CreateDirectory(MaterialsDir);
+                AssetDatabase.Refresh();
+            }
+            string path = $"{MaterialsDir}/{name}.mat";
+            var shader = GetUrpLit();
+
+            // Always recreate to pick up new textures
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (existing != null) AssetDatabase.DeleteAsset(path);
+
+            var mat = new Material(shader);
+            mat.name = name;
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+            if (mat.HasProperty("_BaseMap") && texture != null) mat.SetTexture("_BaseMap", texture);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", smoothness);
+            // Tile the texture for more detail
+            if (mat.HasProperty("_BaseMap"))
+            {
+                mat.SetTextureScale("_BaseMap", new Vector2(3f, 3f));
+            }
+            AssetDatabase.CreateAsset(mat, path);
+            AssetDatabase.SaveAssets();
+            return mat;
         }
 
         // BOT-A08: palette now data-driven from Botanika.asset SceneTheme.
@@ -103,17 +142,28 @@ namespace Afterhumans.EditorTools
             Color flowerYell = theme != null ? theme.accent1   : new Color(0.95f, 0.82f, 0.18f);
             Color flowerPurp = new Color(0.58f, 0.32f, 0.78f);  // no theme slot; keep fixed
 
-            _matWood         = LoadOrCreateLit("Tint_Wood",         wood,        0.15f);
-            _matUpholstery   = LoadOrCreateLit("Tint_Upholstery",   upholstery,  0.1f);
+            // Generate procedural textures
+            ProceduralTextures.ClearCache(); // regenerate every Dress run
+            var texWood    = ProceduralTextures.WoodFurniture();
+            var texPlaster = ProceduralTextures.PlasterWall();
+            var texTile    = ProceduralTextures.TileFloor();
+            var texFabric  = ProceduralTextures.Fabric();
+
+            // TEXTURED materials (wood, walls, upholstery, floor)
+            _matWood         = LoadOrCreateLitTextured("Tint_Wood",       Color.white, texWood,    0.25f);
+            _matUpholstery   = LoadOrCreateLitTextured("Tint_Upholstery", Color.white, texFabric,  0.15f);
+            _matBark         = LoadOrCreateLitTextured("Tint_Bark",       new Color(0.7f,0.7f,0.7f), texWood, 0.1f);
+
+            // Flat-color materials (metal, plants, flowers — textures not needed)
             _matMetal        = LoadOrCreateLit("Tint_Metal",        metal,       0.6f);
             _matLeaf         = LoadOrCreateLit("Tint_Leaf",         leaf,        0.15f);
-            _matBark         = LoadOrCreateLit("Tint_Bark",         bark,        0.1f);
             _matStem         = LoadOrCreateLit("Tint_Stem",         stem,        0.15f);
             _matBook         = LoadOrCreateLit("Tint_Book",         book,        0.15f);
             _matFlowerRed    = LoadOrCreateLit("Tint_FlowerRed",    flowerRed,   0.3f);
             _matFlowerYellow = LoadOrCreateLit("Tint_FlowerYellow", flowerYell,  0.3f);
             _matFlowerPurple = LoadOrCreateLit("Tint_FlowerPurple", flowerPurp,  0.3f);
             AssetDatabase.SaveAssets();
+            Debug.Log("[BotanikaDresser] Materials initialized with procedural textures");
         }
 
         // Small color math helpers for palette derivation — keep inline to avoid
@@ -136,7 +186,8 @@ namespace Afterhumans.EditorTools
         private static void BuildGreenhouseShell(GameObject parent)
         {
             // Floor: 11x11 tiles, each 1m square, centered on origin so room spans (-5.5..5.5)
-            var matTile = LoadOrCreateLit("Tint_TileFloor", new Color(0.58f, 0.45f, 0.30f), 0.1f);
+            var texTile = ProceduralTextures.TileFloor();
+            var matTile = LoadOrCreateLitTextured("Tint_TileFloor", Color.white, texTile, 0.15f);
             for (int x = -5; x <= 5; x++)
             {
                 for (int z = -5; z <= 5; z++)
@@ -147,7 +198,8 @@ namespace Afterhumans.EditorTools
             }
 
             // Walls along the perimeter, with wallWindow tiles every 3rd slot for light
-            var matPlaster = LoadOrCreateLit("Tint_Plaster", new Color(0.75f, 0.63f, 0.48f), 0.1f);
+            var texPlaster = ProceduralTextures.PlasterWall();
+            var matPlaster = LoadOrCreateLitTextured("Tint_Plaster", Color.white, texPlaster, 0.12f);
             for (int x = -5; x <= 5; x++)
             {
                 // North wall (+Z side), facing -Z (into room)
@@ -275,10 +327,9 @@ namespace Afterhumans.EditorTools
             var player = GameObject.Find("Player");
             if (player != null)
             {
-                // Y=0.02 — directly on floor tiles (not above them!)
-                // Previous y=1.1 caused player to fall through thin tile colliders
-                player.transform.position = new Vector3(0f, 0.02f, -4.0f);
-                player.transform.rotation = Quaternion.identity;
+                // Spawn in center-south of room, away from Stas (at z=-3.5)
+                player.transform.position = new Vector3(0f, 0.02f, -2.0f);
+                player.transform.rotation = Quaternion.identity; // face +Z toward Sasha
                 Debug.Log("[BotanikaDresser] Player spawn on floor (0, 0.02, -4.0)");
             }
 
