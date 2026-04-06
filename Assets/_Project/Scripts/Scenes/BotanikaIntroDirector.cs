@@ -43,6 +43,8 @@ namespace Afterhumans.Scenes
 
         private MonoBehaviour _fpsController;
         private MonoBehaviour _playerInteraction;
+        private bool _fpsWasEnabled;
+        private bool _interactWasEnabled;
         private Vector3 _finalCamPos;
         private Quaternion _finalCamRot;
 
@@ -77,6 +79,9 @@ namespace Afterhumans.Scenes
             _fpsController = playerTransform.GetComponent("SimpleFirstPersonController") as MonoBehaviour;
             _playerInteraction = playerTransform.GetComponent("PlayerInteraction") as MonoBehaviour;
 
+            // mm-review fix: track original state so we restore correctly
+            _fpsWasEnabled = _fpsController != null && _fpsController.enabled;
+            _interactWasEnabled = _playerInteraction != null && _playerInteraction.enabled;
             if (_fpsController != null) _fpsController.enabled = false;
             if (_playerInteraction != null) _playerInteraction.enabled = false;
 
@@ -138,9 +143,11 @@ namespace Afterhumans.Scenes
             yield return SmoothMove(cam, cam.position, _finalCamPos,
                 cam.rotation, _finalCamRot, 3f);
 
-            // Enable player controls
-            if (_fpsController != null) _fpsController.enabled = true;
-            if (_playerInteraction != null) _playerInteraction.enabled = true;
+            // mm-review fix: restore original enabled state, not unconditional true.
+            // If another system (e.g. dialogue) disabled them during cinematic,
+            // we don't blindly re-enable — respect the other system's lock.
+            if (_fpsController != null) _fpsController.enabled = _fpsWasEnabled;
+            if (_playerInteraction != null) _playerInteraction.enabled = _interactWasEnabled;
 
             IsPlaying = false;
 
@@ -154,6 +161,13 @@ namespace Afterhumans.Scenes
         private IEnumerator SmoothMove(Transform t, Vector3 fromPos, Vector3 toPos,
             Quaternion fromRot, Quaternion toRot, float duration)
         {
+            // mm-review fix: guard against zero duration → division by zero
+            if (duration <= 0f)
+            {
+                t.position = toPos;
+                t.rotation = toRot;
+                yield break;
+            }
             float elapsed = 0f;
             while (elapsed < duration)
             {
