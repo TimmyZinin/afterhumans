@@ -34,8 +34,8 @@ namespace Afterhumans.Audio
         private AudioSource _source;
         private AudioClip[] _stepClips;
         private float _stepTimer;
-        private CharacterController _cc;
         private Vector3 _lastPos;
+        private bool _lastPosInitialized;
         private int _clipIndex;
 
         private void Awake()
@@ -44,8 +44,6 @@ namespace Afterhumans.Audio
             _source.playOnAwake = false;
             _source.spatialBlend = 0f;  // 2D (player's own footsteps)
             _source.volume = 0.35f;
-
-            _cc = GetComponent<CharacterController>();
 
             // Generate 4 procedural step variations
             _stepClips = new AudioClip[4];
@@ -57,16 +55,19 @@ namespace Afterhumans.Audio
 
         private void Update()
         {
-            float velocity;
-            if (_cc != null)
+            // mm-review HIGH fix: initialize _lastPos on first frame to prevent
+            // phantom velocity spike from (currentPos - Vector3.zero).
+            if (!_lastPosInitialized)
             {
-                velocity = _cc.velocity.magnitude;
-            }
-            else
-            {
-                velocity = (transform.position - _lastPos).magnitude / Time.deltaTime;
                 _lastPos = transform.position;
+                _lastPosInitialized = true;
+                return;
             }
+
+            float velocity = Time.deltaTime > 0.0001f
+                ? (transform.position - _lastPos).magnitude / Time.deltaTime
+                : 0f;
+            _lastPos = transform.position;
 
             if (velocity < minVelocity)
             {

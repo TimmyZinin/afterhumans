@@ -30,11 +30,16 @@ namespace Afterhumans.Audio
                 float overtone = Mathf.Sin(t * 220f * Mathf.PI * 2f) * 0.08f;
                 float sub = Mathf.Sin(t * 55f * Mathf.PI * 2f) * 0.12f;
                 data[i] = (fundamental + overtone + sub) * lfo * 0.4f;
-                // Crossfade loop point (last 0.5s fades to match start)
-                if (i > sampleCount - SampleRate / 2)
+                // mm-review HIGH fix: symmetrical crossfade — fade in first 0.5s
+                // AND fade out last 0.5s for seamless loop point continuity.
+                int fadeLen = SampleRate / 2;
+                if (i < fadeLen)
                 {
-                    float fade = (float)(sampleCount - i) / (SampleRate / 2f);
-                    data[i] *= fade;
+                    data[i] *= (float)i / fadeLen;
+                }
+                else if (i > sampleCount - fadeLen)
+                {
+                    data[i] *= (float)(sampleCount - i) / fadeLen;
                 }
             }
             clip.SetData(data, 0);
