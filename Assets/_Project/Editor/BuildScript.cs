@@ -66,8 +66,8 @@ namespace Afterhumans.EditorTools
             // Metal exclusive fullscreen blocks macOS compositor → screencapture
             // and Computer Use MCP return black/empty frames.
             PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
-            PlayerSettings.defaultScreenWidth = 1280;
-            PlayerSettings.defaultScreenHeight = 720;
+            PlayerSettings.defaultScreenWidth = 1920;
+            PlayerSettings.defaultScreenHeight = 1080;
             PlayerSettings.resizableWindow = true;
 
             // Reduce build size, acceptable for macOS standalone

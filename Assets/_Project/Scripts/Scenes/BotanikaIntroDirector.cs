@@ -2,6 +2,7 @@ using System.Collections;
 using TMPro;
 using UnityEngine;
 using Afterhumans.Dialogue;
+using Afterhumans.Player;
 
 namespace Afterhumans.Scenes
 {
@@ -74,16 +75,23 @@ namespace Afterhumans.Scenes
             // QA Bug 3 fix: explicitly set final camera orientation facing into
             // the room (toward +Z, slightly down) instead of inheriting whatever
             // rotation the camera had at scene load — which often looks at skybox.
+            // Camera settles at eye height above wherever the player stands.
+            // Player may be at any Y (depends on BotanikaDresser spawn),
+            // so we use player pos + eye offset.
             _finalCamPos = playerTransform.position + new Vector3(0f, 1.65f, 0f);
-            _finalCamRot = Quaternion.Euler(5f, 0f, 0f);  // slightly down, into room
+            _finalCamRot = Quaternion.Euler(15f, 0f, 0f);  // 15° down — see room clearly
 
             // Disable player controls during cinematic
-            _fpsController = playerTransform.GetComponent("SimpleFirstPersonController") as MonoBehaviour;
-            _playerInteraction = playerTransform.GetComponent("PlayerInteraction") as MonoBehaviour;
+            // Use generic GetComponent — string reflection fails with namespaced types
+            _fpsController = playerTransform.GetComponent<SimpleFirstPersonController>();
+            _playerInteraction = playerTransform.GetComponent<PlayerInteraction>();
 
-            // mm-review fix: track original state so we restore correctly
+            Debug.Log($"[IntroDirector] FPS controller found: {_fpsController != null}, PlayerInteraction found: {_playerInteraction != null}");
+            Debug.Log($"[IntroDirector] Player pos: {playerTransform.position}, Camera pos: {playerCamera.transform.position}");
+
             _fpsWasEnabled = _fpsController != null && _fpsController.enabled;
             _interactWasEnabled = _playerInteraction != null && _playerInteraction.enabled;
+            Debug.Log($"[IntroDirector] FPS was enabled: {_fpsWasEnabled}, Interact was enabled: {_interactWasEnabled}");
             if (_fpsController != null) _fpsController.enabled = false;
             if (_playerInteraction != null) _playerInteraction.enabled = false;
 
@@ -148,9 +156,24 @@ namespace Afterhumans.Scenes
             // mm-review fix: restore original enabled state, not unconditional true.
             // If another system (e.g. dialogue) disabled them during cinematic,
             // we don't blindly re-enable — respect the other system's lock.
-            if (_fpsController != null) _fpsController.enabled = _fpsWasEnabled;
+            // Reset player body to face +Z (into room, toward Sasha)
+            playerTransform.rotation = Quaternion.identity;
+
+            Debug.Log($"[IntroDirector] Cinematic done. Re-enabling controls.");
+            if (_fpsController != null)
+            {
+                _fpsController.enabled = _fpsWasEnabled;
+                var fps = _fpsController as SimpleFirstPersonController;
+                if (fps != null) fps.SetPitch(15f);
+                Debug.Log($"[IntroDirector] FPS controller enabled={_fpsController.enabled}");
+            }
+            else
+            {
+                Debug.LogError("[IntroDirector] FPS CONTROLLER IS NULL — player will be frozen!");
+            }
             if (_playerInteraction != null) _playerInteraction.enabled = _interactWasEnabled;
 
+            Debug.Log($"[IntroDirector] Player final pos: {playerTransform.position}, Camera pos: {playerCamera.transform.position}, Camera rot: {playerCamera.transform.rotation.eulerAngles}");
             IsPlaying = false;
 
             // Show tutorial overlay

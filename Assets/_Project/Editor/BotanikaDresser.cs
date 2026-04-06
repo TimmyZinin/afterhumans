@@ -275,10 +275,22 @@ namespace Afterhumans.EditorTools
             var player = GameObject.Find("Player");
             if (player != null)
             {
-                player.transform.position = new Vector3(0f, 1.1f, -4.5f);
+                // Y=0.02 — directly on floor tiles (not above them!)
+                // Previous y=1.1 caused player to fall through thin tile colliders
+                player.transform.position = new Vector3(0f, 0.02f, -4.0f);
                 player.transform.rotation = Quaternion.identity;
-                Debug.Log("[BotanikaDresser] Player spawn at doorway (0, 1.1, -4.5)");
+                Debug.Log("[BotanikaDresser] Player spawn on floor (0, 0.02, -4.0)");
             }
+
+            // Safety net: thick invisible floor collider under the entire room
+            // Prevents player from falling through thin Kenney tile colliders
+            var safetyFloor = new GameObject("SafetyFloor");
+            safetyFloor.transform.position = new Vector3(0f, -1f, 0f);
+            var safetyCol = safetyFloor.AddComponent<BoxCollider>();
+            safetyCol.size = new Vector3(30f, 2f, 30f);  // 30x30 area, 2m thick
+            safetyCol.center = Vector3.zero;
+            safetyFloor.transform.SetParent(propsRoot.transform, worldPositionStays: true);
+            Debug.Log("[BotanikaDresser] Safety floor collider added at y=-0.5");
 
             // Hide the 50m placeholder ground plane — our 11x11 tile floor replaces it.
             var oldGround = GameObject.Find("Placeholder_Ground");
@@ -419,6 +431,9 @@ namespace Afterhumans.EditorTools
 
             // BOT-N01/02/03/08: 5 humanoid NPCs with procedural idle + facing
             BotanikaNpcPopulator.Apply(propsRoot);
+
+            // Kafka the corgi — emotional anchor of the game
+            SceneEnricher.CreateKafkaPlaceholder(player);
 
             EditorSceneManager.MarkSceneDirty(scene);
             bool saved = EditorSceneManager.SaveScene(scene, ScenePath);

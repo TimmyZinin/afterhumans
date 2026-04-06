@@ -54,7 +54,11 @@ namespace Afterhumans.EditorTools
             {
                 if (preset == Preset.Botanika)
                 {
-                    playerCam.clearFlags = CameraClearFlags.Skybox;
+                    // Use warm solid color instead of HDRI skybox — the skybox is
+                    // too bright and washes out the room interior. Windows show
+                    // warm amber glow suggesting sunset outside.
+                    playerCam.clearFlags = CameraClearFlags.SolidColor;
+                    playerCam.backgroundColor = new Color(0.85f, 0.65f, 0.40f, 1f); // warm amber sky
                 }
                 else
                 {
@@ -78,12 +82,11 @@ namespace Afterhumans.EditorTools
 
         private static void ApplyBotanika()
         {
-            // Interior greenhouse — soft warm glow, LOW fog density (we're indoors, not in the desert).
-            // Camera keeps Skybox clearFlags in this preset so the windows show sky beyond the walls.
+            // Interior greenhouse — warm golden hour, high ambient to compete with skybox
             RenderSettings.fogColor = new Color(0.95f, 0.80f, 0.58f, 1f);
             RenderSettings.fogDensity = 0.008f;
-            RenderSettings.ambientLight = new Color(0.58f, 0.48f, 0.34f);
-            RenderSettings.ambientIntensity = 1.25f;
+            RenderSettings.ambientLight = new Color(0.85f, 0.72f, 0.55f);  // brighter warm ambient
+            RenderSettings.ambientIntensity = 2.0f;  // strong fill to match skybox brightness
         }
 
         private static void ApplyCity()
@@ -120,8 +123,8 @@ namespace Afterhumans.EditorTools
             {
                 case Preset.Botanika:
                     sun.color = new Color(1.0f, 0.86f, 0.67f);  // 3200K
-                    sun.intensity = 1.4f;
-                    sun.transform.rotation = Quaternion.Euler(25f, -45f, 0f);
+                    sun.intensity = 2.5f;  // strong sun through greenhouse windows
+                    sun.transform.rotation = Quaternion.Euler(35f, -45f, 0f);  // steeper angle for more floor light
                     sun.shadows = LightShadows.Soft;
                     break;
                 case Preset.City:

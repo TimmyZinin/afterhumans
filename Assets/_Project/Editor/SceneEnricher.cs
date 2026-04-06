@@ -521,60 +521,169 @@ namespace Afterhumans.EditorTools
             }
         }
 
-        private static void CreateKafkaPlaceholder(GameObject player)
+        private static Material KafkaMat(Color color, float smoothness = 0.3f)
         {
-            // Already exists (re-run) — leave it
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var mat = new Material(shader);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", smoothness);
+            return mat;
+        }
+
+        private static GameObject KafkaPart(string name, PrimitiveType type, Transform parent,
+            Vector3 localPos, Vector3 localScale, Material mat, Vector3? eulerAngles = null)
+        {
+            var part = GameObject.CreatePrimitive(type);
+            part.name = name;
+            part.transform.SetParent(parent, worldPositionStays: false);
+            part.transform.localPosition = localPos;
+            part.transform.localScale = localScale;
+            if (eulerAngles.HasValue)
+                part.transform.localEulerAngles = eulerAngles.Value;
+            var rend = part.GetComponent<Renderer>();
+            if (rend != null) rend.sharedMaterial = mat;
+            Object.DestroyImmediate(part.GetComponent<Collider>());
+            return part;
+        }
+
+        public static void CreateKafkaPlaceholder(GameObject player)
+        {
+            // Remove old placeholder if it exists (allows re-run / upgrade)
             var existing = GameObject.Find("Kafka");
-            if (existing != null) return;
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            // Welsh Corgi Cardigan — black with white markings + tan accents
+            var matBlack = KafkaMat(new Color(0.15f, 0.14f, 0.16f), 0.25f);
+            var matWhite = KafkaMat(new Color(0.92f, 0.90f, 0.87f), 0.2f);
+            var matTan   = KafkaMat(new Color(0.72f, 0.50f, 0.28f), 0.2f);
+            var matNose  = KafkaMat(new Color(0.08f, 0.06f, 0.06f), 0.6f);
+            var matEye   = KafkaMat(new Color(0.12f, 0.08f, 0.06f), 0.7f);
 
             var kafka = new GameObject("Kafka");
             kafka.tag = "Untagged";
 
-            // Body: low wide box tinted black-white corgi-ish via simple dark grey tint.
-            // Real corgi mesh will replace this later.
-            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            body.name = "KafkaBody";
-            body.transform.SetParent(kafka.transform, worldPositionStays: false);
-            body.transform.localPosition = Vector3.zero;
-            body.transform.localScale = new Vector3(0.35f, 0.25f, 0.55f); // corgi-proportioned stub
-            var bodyRend = body.GetComponent<Renderer>();
-            if (bodyRend != null && bodyRend.sharedMaterial != null)
-            {
-                var mat = new Material(bodyRend.sharedMaterial);
-                mat.color = new Color(0.18f, 0.18f, 0.20f); // almost black
-                bodyRend.sharedMaterial = mat;
-            }
+            // === BODY (elongated capsule — corgi proportions: long, low) ===
+            KafkaPart("Body", PrimitiveType.Capsule, kafka.transform,
+                Vector3.zero,
+                new Vector3(0.22f, 0.28f, 0.22f),  // capsule: radius=0.22, half-height=0.28
+                matBlack,
+                new Vector3(0f, 0f, 90f));  // rotate to horizontal
 
-            // White chest/collar stripe
-            var chest = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            chest.name = "KafkaChest";
-            chest.transform.SetParent(kafka.transform, worldPositionStays: false);
-            chest.transform.localPosition = new Vector3(0f, -0.02f, 0.20f);
-            chest.transform.localScale = new Vector3(0.36f, 0.20f, 0.16f);
-            var chestRend = chest.GetComponent<Renderer>();
-            if (chestRend != null && chestRend.sharedMaterial != null)
-            {
-                var mat = new Material(chestRend.sharedMaterial);
-                mat.color = new Color(0.95f, 0.95f, 0.93f); // off-white
-                chestRend.sharedMaterial = mat;
-            }
-            // Disable child colliders — only Kafka root needs one for physics sanity
-            Object.DestroyImmediate(chest.GetComponent<Collider>());
-            Object.DestroyImmediate(body.GetComponent<Collider>());
+            // White chest
+            KafkaPart("Chest", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(0f, -0.02f, 0.18f),
+                new Vector3(0.18f, 0.16f, 0.14f),
+                matWhite);
 
-            // Position Kafka at player's feet + 1m to the right
+            // White belly stripe
+            KafkaPart("Belly", PrimitiveType.Cube, kafka.transform,
+                new Vector3(0f, -0.09f, 0.02f),
+                new Vector3(0.14f, 0.04f, 0.22f),
+                matWhite);
+
+            // === HEAD (sphere, slightly larger for cute look) ===
+            KafkaPart("Head", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(0f, 0.06f, 0.30f),
+                new Vector3(0.20f, 0.18f, 0.18f),
+                matBlack);
+
+            // Snout / muzzle (small sphere, tan)
+            KafkaPart("Snout", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(0f, 0.02f, 0.40f),
+                new Vector3(0.10f, 0.08f, 0.10f),
+                matTan);
+
+            // Nose (tiny sphere)
+            KafkaPart("Nose", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(0f, 0.04f, 0.445f),
+                new Vector3(0.045f, 0.035f, 0.035f),
+                matNose);
+
+            // Eyes (two small spheres)
+            KafkaPart("EyeL", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(-0.06f, 0.10f, 0.38f),
+                new Vector3(0.035f, 0.035f, 0.02f),
+                matEye);
+            KafkaPart("EyeR", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(0.06f, 0.10f, 0.38f),
+                new Vector3(0.035f, 0.035f, 0.02f),
+                matEye);
+
+            // Tan eyebrow markings
+            KafkaPart("BrowL", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(-0.055f, 0.13f, 0.37f),
+                new Vector3(0.04f, 0.02f, 0.03f),
+                matTan);
+            KafkaPart("BrowR", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(0.055f, 0.13f, 0.37f),
+                new Vector3(0.04f, 0.02f, 0.03f),
+                matTan);
+
+            // === EARS (two cubes, angled outward — corgi signature big ears) ===
+            KafkaPart("EarL", PrimitiveType.Cube, kafka.transform,
+                new Vector3(-0.08f, 0.20f, 0.30f),
+                new Vector3(0.06f, 0.12f, 0.05f),
+                matBlack,
+                new Vector3(0f, 0f, 15f));
+            KafkaPart("EarR", PrimitiveType.Cube, kafka.transform,
+                new Vector3(0.08f, 0.20f, 0.30f),
+                new Vector3(0.06f, 0.12f, 0.05f),
+                matBlack,
+                new Vector3(0f, 0f, -15f));
+
+            // === LEGS (4 short capsules — corgi's stubby legs) ===
+            float legY = -0.12f;
+            float legFrontZ = 0.16f;
+            float legBackZ = -0.16f;
+            float legX = 0.09f;
+            var legScale = new Vector3(0.05f, 0.07f, 0.05f);
+
+            KafkaPart("LegFL", PrimitiveType.Capsule, kafka.transform,
+                new Vector3(-legX, legY, legFrontZ), legScale, matBlack);
+            KafkaPart("LegFR", PrimitiveType.Capsule, kafka.transform,
+                new Vector3(legX, legY, legFrontZ), legScale, matBlack);
+            KafkaPart("LegBL", PrimitiveType.Capsule, kafka.transform,
+                new Vector3(-legX, legY, legBackZ), legScale, matBlack);
+            KafkaPart("LegBR", PrimitiveType.Capsule, kafka.transform,
+                new Vector3(legX, legY, legBackZ), legScale, matBlack);
+
+            // White paws
+            var pawScale = new Vector3(0.05f, 0.02f, 0.055f);
+            KafkaPart("PawFL", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(-legX, -0.18f, legFrontZ), pawScale, matWhite);
+            KafkaPart("PawFR", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(legX, -0.18f, legFrontZ), pawScale, matWhite);
+            KafkaPart("PawBL", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(-legX, -0.18f, legBackZ), pawScale, matWhite);
+            KafkaPart("PawBR", PrimitiveType.Sphere, kafka.transform,
+                new Vector3(legX, -0.18f, legBackZ), pawScale, matWhite);
+
+            // === TAIL (capsule, slightly up and curved) ===
+            KafkaPart("Tail", PrimitiveType.Capsule, kafka.transform,
+                new Vector3(0f, 0.06f, -0.30f),
+                new Vector3(0.04f, 0.10f, 0.04f),
+                matBlack,
+                new Vector3(-30f, 0f, 0f));  // angled upward
+
+            // Position Kafka on the floor next to the player
             if (player != null)
             {
-                kafka.transform.position = player.transform.position + new Vector3(1.2f, -0.9f, 0.3f);
+                kafka.transform.position = new Vector3(
+                    player.transform.position.x + 1.0f,
+                    0.2f,  // on floor (y=0) + corgi belly height
+                    player.transform.position.z + 0.5f);
             }
             else
             {
-                kafka.transform.position = new Vector3(1.2f, 0.2f, 0.3f);
+                kafka.transform.position = new Vector3(1.0f, 0.2f, -3.5f);
             }
 
-            // Behaviour
+            // Behaviour: follow + idle animation
             var follow = Undo.AddComponent<KafkaFollowSimple>(kafka);
-            Debug.Log($"[SceneEnricher] Kafka placeholder added ({kafka.name}, follow={follow != null})");
+            kafka.AddComponent<Afterhumans.Kafka.KafkaIdleAnimation>();
+
+            Debug.Log($"[SceneEnricher] Kafka corgi built (22 parts, follow={follow != null})");
         }
 
         private static void CreatePlaceholderNpc(string sceneName, string npcKnot, string npcName)
