@@ -81,12 +81,13 @@ namespace Afterhumans.Player
         {
             if (cameraTransform == null) return;
 
-            // Skip mouse input for a few frames after lock to avoid delta burst
+            // HIGH-4 fix: skip mouse input after lock to avoid delta burst.
+            // GetAxisRaw doesn't truly "consume" — it just reads current frame value.
+            // By returning early we discard the frame's delta entirely.
             if (_ignoreMouseFrames > 0)
             {
                 _ignoreMouseFrames--;
-                Input.GetAxisRaw("Mouse X"); // consume
-                Input.GetAxisRaw("Mouse Y");
+                // Don't apply any rotation — just skip this frame's mouse input
                 return;
             }
 

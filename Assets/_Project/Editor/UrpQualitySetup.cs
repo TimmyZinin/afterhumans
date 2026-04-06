@@ -118,10 +118,12 @@ namespace Afterhumans.EditorTools
         {
             // Generate greenhouse window frame cookie texture
             var cookiePath = "Assets/_Project/Textures/Procedural/cookie_greenhouse.png";
+            // MEDIUM-2 fix: early return with cookie application if already exists
             var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(cookiePath);
             if (existing != null)
             {
                 ApplyCookieToSun(existing);
+                Debug.Log("[UrpQualitySetup] Cookie already exists, reusing");
                 return;
             }
 
@@ -194,18 +196,20 @@ namespace Afterhumans.EditorTools
             }
         }
 
+        // HIGH-1 fix: explicit validation + error level logging
+        private static int _propMissing;
         private static void SetBool(SerializedObject so, string prop, bool value)
         {
             var p = so.FindProperty(prop);
-            if (p != null) p.boolValue = value;
-            else Debug.LogWarning($"[UrpQualitySetup] Property not found: {prop}");
+            if (p != null) { p.boolValue = value; }
+            else { Debug.LogError($"[UrpQualitySetup] MISSING PROPERTY: {prop} — URP version mismatch?"); _propMissing++; }
         }
 
         private static void SetInt(SerializedObject so, string prop, int value)
         {
             var p = so.FindProperty(prop);
-            if (p != null) p.intValue = value;
-            else Debug.LogWarning($"[UrpQualitySetup] Property not found: {prop}");
+            if (p != null) { p.intValue = value; }
+            else { Debug.LogError($"[UrpQualitySetup] MISSING PROPERTY: {prop} — URP version mismatch?"); _propMissing++; }
         }
     }
 }

@@ -17,6 +17,55 @@ namespace Afterhumans.EditorTools
         private const string ScenePath = "Assets/_Project/Scenes/Scene_Botanika.unity";
 
         // ============================================================
+        // SHARED CONSTANTS — single source of truth for all sprints
+        // FIX: CRITICAL-1 from mm-review — positions must match across sprints
+        // ============================================================
+
+        // Room structure
+        private const float WallHeight = 9.6f;
+        private const float RoomWidth = 12f;
+        private const float RoomDepth = 10f;
+
+        // Asset paths
+        private const string FurnitureFbx = "Assets/_Project/Vendor/Kenney/furniture-kit/Models/FBX format";
+        private const string NatureFbx = "Assets/_Project/Vendor/Kenney/nature-kit/Models/FBX format";
+        private const string CharacterFbx = "Assets/_Project/Vendor/Kenney/blocky-characters/Models/FBX format";
+        private const string CharacterTex = CharacterFbx + "/Textures";
+
+        // Furniture positions — used by BOTH greybox AND FBX placement
+        private static readonly Vector3 PosSofa       = new Vector3(0, 0, 3.8f);
+        private static readonly Vector3 PosSofaEast    = new Vector3(4.8f, 0, 0);
+        private static readonly Vector3 PosCoffeeTable = new Vector3(0, 0, 2.5f);
+        private static readonly Vector3 PosFloorLamp   = new Vector3(2.0f, 0, 3.8f);
+        private static readonly Vector3 PosDesk        = new Vector3(-4, 0, 1.5f);
+        private static readonly Vector3 PosChairMila   = new Vector3(-2.8f, 0, 1.5f);
+        private static readonly Vector3 PosKitchen     = new Vector3(4.5f, 0, -2.5f);
+        private static readonly Vector3 PosTableNikolai = new Vector3(-4.5f, 0, 4.2f);
+        private static readonly Vector3 PosChairNikolai = new Vector3(-3.5f, 0, 4.2f);
+        private static readonly Vector3 PosBookcaseNW  = new Vector3(-5.2f, 0, 4.5f);
+        private static readonly Vector3 PosBookcaseNE  = new Vector3(5.2f, 0, 4.5f);
+        private static readonly Vector3 PosBookcaseW   = new Vector3(-5.2f, 0, 0);
+        private static readonly Vector3 PosServerRack  = new Vector3(5.2f, 0, -3.5f);
+
+        // NPC positions
+        private static readonly Vector3 PosSasha   = new Vector3(0, 0, 2.0f);
+        private static readonly Vector3 PosMila    = new Vector3(-2.2f, 0, 1.5f);
+        private static readonly Vector3 PosKirill  = new Vector3(3.0f, 0, -2.5f);
+        private static readonly Vector3 PosNikolai = new Vector3(-3.0f, 0, 3.5f);
+        private static readonly Vector3 PosStas    = new Vector3(1.5f, 0, -4f);
+        private static readonly Vector3 PosKafka   = new Vector3(1, 0, -2.5f);
+        private static readonly Vector3 PosPlayer  = new Vector3(0, 0, -3);
+
+        // Art Bible §4.1 lighting values — exact match
+        private static readonly Color ArtBibleSunColor = new Color(1.0f, 0.87f, 0.68f); // 3200K
+        private const float ArtBibleSunIntensity = 1.2f;
+        private static readonly Vector3 ArtBibleSunRotation = new Vector3(25, -45, 0);
+        private static readonly Color ArtBibleAmbientColor = new Color(0.96f, 0.85f, 0.64f); // #F5D8A3
+        private const float ArtBibleAmbientIntensity = 0.4f;
+        private static readonly Color ArtBibleFogColor = new Color(0.96f, 0.85f, 0.64f);
+        private const float ArtBibleFogDensity = 0.015f;
+
+        // ============================================================
         // SPRINT 1: GREYBOX
         // Grey cubes, floor, walls, furniture silhouettes.
         // Goal: proportions, scale, navigation.
@@ -27,21 +76,20 @@ namespace Afterhumans.EditorTools
         {
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
-            // WIPE ENTIRE SCENE — remove ALL root GameObjects (v1 garbage)
+            // HIGH-5 fix: WIPE ENTIRE SCENE with explicit warning
             var roots = scene.GetRootGameObjects();
+            if (roots.Length > 0)
+                Debug.Log($"[BotanikaBuilder] WARNING: Clearing {roots.Length} root objects from scene (full rebuild)");
             foreach (var go in roots)
-            {
                 Object.DestroyImmediate(go);
-            }
-            Debug.Log($"[BotanikaBuilder] Cleared {roots.Length} root objects from scene");
 
             var root = new GameObject("Botanika_Greybox");
             var grey = MakeGreyMaterial();
             var darkGrey = MakeMaterial("DarkGrey", new Color(0.35f, 0.35f, 0.35f));
             var green = MakeMaterial("Plant", new Color(0.25f, 0.45f, 0.2f));
 
-            // === STRUCTURE: floor, HIGH walls (9.6m), ceiling, panoramic windows ===
-            float wallH = 9.6f; // 3x higher — grand orangery hall
+            // === STRUCTURE: floor, HIGH walls, ceiling, panoramic windows ===
+            float wallH = WallHeight;
             float halfH = wallH / 2f;
 
             MakeBox(root, "Floor", new Vector3(0, -0.05f, 0), new Vector3(12, 0.1f, 10), grey);
@@ -87,36 +135,29 @@ namespace Afterhumans.EditorTools
             cl.intensity = 3f;
             cl.range = 12f;
 
-            // === FURNITURE: два дивана, кофейный стол, лампы ===
-            // Sofa 1 (Sasha) — центр-север, лицом к югу
-            MakeBox(root, "Sofa_Sasha", new Vector3(0, 0.35f, 3.8f), new Vector3(2.0f, 0.7f, 0.8f), darkGrey);
-            // Sofa 2 — у восточной стены
-            MakeBox(root, "Sofa_East", new Vector3(4.5f, 0.35f, 0), new Vector3(0.8f, 0.7f, 1.8f), darkGrey);
-            // Coffee table перед диваном Саши
-            MakeBox(root, "CoffeeTable", new Vector3(0, 0.22f, 2.5f), new Vector3(1.0f, 0.44f, 0.5f), grey);
-            // Floor lamp около дивана
-            MakeBox(root, "FloorLamp", new Vector3(1.8f, 0.7f, 3.8f), new Vector3(0.2f, 1.4f, 0.2f), darkGrey);
+            // === FURNITURE: positions from shared constants ===
+            MakeBox(root, "Sofa_Sasha", PosSofa + Vector3.up * 0.35f, new Vector3(2.0f, 0.7f, 0.8f), darkGrey);
+            MakeBox(root, "Sofa_East", PosSofaEast + Vector3.up * 0.35f, new Vector3(0.8f, 0.7f, 1.8f), darkGrey);
+            MakeBox(root, "CoffeeTable", PosCoffeeTable + Vector3.up * 0.22f, new Vector3(1.0f, 0.44f, 0.5f), grey);
+            MakeBox(root, "FloorLamp", PosFloorLamp + Vector3.up * 0.7f, new Vector3(0.2f, 1.4f, 0.2f), darkGrey);
 
-            // === ЗОНЫ NPC ===
-            // Mila: стол + стул (западная часть)
-            MakeBox(root, "Desk_Mila", new Vector3(-4, 0.38f, 1.5f), new Vector3(1.2f, 0.76f, 0.6f), grey);
-            MakeBox(root, "Chair_Mila", new Vector3(-3, 0.35f, 1.5f), new Vector3(0.5f, 0.7f, 0.5f), darkGrey);
-            // Kirill: кухонный угол (восточная часть, юг)
-            MakeBox(root, "Kitchen_Counter", new Vector3(4.5f, 0.45f, -2.5f), new Vector3(1.5f, 0.9f, 0.6f), grey);
-            MakeBox(root, "Kitchen_Stove", new Vector3(4.5f, 0.9f, -2.5f), new Vector3(0.4f, 0.1f, 0.4f), darkGrey);
-            // Nikolai: угол с столом и бутылкой (северо-запад)
-            MakeBox(root, "Table_Nikolai", new Vector3(-4.5f, 0.3f, 4.2f), new Vector3(0.8f, 0.6f, 0.8f), grey);
-            MakeBox(root, "Chair_Nikolai", new Vector3(-3.5f, 0.35f, 4.2f), new Vector3(0.5f, 0.7f, 0.5f), darkGrey);
+            // === NPC ZONES ===
+            MakeBox(root, "Desk_Mila", PosDesk + Vector3.up * 0.38f, new Vector3(1.2f, 0.76f, 0.6f), grey);
+            MakeBox(root, "Chair_Mila", PosChairMila + Vector3.up * 0.35f, new Vector3(0.5f, 0.7f, 0.5f), darkGrey);
+            MakeBox(root, "Kitchen_Counter", PosKitchen + Vector3.up * 0.45f, new Vector3(1.5f, 0.9f, 0.6f), grey);
+            MakeBox(root, "Kitchen_Stove", PosKitchen + Vector3.up * 0.9f, new Vector3(0.4f, 0.1f, 0.4f), darkGrey);
+            MakeBox(root, "Table_Nikolai", PosTableNikolai + Vector3.up * 0.3f, new Vector3(0.8f, 0.6f, 0.8f), grey);
+            MakeBox(root, "Chair_Nikolai", PosChairNikolai + Vector3.up * 0.35f, new Vector3(0.5f, 0.7f, 0.5f), darkGrey);
             // Stas: у двери (юг), ходит туда-сюда
             // (нет мебели — он стоит/ходит)
 
-            // === СТЕЛЛАЖИ С КНИГАМИ ===
-            MakeBox(root, "Bookcase_NW", new Vector3(-5.2f, 0.9f, 4.8f), new Vector3(1.0f, 1.8f, 0.4f), darkGrey);
-            MakeBox(root, "Bookcase_NE", new Vector3(5.2f, 0.9f, 4.8f), new Vector3(1.0f, 1.8f, 0.4f), darkGrey);
-            MakeBox(root, "Bookcase_W", new Vector3(-5.2f, 0.9f, 0), new Vector3(0.6f, 1.8f, 1.2f), darkGrey);
+            // === BOOKCASES ===
+            MakeBox(root, "Bookcase_NW", PosBookcaseNW + Vector3.up * 0.9f, new Vector3(1.0f, 1.8f, 0.4f), darkGrey);
+            MakeBox(root, "Bookcase_NE", PosBookcaseNE + Vector3.up * 0.9f, new Vector3(1.0f, 1.8f, 0.4f), darkGrey);
+            MakeBox(root, "Bookcase_W", PosBookcaseW + Vector3.up * 0.9f, new Vector3(0.6f, 1.8f, 1.2f), darkGrey);
 
-            // === СЕРВЕРНАЯ СТОЙКА (data-элемент) ===
-            MakeBox(root, "ServerRack", new Vector3(5.2f, 0.8f, -3.5f), new Vector3(0.5f, 1.6f, 0.4f), darkGrey);
+            // === SERVER RACK ===
+            MakeBox(root, "ServerRack", PosServerRack + Vector3.up * 0.8f, new Vector3(0.5f, 1.6f, 0.4f), darkGrey);
 
             // === РАСТЕНИЯ — это ОРАНЖЕРЕЯ, зелень везде ===
             // Крупные кусты по углам
@@ -171,8 +212,13 @@ namespace Afterhumans.EditorTools
             var root = new GameObject("Botanika_Gameplay");
 
             // --- PLAYER INTERACTION ---
+            // LOW-4 fix: validate Player exists
             var player = GameObject.FindWithTag("Player");
-            if (player != null)
+            if (player == null)
+            {
+                Debug.LogError("[BotanikaBuilder] Sprint 2: Player NOT FOUND — run Sprint 1 first!");
+                return;
+            }
             {
                 var pi = player.GetComponent<Afterhumans.Player.PlayerInteraction>();
                 if (pi == null) pi = player.AddComponent<Afterhumans.Player.PlayerInteraction>();
@@ -195,12 +241,12 @@ namespace Afterhumans.EditorTools
             var npcPurple = MakeMaterial("NPC_Purple", new Color(0.6f, 0.3f, 0.7f));
             var npcGreen  = MakeMaterial("NPC_Green", new Color(0.3f, 0.65f, 0.35f));
 
-            // NPC positions: clearly IN FRONT of furniture, 1m+ clearance
-            SpawnNpc(root, "Sasha",   new Vector3(0, 0, 2.0f),     180, "sasha",   3.0f, npcYellow);    // in front of sofa
-            SpawnNpc(root, "Mila",    new Vector3(-2.2f, 0, 1.5f),  90, "mila",    2.5f, npcBlue);      // in front of desk, more clearance
-            SpawnNpc(root, "Kirill",  new Vector3(3.0f, 0, -2.5f), -90, "kirill",  2.5f, npcRed);       // in front of kitchen
-            SpawnNpc(root, "Nikolai", new Vector3(-3.0f, 0, 3.5f), 135, "nikolai", 2.5f, npcPurple);    // in front of corner table
-            SpawnNpc(root, "Stas",    new Vector3(1.5f, 0, -4f),     0, "stas",    2.5f, npcGreen);     // near door
+            // NPC positions from shared constants
+            SpawnNpc(root, "Sasha",   PosSasha,   180, "sasha",   3.0f, npcYellow);
+            SpawnNpc(root, "Mila",    PosMila,     90, "mila",    2.5f, npcBlue);
+            SpawnNpc(root, "Kirill",  PosKirill,  -90, "kirill",  2.5f, npcRed);
+            SpawnNpc(root, "Nikolai", PosNikolai, 135, "nikolai", 2.5f, npcPurple);
+            SpawnNpc(root, "Stas",    PosStas,      0, "stas",    2.5f, npcGreen);
 
             // --- KAFKA ---
             SetupKafka(root);
@@ -412,32 +458,36 @@ namespace Afterhumans.EditorTools
 
             var root = new GameObject("Botanika_Lighting");
 
-            // Remove temp light from Sprint 1
+            // Remove temp light from Sprint 1 (HIGH-2 fix: validate dependency)
             var tempLight = GameObject.Find("Sun_Temp");
-            if (tempLight != null) Object.DestroyImmediate(tempLight);
+            if (tempLight != null)
+                Object.DestroyImmediate(tempLight);
+            else if (GameObject.Find("Botanika_Greybox") == null)
+                Debug.LogWarning("[BotanikaBuilder] Sprint 3: Botanika_Greybox not found — run Sprint 1 first");
 
             // === DIRECTIONAL LIGHT (Sun) — Art Bible §4.1 ===
             var sunGo = new GameObject("Sun_Directional");
             sunGo.transform.SetParent(root.transform);
             var sun = sunGo.AddComponent<Light>();
             sun.type = LightType.Directional;
-            sun.color = new Color(1.0f, 0.86f, 0.67f); // 3200K warm
-            sun.intensity = 1.5f;
-            sun.transform.rotation = Quaternion.Euler(25f, -45f, 0f); // low sun from NW
+            // CRITICAL-3 fix: exact Art Bible §4.1 values
+            sun.color = ArtBibleSunColor;
+            sun.intensity = ArtBibleSunIntensity;
+            sun.transform.rotation = Quaternion.Euler(ArtBibleSunRotation);
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 0.7f;
             RenderSettings.sun = sun;
 
-            // === RENDER SETTINGS ===
+            // === RENDER SETTINGS — exact Art Bible §4.1 ===
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.55f, 0.45f, 0.32f); // warm dim
-            RenderSettings.ambientIntensity = 0.5f;
+            RenderSettings.ambientLight = ArtBibleAmbientColor; // #F5D8A3
+            RenderSettings.ambientIntensity = ArtBibleAmbientIntensity; // 0.4
 
-            // Fog — warm haze
+            // Fog — Art Bible §4.1
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.012f;
-            RenderSettings.fogColor = new Color(0.95f, 0.80f, 0.58f);
+            RenderSettings.fogDensity = ArtBibleFogDensity; // 0.015
+            RenderSettings.fogColor = ArtBibleFogColor;
 
             // === SKYBOX ===
             var hdriPath = "Assets/_Project/Vendor/PolyHaven/kloppenheim_06_puresky_2k.hdr";
@@ -555,8 +605,9 @@ namespace Afterhumans.EditorTools
 
             // Color Adjustments
             var color = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
-            color.saturation.Override(10f);
-            color.contrast.Override(8f);
+            // LOW-2 fix: exact Art Bible §5 values
+            color.saturation.Override(10f); // Art Bible: +10 ✓
+            color.contrast.Override(5f);    // Art Bible: +5 (was 8)
             color.postExposure.Override(0.2f);
 
             // White Balance
@@ -580,17 +631,21 @@ namespace Afterhumans.EditorTools
         // procedural textures on surfaces
         // ============================================================
 
-        private const string FurnitureFbx = "Assets/_Project/Vendor/Kenney/furniture-kit/Models/FBX format";
-        private const string NatureFbx = "Assets/_Project/Vendor/Kenney/nature-kit/Models/FBX format";
-        private const string CharacterFbx = "Assets/_Project/Vendor/Kenney/blocky-characters/Models/FBX format";
-        private const string CharacterTex = "Assets/_Project/Vendor/Kenney/blocky-characters/Models/FBX format/Textures";
+        // Asset paths defined in shared constants above
 
         [MenuItem("Afterhumans/v2/Sprint 4 — Art Pass")]
         public static void Sprint4_Art()
         {
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-            ClearRoot("Botanika_Art");
 
+            // HIGH-3 fix: validate asset paths before proceeding
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Vendor/Kenney/furniture-kit"))
+            {
+                Debug.LogError("[BotanikaBuilder] Sprint 4: Kenney furniture-kit NOT FOUND. Run scripts/download-assets.sh first.");
+                return;
+            }
+
+            ClearRoot("Botanika_Art");
             var root = new GameObject("Botanika_Art");
 
             // Generate procedural textures
@@ -747,13 +802,17 @@ namespace Afterhumans.EditorTools
             Debug.Log("[BotanikaBuilder] Sprint 5 POLISH done — FBX furniture + plants ADDED (greybox kept)");
         }
 
+        /// <summary>
+        /// Place Kenney FBX model. If mat is null, PRESERVES original FBX materials.
+        /// CRITICAL-2 fix: don't destroy embedded FBX textures unless explicitly overriding.
+        /// </summary>
         private static void PlaceFbx(GameObject parent, string fbxPath, string name,
-            Vector3 pos, Quaternion rot, Vector3 scale, Material mat)
+            Vector3 pos, Quaternion rot, Vector3 scale, Material mat = null)
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
             if (prefab == null)
             {
-                Debug.LogWarning($"[BotanikaBuilder] FBX not found: {fbxPath}");
+                Debug.LogError($"[BotanikaBuilder] FBX not found: {fbxPath}");
                 return;
             }
             var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
@@ -764,11 +823,15 @@ namespace Afterhumans.EditorTools
             go.transform.rotation = rot;
             go.transform.localScale = scale;
             go.isStatic = true;
-            foreach (var rend in go.GetComponentsInChildren<Renderer>(true))
+            // Only override materials if explicitly provided
+            if (mat != null)
             {
-                var mats = new Material[rend.sharedMaterials.Length];
-                for (int i = 0; i < mats.Length; i++) mats[i] = mat;
-                rend.sharedMaterials = mats;
+                foreach (var rend in go.GetComponentsInChildren<Renderer>(true))
+                {
+                    var mats = new Material[rend.sharedMaterials.Length];
+                    for (int i = 0; i < mats.Length; i++) mats[i] = mat;
+                    rend.sharedMaterials = mats;
+                }
             }
             ColliderHelper.AddSimpleCollider(go);
         }
