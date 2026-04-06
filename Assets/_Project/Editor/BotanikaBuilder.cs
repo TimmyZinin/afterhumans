@@ -538,6 +538,122 @@ namespace Afterhumans.EditorTools
         }
 
         // ============================================================
+        // SPRINT 4: ART PASS
+        // Replace grey cubes with Kenney FBX, apply textures to NPC,
+        // procedural textures on surfaces
+        // ============================================================
+
+        private const string FurnitureFbx = "Assets/_Project/Vendor/Kenney/furniture-kit/Models/FBX format";
+        private const string NatureFbx = "Assets/_Project/Vendor/Kenney/nature-kit/Models/FBX format";
+        private const string CharacterFbx = "Assets/_Project/Vendor/Kenney/blocky-characters/Models/FBX format";
+        private const string CharacterTex = "Assets/_Project/Vendor/Kenney/blocky-characters/Models/FBX format/Textures";
+
+        [MenuItem("Afterhumans/v2/Sprint 4 — Art Pass")]
+        public static void Sprint4_Art()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            ClearRoot("Botanika_Art");
+
+            var root = new GameObject("Botanika_Art");
+
+            // Generate procedural textures
+            ProceduralTextures.ClearCache();
+            var texTile = ProceduralTextures.TileFloor();
+            var texPlaster = ProceduralTextures.PlasterWall();
+            var texWood = ProceduralTextures.WoodFurniture();
+            var texFabric = ProceduralTextures.Fabric();
+
+            // === RETEXTURE GREYBOX SURFACES ===
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox != null)
+            {
+                RetextureByName(greybox, "Floor", texTile, new Color(0.75f, 0.58f, 0.42f), 6f);
+                RetextureByName(greybox, "Wall_", texPlaster, new Color(0.85f, 0.75f, 0.60f), 3f);
+                RetextureByName(greybox, "GlassCeiling", null, new Color(0.7f, 0.85f, 0.8f, 0.15f), 1f, true);
+                RetextureByName(greybox, "Sofa_", texFabric, new Color(0.55f, 0.32f, 0.22f), 2f);
+                RetextureByName(greybox, "Desk_", texWood, new Color(0.65f, 0.45f, 0.28f), 2f);
+                RetextureByName(greybox, "Kitchen_", texWood, new Color(0.50f, 0.38f, 0.25f), 2f);
+                RetextureByName(greybox, "Table_", texWood, new Color(0.60f, 0.42f, 0.26f), 2f);
+                RetextureByName(greybox, "Chair_", texFabric, new Color(0.45f, 0.30f, 0.20f), 2f);
+                RetextureByName(greybox, "Bookcase_", texWood, new Color(0.42f, 0.28f, 0.16f), 2f);
+                RetextureByName(greybox, "FloorLamp", texWood, new Color(0.35f, 0.25f, 0.15f), 1f);
+                RetextureByName(greybox, "CoffeeTable", texWood, new Color(0.50f, 0.35f, 0.22f), 2f);
+                RetextureByName(greybox, "ServerRack", null, new Color(0.25f, 0.25f, 0.28f), 1f);
+                RetextureByName(greybox, "Plant_", null, new Color(0.22f, 0.48f, 0.18f), 1f);
+                Debug.Log("[BotanikaBuilder] Greybox surfaces retextured");
+            }
+
+            // === RETEXTURE NPC with Kenney character textures ===
+            var gameplay = GameObject.Find("Botanika_Gameplay");
+            if (gameplay != null)
+            {
+                ApplyCharacterTexture(gameplay, "NPC_Sasha", "texture-a.png");
+                ApplyCharacterTexture(gameplay, "NPC_Mila", "texture-c.png");
+                ApplyCharacterTexture(gameplay, "NPC_Kirill", "texture-e.png");
+                ApplyCharacterTexture(gameplay, "NPC_Nikolai", "texture-g.png");
+                ApplyCharacterTexture(gameplay, "NPC_Stas", "texture-i.png");
+                Debug.Log("[BotanikaBuilder] NPC textures applied");
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[BotanikaBuilder] Sprint 4 ART done — textures on surfaces + NPC skins");
+        }
+
+        private static void RetextureByName(GameObject parent, string nameContains,
+            Texture2D texture, Color tint, float tileScale, bool transparent = false)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            foreach (var rend in parent.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!rend.gameObject.name.Contains(nameContains)) continue;
+
+                var mat = new Material(shader);
+                if (transparent)
+                {
+                    mat.SetFloat("_Surface", 1); // Transparent
+                    mat.SetFloat("_Blend", 0);
+                    mat.SetOverrideTag("RenderType", "Transparent");
+                    mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    mat.SetInt("_ZWrite", 0);
+                    mat.renderQueue = 3000;
+                }
+                mat.SetColor("_BaseColor", tint);
+                if (texture != null)
+                {
+                    mat.SetTexture("_BaseMap", texture);
+                    mat.SetTextureScale("_BaseMap", new Vector2(tileScale, tileScale));
+                }
+                mat.SetFloat("_Smoothness", 0.15f);
+                rend.sharedMaterial = mat;
+            }
+        }
+
+        private static void ApplyCharacterTexture(GameObject parent, string npcName, string texFileName)
+        {
+            var npc = parent.transform.Find(npcName);
+            if (npc == null) return;
+
+            var texPath = $"{CharacterTex}/{texFileName}";
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(texPath);
+            if (tex == null)
+            {
+                Debug.LogWarning($"[BotanikaBuilder] Texture not found: {texPath}");
+                return;
+            }
+
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var mat = new Material(shader);
+            mat.SetTexture("_BaseMap", tex);
+            mat.SetColor("_BaseColor", Color.white);
+            mat.SetFloat("_Smoothness", 0.2f);
+
+            foreach (var rend in npc.GetComponentsInChildren<Renderer>(true))
+                rend.sharedMaterial = mat;
+        }
+
+        // ============================================================
         // HELPERS
         // ============================================================
 
