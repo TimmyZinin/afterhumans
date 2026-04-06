@@ -90,8 +90,15 @@ namespace Afterhumans.EditorTools
 
             SafeClearProfile(profile);
 
+            // Sub-asset persistence helper: profile.Add<T>() creates ScriptableObject
+            // instances that must be explicitly added as sub-assets via
+            // AssetDatabase.AddObjectToAsset to survive serialization. Without this,
+            // components list shows {fileID: 0} after Unity domain reload.
+            string assetPath = AssetDatabase.GetAssetPath(profile);
+
             // Bloom — visible sun rays + warm highlights
             var bloom = profile.Add<Bloom>(true);
+            AssetDatabase.AddObjectToAsset(bloom, assetPath);
             bloom.intensity.Override(0.6f);
             bloom.threshold.Override(0.95f);
             bloom.scatter.Override(0.75f);
@@ -99,10 +106,12 @@ namespace Afterhumans.EditorTools
 
             // Tonemapping ACES — cinematic highlight rolloff
             var tone = profile.Add<Tonemapping>(true);
+            AssetDatabase.AddObjectToAsset(tone, assetPath);
             tone.mode.Override(TonemappingMode.ACES);
 
             // Color Adjustments — warm + saturated
             var color = profile.Add<ColorAdjustments>(true);
+            AssetDatabase.AddObjectToAsset(color, assetPath);
             color.saturation.Override(12f);
             color.contrast.Override(8f);
             color.postExposure.Override(0.2f);
@@ -110,29 +119,34 @@ namespace Afterhumans.EditorTools
 
             // White Balance — push warm
             var wb = profile.Add<WhiteBalance>(true);
+            AssetDatabase.AddObjectToAsset(wb, assetPath);
             wb.temperature.Override(15f);
             wb.tint.Override(-5f);
 
             // Shadows/Midtones/Highlights 3-way — cool shadows, warm highlights
             var smh = profile.Add<ShadowsMidtonesHighlights>(true);
+            AssetDatabase.AddObjectToAsset(smh, assetPath);
             smh.shadows.Override(new Vector4(0.85f, 0.92f, 1.02f, 0f));
             smh.midtones.Override(new Vector4(1.04f, 1.02f, 0.95f, 0f));
             smh.highlights.Override(new Vector4(1.1f, 1.0f, 0.82f, 0f));
 
             // Vignette — subtle edge darkening
             var vign = profile.Add<Vignette>(true);
+            AssetDatabase.AddObjectToAsset(vign, assetPath);
             vign.intensity.Override(0.22f);
             vign.smoothness.Override(0.5f);
             // URP 17.0.4 Vignette only has intensity + smoothness (no roundness param)
 
             // Film Grain — 0.15 intensity (ART_BIBLE §5)
             var grain = profile.Add<FilmGrain>(true);
+            AssetDatabase.AddObjectToAsset(grain, assetPath);
             grain.type.Override(FilmGrainLookup.Thin2);
             grain.intensity.Override(0.18f);
             grain.response.Override(1.0f);
 
             // Depth of Field — cinematic 3m focus f/5.6
             var dof = profile.Add<DepthOfField>(true);
+            AssetDatabase.AddObjectToAsset(dof, assetPath);
             dof.mode.Override(DepthOfFieldMode.Bokeh);
             dof.focusDistance.Override(3f);
             dof.aperture.Override(5.6f);

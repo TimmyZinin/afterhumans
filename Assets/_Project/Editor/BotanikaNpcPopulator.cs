@@ -145,6 +145,23 @@ namespace Afterhumans.EditorTools
             // BOT-S07: Footstep controller on player
             SpawnFootstepController();
 
+            // BOT-F09: ensure debug HUD is off (may be stale from old SceneEnricher)
+            var player = GameObject.FindGameObjectWithTag("Player") ?? GameObject.Find("Player");
+            if (player != null)
+            {
+                var pi = player.GetComponent<Afterhumans.Player.PlayerInteraction>();
+                if (pi != null)
+                {
+                    var soPi = new SerializedObject(pi);
+                    var hudProp = soPi.FindProperty("showDebugHud");
+                    if (hudProp != null && hudProp.boolValue)
+                    {
+                        hudProp.boolValue = false;
+                        soPi.ApplyModifiedPropertiesWithoutUndo();
+                    }
+                }
+            }
+
             Debug.Log($"[BotanikaNpcPopulator] DONE — {spawned}/{Npcs.Length} NPCs + note + cue + chapter + intro + audio.");
         }
 

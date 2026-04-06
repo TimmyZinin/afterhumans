@@ -197,10 +197,12 @@ namespace Afterhumans.EditorTools
                 if (camProp != null) camProp.objectReferenceValue = cam;
                 var distProp = soInt.FindProperty("maxDistance");
                 if (distProp != null) distProp.floatValue = 5f;
+                // BOT-F09: showDebugHud OFF by default for production builds.
+                // Use MenuItem Afterhumans/Debug/Toggle PlayerInteraction HUD for QA.
                 var hudProp = soInt.FindProperty("showDebugHud");
-                if (hudProp != null) hudProp.boolValue = true;
+                if (hudProp != null) hudProp.boolValue = false;
                 soInt.ApplyModifiedPropertiesWithoutUndo();
-                Debug.Log($"[SceneEnricher] Wired PlayerInteraction in {sceneName} (cam+maxDistance=5+HUD)");
+                Debug.Log($"[SceneEnricher] Wired PlayerInteraction in {sceneName} (cam+maxDistance=5+HUD=off)");
             }
             else
             {
