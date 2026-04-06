@@ -863,6 +863,260 @@ namespace Afterhumans.EditorTools
             Debug.Log("[BotanikaBuilder] Sprint 8 MATERIALS done — normal maps, roughness, emissive, glass");
         }
 
+        // ============================================================
+        // SPRINT 9: ATMOSPHERE + DETAILS
+        // Particles, storytelling props, graffiti, server LED
+        // ============================================================
+
+        [MenuItem("Afterhumans/v2/Sprint 9 — Atmosphere")]
+        public static void Sprint9_Atmosphere()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            ClearRoot("Botanika_Atmosphere");
+
+            var root = new GameObject("Botanika_Atmosphere");
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+
+            // === DUST PARTICLES in light beams ===
+            CreateDustParticles(root);
+
+            // === COFFEE STEAM near Kirill ===
+            CreateSteamParticles(root, PosKitchen + new Vector3(0, 1.0f, 0));
+
+            // === STORYTELLING PROPS ===
+            // Mugs (cylinders — no Kenney mug model)
+            var mugMat = MakeMaterial("Mug", new Color(0.85f, 0.82f, 0.75f), 0.3f);
+            MakeCylinder(root, "Mug_Sasha", PosCoffeeTable + new Vector3(-0.3f, 0.5f, 0.1f),
+                new Vector3(0.06f, 0.05f, 0.06f), mugMat);
+            MakeCylinder(root, "Mug_Mila", PosDesk + new Vector3(0.4f, 0.85f, 0.2f),
+                new Vector3(0.06f, 0.05f, 0.06f), mugMat);
+            MakeCylinder(root, "Mug_Kirill", PosKitchen + new Vector3(-0.3f, 1.0f, 0.1f),
+                new Vector3(0.06f, 0.05f, 0.06f), mugMat);
+
+            // Laptop on Mila's desk (emissive screen)
+            PlaceFbx(root, $"{FurnitureFbx}/laptop.fbx", "Laptop_Mila",
+                PosDesk + new Vector3(0, 0.78f, 0), Quaternion.Euler(0, -90, 0), Vector3.one * 0.8f);
+            // Make laptop screen emissive
+            var laptopObj = root.transform.Find("Laptop_Mila");
+            if (laptopObj != null)
+            {
+                var emMat = new Material(shader);
+                emMat.SetColor("_BaseColor", new Color(0.2f, 0.3f, 0.5f));
+                emMat.SetColor("_EmissionColor", new Color(0.4f, 0.6f, 0.9f) * 1.5f);
+                emMat.EnableKeyword("_EMISSION");
+                emMat.SetFloat("_Smoothness", 0.9f);
+                foreach (var r in laptopObj.GetComponentsInChildren<Renderer>())
+                    r.sharedMaterial = emMat;
+            }
+
+            // Bottle near Nikolai (glass cylinder)
+            var glassMat = new Material(shader);
+            glassMat.SetColor("_BaseColor", new Color(0.15f, 0.25f, 0.12f, 0.6f));
+            glassMat.SetFloat("_Surface", 1);
+            glassMat.SetOverrideTag("RenderType", "Transparent");
+            glassMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            glassMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            glassMat.SetInt("_ZWrite", 0);
+            glassMat.renderQueue = 3000;
+            glassMat.SetFloat("_Smoothness", 0.95f);
+            MakeCylinder(root, "Bottle_Nikolai", PosTableNikolai + new Vector3(0.15f, 0.65f, 0),
+                new Vector3(0.035f, 0.12f, 0.035f), glassMat);
+
+            // Turka near Kirill (copper cylinder)
+            var copperMat = MakeMaterial("Copper", new Color(0.72f, 0.42f, 0.22f), 0.4f);
+            MakeCylinder(root, "Turka_Kirill", PosKitchen + new Vector3(0.3f, 1.0f, -0.1f),
+                new Vector3(0.03f, 0.06f, 0.03f), copperMat);
+
+            // Foil hat on Stas (flattened silver sphere)
+            var foilMat = MakeMaterial("Foil", new Color(0.85f, 0.87f, 0.90f), 0.7f);
+            var hat = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            hat.name = "FoilHat_Stas";
+            hat.transform.SetParent(root.transform, false);
+            hat.transform.position = PosStas + new Vector3(0, 1.6f, 0);
+            hat.transform.localScale = new Vector3(0.25f, 0.08f, 0.25f);
+            hat.GetComponent<Renderer>().sharedMaterial = foilMat;
+            Object.DestroyImmediate(hat.GetComponent<Collider>());
+
+            // Note on coffee table (white thin cube)
+            var noteMat = MakeMaterial("Note", new Color(0.95f, 0.93f, 0.88f), 0.9f);
+            MakeBox(root, "Note_Table", PosCoffeeTable + new Vector3(-0.1f, 0.48f, -0.15f),
+                new Vector3(0.15f, 0.005f, 0.1f), noteMat);
+
+            // Pillows on sofa
+            PlaceFbx(root, $"{FurnitureFbx}/pillow.fbx", "Pillow_1",
+                PosSofa + new Vector3(-0.5f, 0.45f, 0), Quaternion.Euler(0, 15, 0), Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/pillow.fbx", "Pillow_2",
+                PosSofa + new Vector3(0.5f, 0.45f, 0), Quaternion.Euler(0, -20, 0), Vector3.one);
+
+            // Small potted plants on surfaces
+            PlaceFbx(root, $"{FurnitureFbx}/plantSmall1.fbx", "PlantPot_Desk",
+                PosDesk + new Vector3(-0.4f, 0.85f, 0), Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/plantSmall2.fbx", "PlantPot_Bookcase",
+                PosBookcaseNW + new Vector3(0, 1.6f, 0), Quaternion.identity, Vector3.one);
+
+            // === GRAFFITI: "segfault == freedom" ===
+            CreateGraffiti(root);
+
+            // === SERVER RACK LED ===
+            CreateServerLED(root);
+
+            // Coat rack near door
+            PlaceFbx(root, $"{FurnitureFbx}/coatRackStanding.fbx", "CoatRack",
+                new Vector3(-2f, 0, -4.2f), Quaternion.identity, Vector3.one);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[BotanikaBuilder] Sprint 9 ATMOSPHERE done — particles, props, graffiti, LED");
+        }
+
+        private static void CreateDustParticles(GameObject parent)
+        {
+            var go = new GameObject("DustParticles");
+            go.transform.SetParent(parent.transform);
+            go.transform.position = new Vector3(2, 5, 1); // near east window, high up
+
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 10f;
+            main.startSpeed = 0.02f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.02f, 0.06f);
+            main.maxParticles = 80;
+            main.startColor = new Color(1f, 0.92f, 0.72f, 0.3f);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.gravityModifier = -0.005f; // slight upward drift
+
+            var emission = ps.emission;
+            emission.rateOverTime = 8f;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(4, 6, 4);
+
+            var colorLife = ps.colorOverLifetime;
+            colorLife.enabled = true;
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0), new GradientColorKey(Color.white, 1) },
+                new[] { new GradientAlphaKey(0, 0), new GradientAlphaKey(0.4f, 0.3f),
+                        new GradientAlphaKey(0.4f, 0.7f), new GradientAlphaKey(0, 1) }
+            );
+            colorLife.color = gradient;
+
+            // Use default particle material
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            renderer.renderMode = ParticleSystemRenderMode.Billboard;
+            var particleMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
+                                            Shader.Find("Particles/Standard Unlit"));
+            particleMat.SetColor("_BaseColor", new Color(1, 0.92f, 0.72f, 0.3f));
+            renderer.sharedMaterial = particleMat;
+
+            Debug.Log("[BotanikaBuilder] Dust particles created (80 max, warm amber)");
+        }
+
+        private static void CreateSteamParticles(GameObject parent, Vector3 pos)
+        {
+            var go = new GameObject("CoffeeSteam");
+            go.transform.SetParent(parent.transform);
+            go.transform.position = pos;
+
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 3f;
+            main.startSpeed = 0.15f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.03f, 0.08f);
+            main.maxParticles = 15;
+            main.startColor = new Color(0.9f, 0.9f, 0.9f, 0.15f);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 5f;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 15;
+            shape.radius = 0.05f;
+
+            var vel = ps.velocityOverLifetime;
+            vel.enabled = true;
+            vel.y = 0.1f;
+
+            var renderer = go.GetComponent<ParticleSystemRenderer>();
+            var steamMat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
+                                         Shader.Find("Particles/Standard Unlit"));
+            steamMat.SetColor("_BaseColor", new Color(0.9f, 0.9f, 0.9f, 0.15f));
+            renderer.sharedMaterial = steamMat;
+        }
+
+        private static void CreateGraffiti(GameObject parent)
+        {
+            var go = new GameObject("Graffiti");
+            go.transform.SetParent(parent.transform);
+            // On north wall, facing south (into room)
+            go.transform.position = new Vector3(2, 3, 4.88f);
+            go.transform.rotation = Quaternion.Euler(0, 180, 0);
+
+            var canvas = go.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            var rect = go.GetComponent<RectTransform>();
+            rect.sizeDelta = new Vector2(300, 60);
+            go.transform.localScale = new Vector3(0.01f, 0.01f, 0.01f);
+
+            var textGo = new GameObject("GraffitiText");
+            textGo.transform.SetParent(go.transform, false);
+            var textRect = textGo.AddComponent<RectTransform>();
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
+            var tmp = textGo.AddComponent<TMPro.TextMeshProUGUI>();
+            tmp.text = "segfault == freedom";
+            tmp.fontSize = 48;
+            tmp.color = new Color(0.85f, 0.15f, 0.1f); // red graffiti
+            tmp.fontStyle = TMPro.FontStyles.Bold;
+            tmp.alignment = TMPro.TextAlignmentOptions.Center;
+
+            Debug.Log("[BotanikaBuilder] Graffiti created: 'segfault == freedom'");
+        }
+
+        private static void CreateServerLED(GameObject parent)
+        {
+            var pos = PosServerRack;
+            Color[] ledColors = { new Color(0.1f, 1f, 0.2f), new Color(1f, 0.2f, 0.1f), new Color(0.1f, 1f, 0.2f) };
+            float[] heights = { 0.3f, 0.8f, 1.3f };
+
+            for (int i = 0; i < 3; i++)
+            {
+                var ledGo = new GameObject($"ServerLED_{i}");
+                ledGo.transform.SetParent(parent.transform);
+                ledGo.transform.position = pos + new Vector3(-0.15f, heights[i], 0);
+                var led = ledGo.AddComponent<Light>();
+                led.type = LightType.Point;
+                led.color = ledColors[i];
+                led.intensity = 0.5f;
+                led.range = 0.5f;
+                // Add blinking
+                ledGo.AddComponent<Afterhumans.Art.BlinkingLight>();
+            }
+            Debug.Log("[BotanikaBuilder] Server rack LED created (3 lights)");
+        }
+
+        private static GameObject MakeCylinder(GameObject parent, string name, Vector3 pos, Vector3 scale, Material mat)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            go.transform.SetParent(parent.transform, false);
+            go.transform.position = pos;
+            go.transform.localScale = scale;
+            go.isStatic = true;
+            go.GetComponent<Renderer>().sharedMaterial = mat;
+            Object.DestroyImmediate(go.GetComponent<Collider>());
+            return go;
+        }
+
+        // ============================================================
+        // PBR HELPERS
+        // ============================================================
+
         private static void ApplyPbrMaterial(GameObject parent, string nameContains, Shader shader,
             Texture2D albedo, Texture2D normal, Color tint, float roughness, float metallic, float tileScale)
         {
