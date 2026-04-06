@@ -40,15 +40,52 @@ namespace Afterhumans.EditorTools
             var darkGrey = MakeMaterial("DarkGrey", new Color(0.35f, 0.35f, 0.35f));
             var green = MakeMaterial("Plant", new Color(0.25f, 0.45f, 0.2f));
 
-            // === STRUCTURE: floor, walls, glass ceiling ===
+            // === STRUCTURE: floor, HIGH walls (9.6m), ceiling, panoramic windows ===
+            float wallH = 9.6f; // 3x higher — grand orangery hall
+            float halfH = wallH / 2f;
+
             MakeBox(root, "Floor", new Vector3(0, -0.05f, 0), new Vector3(12, 0.1f, 10), grey);
-            MakeBox(root, "Wall_North", new Vector3(0, 1.6f, 5), new Vector3(12, 3.2f, 0.2f), grey);
-            MakeBox(root, "Wall_South_L", new Vector3(-3.3f, 1.6f, -5), new Vector3(5.4f, 3.2f, 0.2f), grey);
-            MakeBox(root, "Wall_South_R", new Vector3(3.3f, 1.6f, -5), new Vector3(5.4f, 3.2f, 0.2f), grey);
-            MakeBox(root, "Wall_East", new Vector3(6, 1.6f, 0), new Vector3(0.2f, 3.2f, 10), grey);
-            MakeBox(root, "Wall_West", new Vector3(-6, 1.6f, 0), new Vector3(0.2f, 3.2f, 10), grey);
-            // Glass ceiling (оранжерея = стеклянная крыша)
-            MakeBox(root, "GlassCeiling", new Vector3(0, 3.2f, 0), new Vector3(12, 0.05f, 10), grey);
+
+            // Ceiling (solid, visible, not transparent)
+            MakeBox(root, "Ceiling", new Vector3(0, wallH, 0), new Vector3(12, 0.15f, 10), grey);
+
+            // North wall: 2 pillars + panoramic window gap in between
+            MakeBox(root, "Wall_North_L", new Vector3(-4.5f, halfH, 5), new Vector3(3, wallH, 0.2f), grey);
+            MakeBox(root, "Wall_North_R", new Vector3(4.5f, halfH, 5), new Vector3(3, wallH, 0.2f), grey);
+            MakeBox(root, "Wall_North_Top", new Vector3(0, wallH - 0.5f, 5), new Vector3(6, 1, 0.2f), grey); // lintel above window
+            MakeBox(root, "Wall_North_Bot", new Vector3(0, 0.4f, 5), new Vector3(6, 0.8f, 0.2f), grey); // sill below window
+            // Window = gap between sill and lintel (no geometry = see through to skybox)
+
+            // South wall: doorway in center + windows on sides
+            MakeBox(root, "Wall_South_L", new Vector3(-4.5f, halfH, -5), new Vector3(3, wallH, 0.2f), grey);
+            MakeBox(root, "Wall_South_R", new Vector3(4.5f, halfH, -5), new Vector3(3, wallH, 0.2f), grey);
+            MakeBox(root, "Wall_South_Top", new Vector3(0, wallH - 0.5f, -5), new Vector3(6, 1, 0.2f), grey);
+            // Doorway gap at bottom center (no geometry)
+
+            // East wall: 2 pillars + panoramic window
+            MakeBox(root, "Wall_East_F", new Vector3(6, halfH, -3.5f), new Vector3(0.2f, wallH, 3), grey);
+            MakeBox(root, "Wall_East_B", new Vector3(6, halfH, 3.5f), new Vector3(0.2f, wallH, 3), grey);
+            MakeBox(root, "Wall_East_Top", new Vector3(6, wallH - 0.5f, 0), new Vector3(0.2f, 1, 4), grey);
+            MakeBox(root, "Wall_East_Bot", new Vector3(6, 0.4f, 0), new Vector3(0.2f, 0.8f, 4), grey);
+
+            // West wall: same pattern
+            MakeBox(root, "Wall_West_F", new Vector3(-6, halfH, -3.5f), new Vector3(0.2f, wallH, 3), grey);
+            MakeBox(root, "Wall_West_B", new Vector3(-6, halfH, 3.5f), new Vector3(0.2f, wallH, 3), grey);
+            MakeBox(root, "Wall_West_Top", new Vector3(-6, wallH - 0.5f, 0), new Vector3(0.2f, 1, 4), grey);
+            MakeBox(root, "Wall_West_Bot", new Vector3(-6, 0.4f, 0), new Vector3(0.2f, 0.8f, 4), grey);
+
+            // Chandelier (simple box in center of ceiling)
+            var chandelierMat = MakeMaterial("Chandelier", new Color(0.9f, 0.8f, 0.5f), 0.5f);
+            MakeBox(root, "Chandelier", new Vector3(0, wallH - 1.5f, 0), new Vector3(1.5f, 0.3f, 1.5f), chandelierMat);
+            // Light source at chandelier
+            var chandLight = new GameObject("ChandelierLight");
+            chandLight.transform.SetParent(root.transform);
+            chandLight.transform.position = new Vector3(0, wallH - 1.8f, 0);
+            var cl = chandLight.AddComponent<Light>();
+            cl.type = LightType.Point;
+            cl.color = new Color(1f, 0.9f, 0.7f);
+            cl.intensity = 3f;
+            cl.range = 12f;
 
             // === FURNITURE: два дивана, кофейный стол, лампы ===
             // Sofa 1 (Sasha) — центр-север, лицом к югу
@@ -160,7 +197,7 @@ namespace Afterhumans.EditorTools
 
             // NPC positions: clearly IN FRONT of furniture, 1m+ clearance
             SpawnNpc(root, "Sasha",   new Vector3(0, 0, 2.0f),     180, "sasha",   3.0f, npcYellow);    // in front of sofa
-            SpawnNpc(root, "Mila",    new Vector3(-2.5f, 0, 1.5f),  90, "mila",    2.5f, npcBlue);      // in front of desk
+            SpawnNpc(root, "Mila",    new Vector3(-2.2f, 0, 1.5f),  90, "mila",    2.5f, npcBlue);      // in front of desk, more clearance
             SpawnNpc(root, "Kirill",  new Vector3(3.0f, 0, -2.5f), -90, "kirill",  2.5f, npcRed);       // in front of kitchen
             SpawnNpc(root, "Nikolai", new Vector3(-3.0f, 0, 3.5f), 135, "nikolai", 2.5f, npcPurple);    // in front of corner table
             SpawnNpc(root, "Stas",    new Vector3(1.5f, 0, -4f),     0, "stas",    2.5f, npcGreen);     // near door
@@ -569,7 +606,7 @@ namespace Afterhumans.EditorTools
             {
                 RetextureByName(greybox, "Floor", texTile, new Color(0.75f, 0.58f, 0.42f), 6f);
                 RetextureByName(greybox, "Wall_", texPlaster, new Color(0.85f, 0.75f, 0.60f), 3f);
-                RetextureByName(greybox, "GlassCeiling", null, new Color(0.7f, 0.85f, 0.8f, 0.15f), 1f, true);
+                RetextureByName(greybox, "GlassCeiling", null, new Color(0.75f, 0.88f, 0.82f, 0.3f), 1f, true); // more visible glass
                 RetextureByName(greybox, "Sofa_", texFabric, new Color(0.55f, 0.32f, 0.22f), 2f);
                 RetextureByName(greybox, "Desk_", texWood, new Color(0.65f, 0.45f, 0.28f), 2f);
                 RetextureByName(greybox, "Kitchen_", texWood, new Color(0.50f, 0.38f, 0.25f), 2f);
@@ -651,6 +688,89 @@ namespace Afterhumans.EditorTools
 
             foreach (var rend in npc.GetComponentsInChildren<Renderer>(true))
                 rend.sharedMaterial = mat;
+        }
+
+        // ============================================================
+        // SPRINT 5: POLISH — incremental, one model at a time
+        // DO NOT hide greybox cubes. ADD FBX models alongside them.
+        // After visual confirmation, greybox cubes can be hidden.
+        // ============================================================
+
+        [MenuItem("Afterhumans/v2/Sprint 5 — Polish")]
+        public static void Sprint5_Polish()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            ClearRoot("Botanika_Polish");
+
+            var root = new GameObject("Botanika_Polish");
+            var matWood = MakeMaterial("FBX_Wood", new Color(0.52f, 0.36f, 0.22f), 0.2f);
+            var matFabric = MakeMaterial("FBX_Fabric", new Color(0.50f, 0.30f, 0.20f), 0.1f);
+            var matLeaf = MakeMaterial("FBX_Leaf", new Color(0.25f, 0.50f, 0.18f), 0.15f);
+
+            // Add Kenney FBX NEXT TO greybox cubes (not replacing them)
+            // Sofa near Sasha's grey block
+            PlaceFbx(root, $"{FurnitureFbx}/loungeDesignSofa.fbx", "FBX_Sofa",
+                new Vector3(0, 0, 4.2f), Quaternion.identity, Vector3.one, matFabric); // face south toward player
+
+            // Coffee table
+            PlaceFbx(root, $"{FurnitureFbx}/tableCoffeeGlassSquare.fbx", "FBX_CoffeeTable",
+                new Vector3(0, 0, 2.0f), Quaternion.identity, Vector3.one, matWood);
+
+            // Floor lamp
+            PlaceFbx(root, $"{FurnitureFbx}/lampRoundFloor.fbx", "FBX_Lamp",
+                new Vector3(2.0f, 0, 4.0f), Quaternion.identity, Vector3.one, matWood);
+
+            // Bookcase
+            PlaceFbx(root, $"{FurnitureFbx}/bookcaseOpen.fbx", "FBX_Bookcase",
+                new Vector3(-5.2f, 0, 4.5f), Quaternion.identity, Vector3.one, matWood);
+
+            // Books on coffee table
+            PlaceFbx(root, $"{FurnitureFbx}/books.fbx", "FBX_Books",
+                new Vector3(0.2f, 0.5f, 2.0f), Quaternion.Euler(0, 25, 0), Vector3.one, matWood);
+
+            // Plants from nature-kit
+            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "FBX_Bush1",
+                new Vector3(-5.0f, 0, 2.5f), Quaternion.identity, Vector3.one * 1.2f, matLeaf);
+            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "FBX_Bush2",
+                new Vector3(5.0f, 0, 2.5f), Quaternion.Euler(0, 90, 0), Vector3.one, matLeaf);
+            PlaceFbx(root, $"{NatureFbx}/plant_bushSmall.fbx", "FBX_Bush3",
+                new Vector3(-5.3f, 0, -1.0f), Quaternion.identity, Vector3.one, matLeaf);
+            PlaceFbx(root, $"{NatureFbx}/tree_palmShort.fbx", "FBX_Palm",
+                new Vector3(5.3f, 0, 4.0f), Quaternion.identity, Vector3.one, matLeaf);
+            PlaceFbx(root, $"{NatureFbx}/flower_redA.fbx", "FBX_Flower1",
+                new Vector3(-1.5f, 0, 0.5f), Quaternion.identity, Vector3.one, matLeaf);
+            PlaceFbx(root, $"{NatureFbx}/flower_yellowA.fbx", "FBX_Flower2",
+                new Vector3(1.5f, 0, -0.5f), Quaternion.identity, Vector3.one, matLeaf);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[BotanikaBuilder] Sprint 5 POLISH done — FBX furniture + plants ADDED (greybox kept)");
+        }
+
+        private static void PlaceFbx(GameObject parent, string fbxPath, string name,
+            Vector3 pos, Quaternion rot, Vector3 scale, Material mat)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(fbxPath);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[BotanikaBuilder] FBX not found: {fbxPath}");
+                return;
+            }
+            var go = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            if (go == null) return;
+            go.name = name;
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            go.transform.position = pos;
+            go.transform.rotation = rot;
+            go.transform.localScale = scale;
+            go.isStatic = true;
+            foreach (var rend in go.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = new Material[rend.sharedMaterials.Length];
+                for (int i = 0; i < mats.Length; i++) mats[i] = mat;
+                rend.sharedMaterials = mats;
+            }
+            ColliderHelper.AddSimpleCollider(go);
         }
 
         // ============================================================
