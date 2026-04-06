@@ -242,10 +242,10 @@ namespace Afterhumans.EditorTools
             {
                 var pi = player.GetComponent<Afterhumans.Player.PlayerInteraction>();
                 if (pi == null) pi = player.AddComponent<Afterhumans.Player.PlayerInteraction>();
-                // Enable debug HUD so Tim can see interaction status
+                // Sprint 10: debug HUD OFF for production look
                 var piSo = new SerializedObject(pi);
                 var debugProp = piSo.FindProperty("showDebugHud");
-                if (debugProp != null) { debugProp.boolValue = true; piSo.ApplyModifiedPropertiesWithoutUndo(); }
+                if (debugProp != null) { debugProp.boolValue = false; piSo.ApplyModifiedPropertiesWithoutUndo(); }
                 // Set maxDistance
                 var distProp = piSo.FindProperty("maxDistance");
                 if (distProp != null) { distProp.floatValue = 5f; piSo.ApplyModifiedPropertiesWithoutUndo(); }
@@ -613,11 +613,12 @@ namespace Afterhumans.EditorTools
 
         private static void AddPostFxToProfile(UnityEngine.Rendering.VolumeProfile profile)
         {
-            // Bloom
+            // Bloom — stronger for stylized glow on lights/emissive
             var bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
-            bloom.intensity.Override(0.5f);
-            bloom.threshold.Override(1.0f);
-            bloom.scatter.Override(0.7f);
+            bloom.intensity.Override(0.8f);  // Sprint 10: was 0.5
+            bloom.threshold.Override(0.85f); // Sprint 10: was 1.0 — more objects glow
+            bloom.scatter.Override(0.75f);
+            bloom.tint.Override(new Color(1f, 0.92f, 0.78f)); // warm bloom
 
             // Tonemapping ACES
             var tone = profile.Add<UnityEngine.Rendering.Universal.Tonemapping>(true);
@@ -635,14 +636,26 @@ namespace Afterhumans.EditorTools
             wb.temperature.Override(15f);
             wb.tint.Override(-5f);
 
-            // Vignette
-            var vig = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
-            vig.intensity.Override(0.22f);
-            vig.smoothness.Override(0.5f);
+            // Shadows/Midtones/Highlights — Art Bible exact
+            var smh = profile.Add<UnityEngine.Rendering.Universal.ShadowsMidtonesHighlights>(true);
+            smh.shadows.Override(new Vector4(0.42f, 0.48f, 0.52f, 0f));   // cool shadows
+            smh.highlights.Override(new Vector4(0.96f, 0.85f, 0.64f, 0f)); // warm highlights
 
-            // Film Grain
+            // Vignette — stronger for cinematic feel
+            var vig = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
+            vig.intensity.Override(0.3f);  // Sprint 10: was 0.22
+            vig.smoothness.Override(0.4f);
+
+            // Film Grain — cinematic
             var grain = profile.Add<UnityEngine.Rendering.Universal.FilmGrain>(true);
-            grain.intensity.Override(0.15f);
+            grain.intensity.Override(0.2f); // Sprint 10: was 0.15
+
+            // Depth of Field — subtle background blur
+            var dof = profile.Add<UnityEngine.Rendering.Universal.DepthOfField>(true);
+            dof.mode.Override(UnityEngine.Rendering.Universal.DepthOfFieldMode.Gaussian);
+            dof.gaussianStart.Override(3f);
+            dof.gaussianEnd.Override(15f);
+            dof.gaussianMaxRadius.Override(0.6f);
         }
 
         // ============================================================
@@ -1051,15 +1064,15 @@ namespace Afterhumans.EditorTools
         {
             var go = new GameObject("Graffiti");
             go.transform.SetParent(parent.transform);
-            // On north wall, facing south (into room)
-            go.transform.position = new Vector3(2, 3, 4.88f);
+            // ON north wall surface, facing south (into room)
+            go.transform.position = new Vector3(2, 3.5f, 4.89f);
             go.transform.rotation = Quaternion.Euler(0, 180, 0);
+            go.transform.localScale = new Vector3(0.008f, 0.008f, 0.008f); // flush against wall
 
             var canvas = go.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
             var rect = go.GetComponent<RectTransform>();
             rect.sizeDelta = new Vector2(300, 60);
-            go.transform.localScale = new Vector3(0.01f, 0.01f, 0.01f);
 
             var textGo = new GameObject("GraffitiText");
             textGo.transform.SetParent(go.transform, false);
