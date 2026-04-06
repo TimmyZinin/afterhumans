@@ -5,6 +5,7 @@ using Afterhumans.Art;
 using Afterhumans.Dialogue;
 using Afterhumans.UI;
 using Afterhumans.Scenes;
+using Afterhumans.Audio;
 
 namespace Afterhumans.EditorTools
 {
@@ -138,7 +139,13 @@ namespace Afterhumans.EditorTools
             // BOT-S01/S02: Wake-up cinematic director
             SpawnIntroDirector();
 
-            Debug.Log($"[BotanikaNpcPopulator] DONE — {spawned}/{Npcs.Length} NPCs + note + door cue + chapter + intro director.");
+            // BOT-S06: Ambient audio
+            SpawnAmbientAudio();
+
+            // BOT-S07: Footstep controller on player
+            SpawnFootstepController();
+
+            Debug.Log($"[BotanikaNpcPopulator] DONE — {spawned}/{Npcs.Length} NPCs + note + cue + chapter + intro + audio.");
         }
 
         private static void SpawnNote(GameObject parent)
@@ -194,6 +201,29 @@ namespace Afterhumans.EditorTools
 
             var go = new GameObject("ChapterIndicator");
             go.AddComponent<ChapterIndicatorUI>();
+        }
+
+        private static void SpawnAmbientAudio()
+        {
+            var existing = GameObject.Find("BotanikaAmbient");
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            var go = new GameObject("BotanikaAmbient");
+            go.AddComponent<BotanikaAmbientAudio>();
+        }
+
+        private static void SpawnFootstepController()
+        {
+            var player = GameObject.FindGameObjectWithTag("Player");
+            if (player == null) player = GameObject.Find("Player");
+            if (player == null) return;
+
+            if (player.GetComponent<FootstepController>() != null) return;
+
+            // Add AudioSource + FootstepController
+            if (player.GetComponent<AudioSource>() == null)
+                player.AddComponent<AudioSource>();
+            player.AddComponent<FootstepController>();
         }
 
         private static void SpawnIntroDirector()
