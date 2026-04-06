@@ -286,7 +286,10 @@ namespace Afterhumans.EditorTools
             {
                 var rend = oldGround.GetComponent<Renderer>();
                 if (rend != null) rend.enabled = false;
-                Debug.Log("[BotanikaDresser] Hid placeholder 50m ground plane");
+                // BOT-T01 fix: remove MeshCollider (criterion #17 zero MeshCollider in scene)
+                var mc = oldGround.GetComponent<MeshCollider>();
+                if (mc != null) Object.DestroyImmediate(mc);
+                Debug.Log("[BotanikaDresser] Hid placeholder 50m ground plane + removed MeshCollider");
             }
 
             // Relocate Sasha NPC to (0, 1, 3) so the hero arrangement is clean.

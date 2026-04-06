@@ -383,21 +383,22 @@ namespace Afterhumans.EditorTools
 
         private static CriterionResult Check17_NoMeshCollider()
         {
+            // mm-review MEDIUM fix: check ALL scene objects, not just Botanika_Props.
+            // MeshColliders on Kafka, NPCs, or SceneEnricher objects also count.
             var meshCols = Object.FindObjectsByType<MeshCollider>(FindObjectsSortMode.None);
-            // Filter to Botanika_Props hierarchy only
-            int inProps = 0;
-            foreach (var mc in meshCols)
+            int total = meshCols.Length;
+            string names = "";
+            if (total > 0)
             {
-                if (mc.transform.root.name == "Botanika_Props" || mc.transform.IsChildOf(
-                    GameObject.Find("Botanika_Props")?.transform ?? mc.transform.root))
-                    inProps++;
+                for (int i = 0; i < Mathf.Min(total, 5); i++)
+                    names += meshCols[i].gameObject.name + " ";
             }
-            bool ok = inProps == 0;
+            bool ok = total == 0;
             return new CriterionResult {
-                id = 17, name = "Zero MeshCollider in props",
-                reference = "BOT-F05: BoxCollider substitute for all props",
+                id = 17, name = "Zero MeshCollider in scene",
+                reference = "BOT-F05: BoxCollider substitute for all interactive/prop objects",
                 passed = ok,
-                evidence = ok ? "0 MeshColliders in Botanika_Props" : $"{inProps} MeshColliders found"
+                evidence = ok ? "0 MeshColliders in entire scene" : $"{total} MeshColliders: {names.Trim()}"
             };
         }
 
@@ -472,7 +473,7 @@ namespace Afterhumans.EditorTools
                      $"expected ~(0.91, 0.65, 0.36), diff={diff:F3}";
             }
             return new CriterionResult {
-                id = 20, name = "Palette matches ART_BIBLE §3.1",
+                id = 20, name = "SceneTheme palette matches ART_BIBLE §3.1",
                 reference = "ART_BIBLE §3.1: primary #E8A75C warm amber",
                 passed = ok, evidence = ev
             };
@@ -560,7 +561,8 @@ namespace Afterhumans.EditorTools
         private static string Escape(string s)
         {
             if (s == null) return "";
-            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n");
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"")
+                .Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
         }
     }
 }

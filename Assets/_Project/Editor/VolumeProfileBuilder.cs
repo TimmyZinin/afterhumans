@@ -167,36 +167,44 @@ namespace Afterhumans.EditorTools
                 AssetDatabase.CreateAsset(profile, path);
             }
             SafeClearProfile(profile);
+            string cityPath = AssetDatabase.GetAssetPath(profile);
 
             var bloom = profile.Add<Bloom>(true);
+            AssetDatabase.AddObjectToAsset(bloom, cityPath);
             bloom.intensity.Override(0.3f);
             bloom.threshold.Override(1.1f);
             bloom.tint.Override(new Color(0.92f, 0.96f, 1f));
 
-            profile.Add<Tonemapping>(true).mode.Override(TonemappingMode.ACES);
+            var tone = profile.Add<Tonemapping>(true);
+            AssetDatabase.AddObjectToAsset(tone, cityPath);
+            tone.mode.Override(TonemappingMode.ACES);
 
             var color = profile.Add<ColorAdjustments>(true);
+            AssetDatabase.AddObjectToAsset(color, cityPath);
             color.saturation.Override(-30f);
             color.contrast.Override(10f);
             color.colorFilter.Override(new Color(0.95f, 0.98f, 1.05f));
 
             var wb = profile.Add<WhiteBalance>(true);
+            AssetDatabase.AddObjectToAsset(wb, cityPath);
             wb.temperature.Override(-20f);
             wb.tint.Override(0f);
 
-            // Chromatic Aberration 0.1 — glitch hint (ART_BIBLE §5.2)
             var ca = profile.Add<ChromaticAberration>(true);
+            AssetDatabase.AddObjectToAsset(ca, cityPath);
             ca.intensity.Override(0.1f);
 
-            // Lens distortion -0.05
             var ld = profile.Add<LensDistortion>(true);
+            AssetDatabase.AddObjectToAsset(ld, cityPath);
             ld.intensity.Override(-0.05f);
 
             var vign = profile.Add<Vignette>(true);
+            AssetDatabase.AddObjectToAsset(vign, cityPath);
             vign.intensity.Override(0.3f);
-            // URP 17.0.4 Vignette only has intensity + smoothness (no roundness param)
 
-            profile.Add<FilmGrain>(true).intensity.Override(0.12f);
+            var grain = profile.Add<FilmGrain>(true);
+            AssetDatabase.AddObjectToAsset(grain, cityPath);
+            grain.intensity.Override(0.12f);
 
             EditorUtility.SetDirty(profile);
             Debug.Log($"[VolumeProfileBuilder] City VolumeProfile: 8 overrides");
@@ -213,35 +221,44 @@ namespace Afterhumans.EditorTools
                 AssetDatabase.CreateAsset(profile, path);
             }
             SafeClearProfile(profile);
+            string desertPath = AssetDatabase.GetAssetPath(profile);
 
             var bloom = profile.Add<Bloom>(true);
+            AssetDatabase.AddObjectToAsset(bloom, desertPath);
             bloom.intensity.Override(1.3f);
             bloom.threshold.Override(0.8f);
             bloom.scatter.Override(0.85f);
             bloom.tint.Override(new Color(1f, 0.7f, 0.4f));
 
-            profile.Add<Tonemapping>(true).mode.Override(TonemappingMode.ACES);
+            var tone = profile.Add<Tonemapping>(true);
+            AssetDatabase.AddObjectToAsset(tone, desertPath);
+            tone.mode.Override(TonemappingMode.ACES);
 
             var color = profile.Add<ColorAdjustments>(true);
+            AssetDatabase.AddObjectToAsset(color, desertPath);
             color.saturation.Override(22f);
             color.contrast.Override(20f);
             color.postExposure.Override(0.35f);
             color.colorFilter.Override(new Color(1.05f, 0.88f, 0.72f));
 
             var wb = profile.Add<WhiteBalance>(true);
+            AssetDatabase.AddObjectToAsset(wb, desertPath);
             wb.temperature.Override(30f);
             wb.tint.Override(10f);
 
             var smh = profile.Add<ShadowsMidtonesHighlights>(true);
-            smh.shadows.Override(new Vector4(0.7f, 0.55f, 0.9f, 0f));  // purple shadows
+            AssetDatabase.AddObjectToAsset(smh, desertPath);
+            smh.shadows.Override(new Vector4(0.7f, 0.55f, 0.9f, 0f));
             smh.midtones.Override(new Vector4(1.08f, 0.92f, 0.7f, 0f));
             smh.highlights.Override(new Vector4(1.15f, 0.85f, 0.6f, 0f));
 
             var vign = profile.Add<Vignette>(true);
+            AssetDatabase.AddObjectToAsset(vign, desertPath);
             vign.intensity.Override(0.28f);
-            // URP 17.0.4 Vignette only has intensity + smoothness
 
-            profile.Add<FilmGrain>(true).intensity.Override(0.2f);
+            var grain = profile.Add<FilmGrain>(true);
+            AssetDatabase.AddObjectToAsset(grain, desertPath);
+            grain.intensity.Override(0.2f);
 
             // DoF — longer focus, epic
             var dof = profile.Add<DepthOfField>(true);
