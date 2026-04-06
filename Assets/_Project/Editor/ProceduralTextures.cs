@@ -12,7 +12,7 @@ namespace Afterhumans.EditorTools
     public static class ProceduralTextures
     {
         private const string TextureDir = "Assets/_Project/Textures/Procedural";
-        private const int Size = 256;
+        private const int Size = 512; // increased from 256 for better quality
 
         private static void EnsureDir()
         {
@@ -214,18 +214,93 @@ namespace Afterhumans.EditorTools
             }
         }
 
-        private static void SaveTexture(Texture2D tex, string assetPath)
+        /// <summary>Generate normal map from a height function using Sobel filter</summary>
+        public static Texture2D GenerateNormalMap(string name, System.Func<float, float, float> heightFunc, float strength = 1.5f)
+        {
+            var path = $"{TextureDir}/{name}.png";
+            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (existing != null) return existing;
+
+            EnsureDir();
+            var tex = new Texture2D(Size, Size, TextureFormat.RGBA32, true);
+
+            for (int y = 1; y < Size - 1; y++)
+            {
+                for (int x = 1; x < Size - 1; x++)
+                {
+                    float nx = x / (float)Size;
+                    float ny = y / (float)Size;
+                    float step = 1f / Size;
+
+                    // Sobel filter for height → normal
+                    float hL = heightFunc(nx - step, ny);
+                    float hR = heightFunc(nx + step, ny);
+                    float hD = heightFunc(nx, ny - step);
+                    float hU = heightFunc(nx, ny + step);
+
+                    Vector3 normal = new Vector3(
+                        (hL - hR) * strength,
+                        (hD - hU) * strength,
+                        1f
+                    ).normalized;
+
+                    // Pack to 0-1 range
+                    tex.SetPixel(x, y, new Color(
+                        normal.x * 0.5f + 0.5f,
+                        normal.y * 0.5f + 0.5f,
+                        normal.z * 0.5f + 0.5f,
+                        1f));
+                }
+            }
+            tex.Apply();
+            SaveTexture(tex, path, isNormal: true);
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+
+        /// <summary>Tile floor normal map — grout lines create depth</summary>
+        public static Texture2D TileFloorNormal()
+        {
+            return GenerateNormalMap("tex_tile_floor_normal", (x, y) =>
+            {
+                int tileSize = 64;
+                int px = (int)(x * Size) % tileSize;
+                int py = (int)(y * Size) % tileSize;
+                bool isGrout = px < 4 || py < 4;
+                return isGrout ? 0f : 0.5f + Mathf.PerlinNoise(x * 15, y * 15) * 0.2f;
+            }, 2.0f);
+        }
+
+        /// <summary>Plaster wall normal map — rough surface variation</summary>
+        public static Texture2D PlasterWallNormal()
+        {
+            return GenerateNormalMap("tex_plaster_wall_normal", (x, y) =>
+            {
+                return Mathf.PerlinNoise(x * 20, y * 20) * 0.5f
+                     + Mathf.PerlinNoise(x * 60, y * 60) * 0.2f;
+            }, 1.5f);
+        }
+
+        /// <summary>Wood normal map — grain direction</summary>
+        public static Texture2D WoodNormal()
+        {
+            return GenerateNormalMap("tex_wood_normal", (x, y) =>
+            {
+                float grain = Mathf.PerlinNoise(x * 2, y * 30);
+                return Mathf.Sin(grain * 12f) * 0.3f + 0.5f;
+            }, 1.2f);
+        }
+
+        private static void SaveTexture(Texture2D tex, string assetPath, bool isNormal = false)
         {
             var bytes = tex.EncodeToPNG();
             var fullPath = Path.Combine(Application.dataPath.Replace("Assets", ""), assetPath);
             File.WriteAllBytes(fullPath, bytes);
             AssetDatabase.ImportAsset(assetPath);
 
-            // Set texture import settings
             var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
             if (importer != null)
             {
-                importer.textureType = TextureImporterType.Default;
+                importer.textureType = isNormal ? TextureImporterType.NormalMap : TextureImporterType.Default;
                 importer.wrapMode = TextureWrapMode.Repeat;
                 importer.filterMode = FilterMode.Bilinear;
                 importer.mipmapEnabled = true;

@@ -790,6 +790,154 @@ namespace Afterhumans.EditorTools
             Debug.Log("[BotanikaBuilder] Sprint 5 POLISH done — extra props (books, rug)");
         }
 
+        // ============================================================
+        // SPRINT 8: MATERIALS — normal maps, roughness, emissive, glass
+        // ============================================================
+
+        [MenuItem("Afterhumans/v2/Sprint 8 — Materials")]
+        public static void Sprint8_Materials()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+            // Generate normal maps
+            var tileNormal = ProceduralTextures.TileFloorNormal();
+            var plasterNormal = ProceduralTextures.PlasterWallNormal();
+            var woodNormal = ProceduralTextures.WoodNormal();
+
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox == null)
+            {
+                Debug.LogError("[BotanikaBuilder] Sprint 8: Botanika_Greybox not found");
+                return;
+            }
+
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+
+            // === FLOOR: tile texture + normal map + roughness ===
+            var texTile = ProceduralTextures.TileFloor();
+            ApplyPbrMaterial(greybox, "Floor", shader, texTile, tileNormal,
+                new Color(0.72f, 0.55f, 0.38f), 0.75f, 0f, 4f);
+
+            // === WALLS: plaster texture + normal map ===
+            var texPlaster = ProceduralTextures.PlasterWall();
+            ApplyPbrMaterial(greybox, "Wall_", shader, texPlaster, plasterNormal,
+                new Color(0.82f, 0.72f, 0.58f), 0.85f, 0f, 3f);
+
+            // === CEILING: slightly different plaster ===
+            ApplyPbrMaterial(greybox, "Ceiling", shader, texPlaster, plasterNormal,
+                new Color(0.88f, 0.82f, 0.72f), 0.8f, 0f, 2f);
+
+            // === GLASS on window gaps (between sills and lintels) ===
+            var glassRoot = GameObject.Find("Botanika_Lighting");
+            if (glassRoot == null) glassRoot = greybox;
+            CreateWindowGlass(glassRoot, shader);
+
+            // === EMISSIVE: chandelier glow ===
+            var chandelier = greybox.transform.Find("Chandelier");
+            if (chandelier != null)
+            {
+                var mat = new Material(shader);
+                mat.SetColor("_BaseColor", new Color(0.95f, 0.85f, 0.55f));
+                mat.SetColor("_EmissionColor", new Color(1f, 0.9f, 0.6f) * 2f);
+                mat.EnableKeyword("_EMISSION");
+                mat.SetFloat("_Smoothness", 0.6f);
+                mat.SetFloat("_Metallic", 0.3f);
+                foreach (var r in chandelier.GetComponentsInChildren<Renderer>())
+                    r.sharedMaterial = mat;
+            }
+
+            // === SERVER RACK: metallic + emissive LED spots ===
+            var serverRack = greybox.transform.Find("ServerRack");
+            if (serverRack != null)
+            {
+                var metalMat = new Material(shader);
+                metalMat.SetColor("_BaseColor", new Color(0.22f, 0.22f, 0.25f));
+                metalMat.SetFloat("_Smoothness", 0.6f);
+                metalMat.SetFloat("_Metallic", 0.8f);
+                foreach (var r in serverRack.GetComponentsInChildren<Renderer>())
+                    r.sharedMaterial = metalMat;
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[BotanikaBuilder] Sprint 8 MATERIALS done — normal maps, roughness, emissive, glass");
+        }
+
+        private static void ApplyPbrMaterial(GameObject parent, string nameContains, Shader shader,
+            Texture2D albedo, Texture2D normal, Color tint, float roughness, float metallic, float tileScale)
+        {
+            foreach (var rend in parent.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!rend.gameObject.name.Contains(nameContains)) continue;
+                var mat = new Material(shader);
+                mat.SetColor("_BaseColor", tint);
+                if (albedo != null)
+                {
+                    mat.SetTexture("_BaseMap", albedo);
+                    mat.SetTextureScale("_BaseMap", new Vector2(tileScale, tileScale));
+                }
+                if (normal != null)
+                {
+                    mat.SetTexture("_BumpMap", normal);
+                    mat.SetTextureScale("_BumpMap", new Vector2(tileScale, tileScale));
+                    mat.SetFloat("_BumpScale", 1.0f);
+                    mat.EnableKeyword("_NORMALMAP");
+                }
+                mat.SetFloat("_Smoothness", 1f - roughness); // URP: smoothness = 1 - roughness
+                mat.SetFloat("_Metallic", metallic);
+                rend.sharedMaterial = mat;
+            }
+        }
+
+        private static void CreateWindowGlass(GameObject parent, Shader shader)
+        {
+            // Glass panes in window openings (between sill and lintel)
+            var glassMat = new Material(shader);
+            glassMat.SetColor("_BaseColor", new Color(0.75f, 0.88f, 0.82f, 0.12f));
+            glassMat.SetFloat("_Surface", 1); // Transparent
+            glassMat.SetFloat("_Blend", 0);   // Alpha
+            glassMat.SetOverrideTag("RenderType", "Transparent");
+            glassMat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            glassMat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            glassMat.SetInt("_ZWrite", 0);
+            glassMat.renderQueue = 3000;
+            glassMat.SetFloat("_Smoothness", 0.95f); // very glossy
+            glassMat.SetFloat("_Metallic", 0.1f);
+
+            float wallH = WallHeight;
+            // North window glass
+            var nGlass = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            nGlass.name = "Glass_North";
+            nGlass.transform.SetParent(parent.transform, false);
+            nGlass.transform.position = new Vector3(0, wallH * 0.5f, 5);
+            nGlass.transform.localScale = new Vector3(6, wallH - 1.8f, 0.05f);
+            nGlass.GetComponent<Renderer>().sharedMaterial = glassMat;
+            Object.DestroyImmediate(nGlass.GetComponent<Collider>());
+            nGlass.isStatic = true;
+
+            // East window glass
+            var eGlass = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            eGlass.name = "Glass_East";
+            eGlass.transform.SetParent(parent.transform, false);
+            eGlass.transform.position = new Vector3(6, wallH * 0.5f, 0);
+            eGlass.transform.localScale = new Vector3(0.05f, wallH - 1.8f, 4);
+            eGlass.GetComponent<Renderer>().sharedMaterial = glassMat;
+            Object.DestroyImmediate(eGlass.GetComponent<Collider>());
+            eGlass.isStatic = true;
+
+            // West window glass
+            var wGlass = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wGlass.name = "Glass_West";
+            wGlass.transform.SetParent(parent.transform, false);
+            wGlass.transform.position = new Vector3(-6, wallH * 0.5f, 0);
+            wGlass.transform.localScale = new Vector3(0.05f, wallH - 1.8f, 4);
+            wGlass.GetComponent<Renderer>().sharedMaterial = glassMat;
+            Object.DestroyImmediate(wGlass.GetComponent<Collider>());
+            wGlass.isStatic = true;
+
+            Debug.Log("[BotanikaBuilder] Window glass panes created (N/E/W)");
+        }
+
         /// <summary>
         /// Place Kenney FBX model. If mat is null, PRESERVES original FBX materials.
         /// CRITICAL-2 fix: don't destroy embedded FBX textures unless explicitly overriding.
