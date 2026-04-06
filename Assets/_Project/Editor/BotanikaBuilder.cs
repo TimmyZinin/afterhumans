@@ -137,46 +137,64 @@ namespace Afterhumans.EditorTools
             cl.intensity = 3f;
             cl.range = 12f;
 
-            // === FURNITURE: positions from shared constants ===
-            MakeBox(root, "Sofa_Sasha", PosSofa + Vector3.up * 0.35f, new Vector3(2.0f, 0.7f, 0.8f), darkGrey);
-            MakeBox(root, "Sofa_East", PosSofaEast + Vector3.up * 0.35f, new Vector3(0.8f, 0.7f, 1.8f), darkGrey);
-            MakeBox(root, "CoffeeTable", PosCoffeeTable + Vector3.up * 0.22f, new Vector3(1.0f, 0.44f, 0.5f), grey);
-            MakeBox(root, "FloorLamp", PosFloorLamp + Vector3.up * 0.7f, new Vector3(0.2f, 1.4f, 0.2f), darkGrey);
+            // === FURNITURE: Kenney FBX (mat=null → preserve original FBX materials) ===
+            PlaceFbx(root, $"{FurnitureFbx}/loungeDesignSofa.fbx", "Sofa_Sasha",
+                PosSofa, Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/loungeSofa.fbx", "Sofa_East",
+                PosSofaEast, Quaternion.Euler(0, -90, 0), Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/tableCoffeeGlassSquare.fbx", "CoffeeTable",
+                PosCoffeeTable, Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/lampRoundFloor.fbx", "FloorLamp",
+                PosFloorLamp, Quaternion.identity, Vector3.one);
 
-            // === NPC ZONES ===
-            MakeBox(root, "Desk_Mila", PosDesk + Vector3.up * 0.38f, new Vector3(1.2f, 0.76f, 0.6f), grey);
-            MakeBox(root, "Chair_Mila", PosChairMila + Vector3.up * 0.35f, new Vector3(0.5f, 0.7f, 0.5f), darkGrey);
-            MakeBox(root, "Kitchen_Counter", PosKitchen + Vector3.up * 0.45f, new Vector3(1.5f, 0.9f, 0.6f), grey);
-            MakeBox(root, "Kitchen_Stove", PosKitchen + Vector3.up * 0.9f, new Vector3(0.4f, 0.1f, 0.4f), darkGrey);
-            MakeBox(root, "Table_Nikolai", PosTableNikolai + Vector3.up * 0.3f, new Vector3(0.8f, 0.6f, 0.8f), grey);
-            MakeBox(root, "Chair_Nikolai", PosChairNikolai + Vector3.up * 0.35f, new Vector3(0.5f, 0.7f, 0.5f), darkGrey);
-            // Stas: у двери (юг), ходит туда-сюда
-            // (нет мебели — он стоит/ходит)
+            // === NPC ZONES — Kenney FBX ===
+            PlaceFbx(root, $"{FurnitureFbx}/desk.fbx", "Desk_Mila",
+                PosDesk, Quaternion.Euler(0, 90, 0), Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/chairDesk.fbx", "Chair_Mila",
+                PosChairMila, Quaternion.Euler(0, -90, 0), Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/kitchenCabinetCornerRound.fbx", "Kitchen_Counter",
+                PosKitchen, Quaternion.Euler(0, -90, 0), Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/tableRound.fbx", "Table_Nikolai",
+                PosTableNikolai, Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/chairCushion.fbx", "Chair_Nikolai",
+                PosChairNikolai, Quaternion.Euler(0, 135, 0), Vector3.one);
 
-            // === BOOKCASES ===
-            MakeBox(root, "Bookcase_NW", PosBookcaseNW + Vector3.up * 0.9f, new Vector3(1.0f, 1.8f, 0.4f), darkGrey);
-            MakeBox(root, "Bookcase_NE", PosBookcaseNE + Vector3.up * 0.9f, new Vector3(1.0f, 1.8f, 0.4f), darkGrey);
-            MakeBox(root, "Bookcase_W", PosBookcaseW + Vector3.up * 0.9f, new Vector3(0.6f, 1.8f, 1.2f), darkGrey);
+            // === BOOKCASES — Kenney FBX ===
+            PlaceFbx(root, $"{FurnitureFbx}/bookcaseOpen.fbx", "Bookcase_NW",
+                PosBookcaseNW, Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/bookcaseOpen.fbx", "Bookcase_NE",
+                PosBookcaseNE, Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/bookcaseOpenLow.fbx", "Bookcase_W",
+                PosBookcaseW, Quaternion.Euler(0, 90, 0), Vector3.one);
 
             // === SERVER RACK ===
             MakeBox(root, "ServerRack", PosServerRack + Vector3.up * 0.8f, new Vector3(0.5f, 1.6f, 0.4f), darkGrey);
 
-            // === РАСТЕНИЯ — это ОРАНЖЕРЕЯ, зелень везде ===
-            // Крупные кусты по углам
-            MakeBox(root, "Plant_NW", new Vector3(-5.0f, 0.6f, 3.0f), new Vector3(1.2f, 1.2f, 1.2f), green);
-            MakeBox(root, "Plant_NE", new Vector3(5.0f, 0.6f, 3.0f), new Vector3(1.0f, 1.0f, 1.0f), green);
-            MakeBox(root, "Plant_SW", new Vector3(-5.0f, 0.5f, -3.5f), new Vector3(1.0f, 1.0f, 1.0f), green);
-            MakeBox(root, "Plant_SE", new Vector3(5.0f, 0.4f, -1.0f), new Vector3(0.8f, 0.8f, 0.8f), green);
-            // Средние растения вдоль стен
-            MakeBox(root, "Plant_W1", new Vector3(-5.3f, 0.4f, -1.0f), new Vector3(0.6f, 0.8f, 0.6f), green);
-            MakeBox(root, "Plant_W2", new Vector3(-5.3f, 0.35f, 1.0f), new Vector3(0.5f, 0.7f, 0.5f), green);
-            MakeBox(root, "Plant_E1", new Vector3(5.3f, 0.4f, 1.5f), new Vector3(0.6f, 0.8f, 0.6f), green);
-            MakeBox(root, "Plant_N1", new Vector3(-2.0f, 0.5f, 4.7f), new Vector3(0.8f, 1.0f, 0.5f), green);
-            MakeBox(root, "Plant_N2", new Vector3(2.5f, 0.45f, 4.7f), new Vector3(0.7f, 0.9f, 0.5f), green);
-            // Мелкие горшки на столах / рядом с мебелью
-            MakeBox(root, "PlantPot_Table", new Vector3(0.3f, 0.55f, 2.5f), new Vector3(0.2f, 0.3f, 0.2f), green);
-            MakeBox(root, "PlantPot_Desk", new Vector3(-4.5f, 0.85f, 1.5f), new Vector3(0.15f, 0.25f, 0.15f), green);
-            MakeBox(root, "PlantPot_Window", new Vector3(3.0f, 0.3f, 4.5f), new Vector3(0.3f, 0.5f, 0.3f), green);
+            // === PLANTS — Kenney nature-kit FBX (preserve original materials) ===
+            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "Plant_NW",
+                new Vector3(-5.0f, 0, 3.0f), Quaternion.identity, Vector3.one * 1.3f);
+            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "Plant_NE",
+                new Vector3(5.0f, 0, 3.0f), Quaternion.Euler(0, 90, 0), Vector3.one * 1.1f);
+            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "Plant_SW",
+                new Vector3(-5.0f, 0, -3.5f), Quaternion.Euler(0, 45, 0), Vector3.one);
+            PlaceFbx(root, $"{NatureFbx}/plant_bushDetailed.fbx", "Plant_SE",
+                new Vector3(5.0f, 0, -1.0f), Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{NatureFbx}/plant_bushSmall.fbx", "Plant_W1",
+                new Vector3(-5.3f, 0, -1.0f), Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{NatureFbx}/plant_bushSmall.fbx", "Plant_W2",
+                new Vector3(-5.3f, 0, 1.0f), Quaternion.Euler(0, 60, 0), Vector3.one);
+            PlaceFbx(root, $"{NatureFbx}/plant_bushSmall.fbx", "Plant_E1",
+                new Vector3(5.3f, 0, 1.5f), Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{NatureFbx}/tree_palmShort.fbx", "Plant_N1",
+                new Vector3(-2.0f, 0, 4.5f), Quaternion.identity, Vector3.one * 1.2f);
+            PlaceFbx(root, $"{NatureFbx}/tree_palmShort.fbx", "Plant_N2",
+                new Vector3(2.5f, 0, 4.5f), Quaternion.Euler(0, -45, 0), Vector3.one);
+            PlaceFbx(root, $"{NatureFbx}/flower_redA.fbx", "Flower_1",
+                new Vector3(-1.5f, 0, 0.5f), Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{NatureFbx}/flower_yellowA.fbx", "Flower_2",
+                new Vector3(1.5f, 0, -0.5f), Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{NatureFbx}/flower_purpleA.fbx", "Flower_3",
+                new Vector3(3.0f, 0, 4.0f), Quaternion.identity, Vector3.one);
 
             // --- PLAYER ---
             SetupPlayer();
@@ -748,9 +766,7 @@ namespace Afterhumans.EditorTools
         }
 
         // ============================================================
-        // SPRINT 5: POLISH — incremental, one model at a time
-        // DO NOT hide greybox cubes. ADD FBX models alongside them.
-        // After visual confirmation, greybox cubes can be hidden.
+        // SPRINT 5: POLISH — extra props only (main furniture now in Sprint 1)
         // ============================================================
 
         [MenuItem("Afterhumans/v2/Sprint 5 — Polish")]
@@ -760,48 +776,18 @@ namespace Afterhumans.EditorTools
             ClearRoot("Botanika_Polish");
 
             var root = new GameObject("Botanika_Polish");
-            var matWood = MakeMaterial("FBX_Wood", new Color(0.52f, 0.36f, 0.22f), 0.2f);
-            var matFabric = MakeMaterial("FBX_Fabric", new Color(0.50f, 0.30f, 0.20f), 0.1f);
-            var matLeaf = MakeMaterial("FBX_Leaf", new Color(0.25f, 0.50f, 0.18f), 0.15f);
 
-            // Add Kenney FBX NEXT TO greybox cubes (not replacing them)
-            // Sofa near Sasha's grey block
-            PlaceFbx(root, $"{FurnitureFbx}/loungeDesignSofa.fbx", "FBX_Sofa",
-                new Vector3(0, 0, 4.2f), Quaternion.identity, Vector3.one, matFabric); // face south toward player
-
-            // Coffee table
-            PlaceFbx(root, $"{FurnitureFbx}/tableCoffeeGlassSquare.fbx", "FBX_CoffeeTable",
-                new Vector3(0, 0, 2.0f), Quaternion.identity, Vector3.one, matWood);
-
-            // Floor lamp
-            PlaceFbx(root, $"{FurnitureFbx}/lampRoundFloor.fbx", "FBX_Lamp",
-                new Vector3(2.0f, 0, 4.0f), Quaternion.identity, Vector3.one, matWood);
-
-            // Bookcase
-            PlaceFbx(root, $"{FurnitureFbx}/bookcaseOpen.fbx", "FBX_Bookcase",
-                new Vector3(-5.2f, 0, 4.5f), Quaternion.identity, Vector3.one, matWood);
-
-            // Books on coffee table
-            PlaceFbx(root, $"{FurnitureFbx}/books.fbx", "FBX_Books",
-                new Vector3(0.2f, 0.5f, 2.0f), Quaternion.Euler(0, 25, 0), Vector3.one, matWood);
-
-            // Plants from nature-kit
-            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "FBX_Bush1",
-                new Vector3(-5.0f, 0, 2.5f), Quaternion.identity, Vector3.one * 1.2f, matLeaf);
-            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "FBX_Bush2",
-                new Vector3(5.0f, 0, 2.5f), Quaternion.Euler(0, 90, 0), Vector3.one, matLeaf);
-            PlaceFbx(root, $"{NatureFbx}/plant_bushSmall.fbx", "FBX_Bush3",
-                new Vector3(-5.3f, 0, -1.0f), Quaternion.identity, Vector3.one, matLeaf);
-            PlaceFbx(root, $"{NatureFbx}/tree_palmShort.fbx", "FBX_Palm",
-                new Vector3(5.3f, 0, 4.0f), Quaternion.identity, Vector3.one, matLeaf);
-            PlaceFbx(root, $"{NatureFbx}/flower_redA.fbx", "FBX_Flower1",
-                new Vector3(-1.5f, 0, 0.5f), Quaternion.identity, Vector3.one, matLeaf);
-            PlaceFbx(root, $"{NatureFbx}/flower_yellowA.fbx", "FBX_Flower2",
-                new Vector3(1.5f, 0, -0.5f), Quaternion.identity, Vector3.one, matLeaf);
+            // Extra props — books, rug, additional details
+            PlaceFbx(root, $"{FurnitureFbx}/books.fbx", "Books_Table",
+                PosCoffeeTable + new Vector3(0.2f, 0.5f, 0), Quaternion.Euler(0, 25, 0), Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/books.fbx", "Books_Bookcase",
+                PosBookcaseNW + new Vector3(0, 0.8f, 0), Quaternion.identity, Vector3.one);
+            PlaceFbx(root, $"{FurnitureFbx}/rugRounded.fbx", "Rug",
+                PosCoffeeTable + Vector3.up * 0.01f, Quaternion.identity, new Vector3(2, 1, 1.5f));
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
-            Debug.Log("[BotanikaBuilder] Sprint 5 POLISH done — FBX furniture + plants ADDED (greybox kept)");
+            Debug.Log("[BotanikaBuilder] Sprint 5 POLISH done — extra props (books, rug)");
         }
 
         /// <summary>
