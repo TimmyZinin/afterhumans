@@ -258,12 +258,31 @@ namespace Afterhumans.EditorTools
             instance.transform.position = spec.position;
             instance.transform.rotation = Quaternion.Euler(0f, spec.yRotation, 0f);
 
-            // Collider for interaction — blocky characters ship without colliders
+            // Collider for interaction — compute from actual renderer bounds
+            // mm-review LOW fix: Kenney models may be scaled 0.2x via
+            // KenneyAssetPostprocessor so hardcoded 1.8m height doesn't match.
+            // Read combined renderer bounds and derive capsule from that.
             var col = instance.GetComponent<CapsuleCollider>();
             if (col == null) col = instance.AddComponent<CapsuleCollider>();
-            col.center = new Vector3(0f, 0.9f, 0f);
-            col.radius = 0.4f;
-            col.height = 1.8f;
+            Bounds? combinedBounds = null;
+            foreach (var r in instance.GetComponentsInChildren<Renderer>())
+            {
+                if (combinedBounds == null) combinedBounds = r.bounds;
+                else { var cb = combinedBounds.Value; cb.Encapsulate(r.bounds); combinedBounds = cb; }
+            }
+            if (combinedBounds.HasValue)
+            {
+                var b = combinedBounds.Value;
+                col.center = instance.transform.InverseTransformPoint(b.center);
+                col.height = b.size.y;
+                col.radius = Mathf.Max(b.size.x, b.size.z) * 0.5f;
+            }
+            else
+            {
+                col.center = new Vector3(0f, 0.9f, 0f);
+                col.radius = 0.4f;
+                col.height = 1.8f;
+            }
             col.direction = 1;  // Y
             col.isTrigger = false;
 

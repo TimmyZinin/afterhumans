@@ -85,17 +85,25 @@ namespace Afterhumans.Dialogue
             ClearChoices();
 
             // BOT-N06: parse "Name: text" speaker prefix (handles Cyrillic names)
+            // mm-review MEDIUM fix: reject URL-like colons (http:, https:, ftp:)
+            // and enforce max speaker length 20 chars to avoid false positives.
             string speaker = null;
             string content = line;
             int colonIdx = line.IndexOf(':');
-            if (colonIdx > 0 && colonIdx < 30)
+            if (colonIdx > 1 && colonIdx < 20)
             {
                 string candidate = line.Substring(0, colonIdx).Trim();
+                // Reject URL protocols and numeric prefixes
+                string lower = candidate.ToLowerInvariant();
+                bool isUrl = lower == "http" || lower == "https" || lower == "ftp";
                 // Validate: speaker name contains only letters/spaces (no URLs, no numbers)
-                bool valid = true;
-                foreach (char c in candidate)
+                bool valid = !isUrl;
+                if (valid)
                 {
-                    if (!char.IsLetter(c) && c != ' ' && c != '-') { valid = false; break; }
+                    foreach (char c in candidate)
+                    {
+                        if (!char.IsLetter(c) && c != ' ' && c != '-') { valid = false; break; }
+                    }
                 }
                 if (valid && candidate.Length >= 2)
                 {
