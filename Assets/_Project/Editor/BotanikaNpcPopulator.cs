@@ -3,6 +3,8 @@ using UnityEditor;
 using UnityEngine;
 using Afterhumans.Art;
 using Afterhumans.Dialogue;
+using Afterhumans.UI;
+using Afterhumans.Scenes;
 
 namespace Afterhumans.EditorTools
 {
@@ -124,7 +126,83 @@ namespace Afterhumans.EditorTools
                 if (SpawnNpc(root, Npcs[i], i)) spawned++;
             }
 
-            Debug.Log($"[BotanikaNpcPopulator] DONE — {spawned}/{Npcs.Length} NPCs spawned.");
+            // BOT-S03: Note interactable on coffee table
+            SpawnNote(root);
+
+            // BOT-S05: Door cue UI (monitors door_to_city_open Ink var)
+            SpawnDoorCue();
+
+            // BOT-S08: Chapter indicator "I. Ботаника"
+            SpawnChapterIndicator();
+
+            // BOT-S01/S02: Wake-up cinematic director
+            SpawnIntroDirector();
+
+            Debug.Log($"[BotanikaNpcPopulator] DONE — {spawned}/{Npcs.Length} NPCs + note + door cue + chapter + intro director.");
+        }
+
+        private static void SpawnNote(GameObject parent)
+        {
+            var existing = GameObject.Find("Note");
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            // Simple white quad representing a folded paper note
+            var note = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            note.name = "Note";
+            note.transform.SetParent(parent.transform, false);
+            note.transform.position = new Vector3(0.25f, 0.48f, 1.8f);  // on coffee table
+            note.transform.rotation = Quaternion.Euler(90f, 15f, 0f);   // face up, slight angle
+            note.transform.localScale = new Vector3(0.25f, 0.18f, 1f);  // paper-sized
+
+            var rend = note.GetComponent<Renderer>();
+            if (rend != null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null) shader = Shader.Find("Standard");
+                var mat = new Material(shader);
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.95f, 0.92f, 0.85f));
+                rend.sharedMaterial = mat;
+            }
+
+            // Replace default MeshCollider with box
+            Object.DestroyImmediate(note.GetComponent<Collider>());
+            var box = note.AddComponent<BoxCollider>();
+            box.size = new Vector3(1f, 1f, 0.1f);
+
+            var interact = note.AddComponent<Interactable>();
+            interact.knotName = "note";
+            interact.promptText = "прочитать";
+            interact.interactRadius = 1.5f;
+            interact.oneTime = true;
+
+            SpawnPrompt(note, "прочитать", 1.5f);
+        }
+
+        private static void SpawnDoorCue()
+        {
+            var existing = GameObject.Find("DoorCueUI");
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            var go = new GameObject("DoorCueUI");
+            go.AddComponent<DoorCueUI>();
+        }
+
+        private static void SpawnChapterIndicator()
+        {
+            var existing = GameObject.Find("ChapterIndicator");
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            var go = new GameObject("ChapterIndicator");
+            go.AddComponent<ChapterIndicatorUI>();
+        }
+
+        private static void SpawnIntroDirector()
+        {
+            var existing = GameObject.Find("BotanikaIntroDirector");
+            if (existing != null) Object.DestroyImmediate(existing);
+
+            var go = new GameObject("BotanikaIntroDirector");
+            go.AddComponent<BotanikaIntroDirector>();
         }
 
         private static bool SpawnNpc(GameObject parent, NpcSpec spec, int index)
