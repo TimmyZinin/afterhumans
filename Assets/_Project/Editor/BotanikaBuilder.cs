@@ -108,7 +108,9 @@ namespace Afterhumans.EditorTools
             MakeBox(root, "Wall_South_L", new Vector3(-4.5f, halfH, -5), new Vector3(3, wallH, 0.2f), grey);
             MakeBox(root, "Wall_South_R", new Vector3(4.5f, halfH, -5), new Vector3(3, wallH, 0.2f), grey);
             MakeBox(root, "Wall_South_Top", new Vector3(0, wallH - 0.5f, -5), new Vector3(6, 1, 0.2f), grey);
-            // Doorway gap at bottom center (no geometry)
+            // Invisible wall blocking doorway exit (player can't leave yet)
+            var doorBlock = MakeBox(root, "DoorBlock", new Vector3(0, halfH, -5), new Vector3(6, wallH, 0.2f), grey);
+            doorBlock.GetComponent<Renderer>().enabled = false; // invisible but collider stays
 
             // East wall: 2 pillars + panoramic window
             MakeBox(root, "Wall_East_F", new Vector3(6, halfH, -3.5f), new Vector3(0.2f, wallH, 3), grey);
