@@ -362,6 +362,182 @@ namespace Afterhumans.EditorTools
         }
 
         // ============================================================
+        // SPRINT 3: LIGHTING
+        // Warm sun, shadows, accent lights, skybox, post-FX
+        // Goal: grey room transforms into warm golden hour greenhouse
+        // ============================================================
+
+        [MenuItem("Afterhumans/v2/Sprint 3 — Lighting")]
+        public static void Sprint3_Lighting()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            ClearRoot("Botanika_Lighting");
+
+            var root = new GameObject("Botanika_Lighting");
+
+            // Remove temp light from Sprint 1
+            var tempLight = GameObject.Find("Sun_Temp");
+            if (tempLight != null) Object.DestroyImmediate(tempLight);
+
+            // === DIRECTIONAL LIGHT (Sun) — Art Bible §4.1 ===
+            var sunGo = new GameObject("Sun_Directional");
+            sunGo.transform.SetParent(root.transform);
+            var sun = sunGo.AddComponent<Light>();
+            sun.type = LightType.Directional;
+            sun.color = new Color(1.0f, 0.86f, 0.67f); // 3200K warm
+            sun.intensity = 1.5f;
+            sun.transform.rotation = Quaternion.Euler(25f, -45f, 0f); // low sun from NW
+            sun.shadows = LightShadows.Soft;
+            sun.shadowStrength = 0.7f;
+            RenderSettings.sun = sun;
+
+            // === RENDER SETTINGS ===
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.55f, 0.45f, 0.32f); // warm dim
+            RenderSettings.ambientIntensity = 0.5f;
+
+            // Fog — warm haze
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.ExponentialSquared;
+            RenderSettings.fogDensity = 0.012f;
+            RenderSettings.fogColor = new Color(0.95f, 0.80f, 0.58f);
+
+            // === SKYBOX ===
+            var hdriPath = "Assets/_Project/Vendor/PolyHaven/kloppenheim_06_puresky_2k.hdr";
+            var hdri = AssetDatabase.LoadAssetAtPath<Texture2D>(hdriPath);
+            if (hdri != null)
+            {
+                var skyShader = Shader.Find("Skybox/Panoramic");
+                if (skyShader != null)
+                {
+                    var skyMat = new Material(skyShader);
+                    skyMat.SetTexture("_MainTex", hdri);
+                    skyMat.SetFloat("_Exposure", 0.8f); // slightly dim so interior isn't washed out
+                    RenderSettings.skybox = skyMat;
+                }
+                // Camera uses skybox
+                var cam = FindPlayerCamera();
+                if (cam != null) cam.clearFlags = CameraClearFlags.Skybox;
+                Debug.Log("[BotanikaBuilder] HDRI Skybox applied");
+            }
+            else
+            {
+                Debug.LogWarning($"[BotanikaBuilder] HDRI not found at {hdriPath}");
+            }
+
+            // === ACCENT POINT LIGHTS ===
+            // Near Sasha's sofa — warm reading light
+            CreatePointLight(root, "Light_Sofa", new Vector3(1.8f, 2.2f, 3.5f),
+                new Color(1f, 0.85f, 0.55f), 2.0f, 4f);
+            // Nikolai's corner — dim warm
+            CreatePointLight(root, "Light_Nikolai", new Vector3(-4.5f, 2.2f, 4f),
+                new Color(1f, 0.78f, 0.45f), 1.5f, 3f);
+            // Server rack — cool accent (contrast)
+            CreatePointLight(root, "Light_Server", new Vector3(5.2f, 1.5f, -3.5f),
+                new Color(0.6f, 0.75f, 1f), 1.0f, 2.5f);
+            // Kitchen — warm
+            CreatePointLight(root, "Light_Kitchen", new Vector3(4.5f, 2.0f, -2.5f),
+                new Color(1f, 0.82f, 0.5f), 1.5f, 3f);
+
+            // === POST-PROCESSING VOLUME ===
+            SetupPostProcessing(root);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[BotanikaBuilder] Sprint 3 LIGHTING done — sun, shadows, skybox, accents, post-FX");
+        }
+
+        private static Camera FindPlayerCamera()
+        {
+            var cams = Object.FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            foreach (var c in cams)
+                if (c.CompareTag("MainCamera")) return c;
+            return cams.Length > 0 ? cams[0] : null;
+        }
+
+        private static void CreatePointLight(GameObject parent, string name, Vector3 pos,
+            Color color, float intensity, float range)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform);
+            go.transform.position = pos;
+            var light = go.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = color;
+            light.intensity = intensity;
+            light.range = range;
+            light.shadows = LightShadows.None; // perf: only sun casts shadows
+        }
+
+        private static void SetupPostProcessing(GameObject parent)
+        {
+            var cam = FindPlayerCamera();
+            if (cam == null) return;
+
+            // Load or create Volume Profile
+            var profilePath = "Assets/_Project/Settings/URP/VolumeProfiles/VP_Botanika_v2.asset";
+            var profile = AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.VolumeProfile>(profilePath);
+
+            if (profile == null)
+            {
+                profile = ScriptableObject.CreateInstance<UnityEngine.Rendering.VolumeProfile>();
+                System.IO.Directory.CreateDirectory("Assets/_Project/Settings/URP/VolumeProfiles");
+                AssetDatabase.CreateAsset(profile, profilePath);
+            }
+
+            // Clear old overrides
+            profile.components.Clear();
+
+            // Add URP post-FX
+            AddPostFxToProfile(profile);
+
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+
+            // Attach Volume to camera
+            var volume = cam.GetComponent<UnityEngine.Rendering.Volume>();
+            if (volume == null) volume = cam.gameObject.AddComponent<UnityEngine.Rendering.Volume>();
+            volume.isGlobal = true;
+            volume.profile = profile;
+            volume.priority = 1;
+
+            Debug.Log("[BotanikaBuilder] Post-processing Volume applied to camera");
+        }
+
+        private static void AddPostFxToProfile(UnityEngine.Rendering.VolumeProfile profile)
+        {
+            // Bloom
+            var bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
+            bloom.intensity.Override(0.5f);
+            bloom.threshold.Override(1.0f);
+            bloom.scatter.Override(0.7f);
+
+            // Tonemapping ACES
+            var tone = profile.Add<UnityEngine.Rendering.Universal.Tonemapping>(true);
+            tone.mode.Override(UnityEngine.Rendering.Universal.TonemappingMode.ACES);
+
+            // Color Adjustments
+            var color = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
+            color.saturation.Override(10f);
+            color.contrast.Override(8f);
+            color.postExposure.Override(0.2f);
+
+            // White Balance
+            var wb = profile.Add<UnityEngine.Rendering.Universal.WhiteBalance>(true);
+            wb.temperature.Override(15f);
+            wb.tint.Override(-5f);
+
+            // Vignette
+            var vig = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
+            vig.intensity.Override(0.22f);
+            vig.smoothness.Override(0.5f);
+
+            // Film Grain
+            var grain = profile.Add<UnityEngine.Rendering.Universal.FilmGrain>(true);
+            grain.intensity.Override(0.15f);
+        }
+
+        // ============================================================
         // HELPERS
         // ============================================================
 
