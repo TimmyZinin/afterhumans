@@ -357,23 +357,56 @@ namespace Afterhumans.EditorTools
         {
             var kafka = new GameObject("Kafka");
             kafka.transform.SetParent(parent.transform, worldPositionStays: false);
-            kafka.transform.position = new Vector3(1, 0, -2.5f);
+            kafka.transform.position = PosKafka;
 
-            // Visual: simple dark capsule for now (Sprint 4 will replace with corgi model)
-            var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            body.name = "KafkaBody";
-            body.transform.SetParent(kafka.transform, worldPositionStays: false);
-            body.transform.localPosition = Vector3.zero;
-            body.transform.localScale = new Vector3(0.25f, 0.2f, 0.4f);
-            body.transform.localRotation = Quaternion.Euler(0, 0, 90); // horizontal
-            var kafkaMat = MakeMaterial("Kafka", new Color(0.15f, 0.13f, 0.12f));
-            body.GetComponent<Renderer>().sharedMaterial = kafkaMat;
-            Object.DestroyImmediate(body.GetComponent<Collider>());
+            // Load Blender-created corgi FBX model
+            var kafkaFbx = "Assets/_Project/Models/kafka_corgi.fbx";
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(kafkaFbx);
+            if (prefab != null)
+            {
+                var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+                model.name = "KafkaModel";
+                model.transform.SetParent(kafka.transform, worldPositionStays: false);
+                model.transform.localPosition = Vector3.zero; // origin at feet from Blender fix
+                model.transform.localRotation = Quaternion.identity;
+                model.transform.localScale = Vector3.one; // model pre-scaled to 45cm in Blender
+
+                // Assign AnimatorController for Tripo walk animation
+                var animCtrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
+                    "Assets/_Project/Models/KafkaAnimator.controller");
+                var animator = model.GetComponentInChildren<Animator>();
+                if (animator != null && animCtrl != null)
+                {
+                    animator.runtimeAnimatorController = animCtrl;
+                    Debug.Log("[BotanikaBuilder] Kafka: AnimatorController assigned");
+                }
+                else
+                {
+                    Debug.LogWarning($"[BotanikaBuilder] Kafka: animator={animator != null}, ctrl={animCtrl != null}");
+                }
+
+                // Preserve Tripo3D original textures/colors
+                Debug.Log("[BotanikaBuilder] Kafka: model + animation + textures loaded");
+            }
+            else
+            {
+                // Fallback: simple capsule if FBX not found
+                Debug.LogWarning($"[BotanikaBuilder] Kafka FBX not found at {kafkaFbx}, using capsule fallback");
+                var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                body.name = "KafkaBody";
+                body.transform.SetParent(kafka.transform, worldPositionStays: false);
+                body.transform.localPosition = Vector3.zero;
+                body.transform.localScale = new Vector3(0.25f, 0.2f, 0.4f);
+                body.transform.localRotation = Quaternion.Euler(0, 0, 90);
+                var kafkaMat = MakeMaterial("Kafka", new Color(0.15f, 0.13f, 0.12f));
+                body.GetComponent<Renderer>().sharedMaterial = kafkaMat;
+                Object.DestroyImmediate(body.GetComponent<Collider>());
+            }
 
             // Follow behavior
             kafka.AddComponent<Afterhumans.Kafka.KafkaFollowSimple>();
 
-            Debug.Log("[BotanikaBuilder] Kafka spawned at (1, 0, -2.5)");
+            Debug.Log($"[BotanikaBuilder] Kafka spawned at {PosKafka}");
         }
 
         private static void SetupDialogueSystem(GameObject parent)
