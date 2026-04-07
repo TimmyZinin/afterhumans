@@ -1,9 +1,11 @@
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
+using System.Linq;
 
 namespace Afterhumans.EditorTools
 {
@@ -359,7 +361,6 @@ namespace Afterhumans.EditorTools
             kafka.transform.SetParent(parent.transform, worldPositionStays: false);
             kafka.transform.position = PosKafka;
 
-            // Load Blender-created corgi FBX model
             var kafkaFbx = "Assets/_Project/Models/kafka_corgi.fbx";
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(kafkaFbx);
             if (prefab != null)
@@ -367,30 +368,71 @@ namespace Afterhumans.EditorTools
                 var model = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
                 model.name = "KafkaModel";
                 model.transform.SetParent(kafka.transform, worldPositionStays: false);
-                model.transform.localPosition = Vector3.zero; // origin at feet from Blender fix
-                model.transform.localRotation = Quaternion.identity;
-                model.transform.localScale = Vector3.one; // model pre-scaled to 45cm in Blender
+                model.transform.localPosition = Vector3.zero;
+                model.transform.localRotation = Quaternion.Euler(0, 90, 0); // Tripo model faces -X, flip to +Z
+                model.transform.localScale = Vector3.one * 3f; // 0.30m real → 0.90m game scale (knee-height to NPC)
 
-                // Assign AnimatorController for Tripo walk animation
-                var animCtrl = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(
-                    "Assets/_Project/Models/KafkaAnimator.controller");
+                // Build AnimatorController: Idle (rest pose) ↔ Walk (clip)
                 var animator = model.GetComponentInChildren<Animator>();
-                if (animator != null && animCtrl != null)
+                if (animator != null)
                 {
-                    animator.runtimeAnimatorController = animCtrl;
-                    Debug.Log("[BotanikaBuilder] Kafka: AnimatorController assigned");
+                    var ctrlPath = "Assets/_Project/Models/KafkaAnimator.controller";
+                    // Delete old controller if exists
+                    if (AssetDatabase.LoadAssetAtPath<Object>(ctrlPath) != null)
+                        AssetDatabase.DeleteAsset(ctrlPath);
+
+                    var controller = AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+
+                    // Bool parameter for walk/idle switch
+                    controller.AddParameter("IsWalking", AnimatorControllerParameterType.Bool);
+
+                    var sm = controller.layers[0].stateMachine;
+
+                    // Idle state — no motion = bind/rest pose (all paws on ground)
+                    var idleState = sm.AddState("Idle");
+                    sm.defaultState = idleState;
+
+                    // Walk state — load clip from FBX
+                    var walkState = sm.AddState("Walk");
+                    var clips = AssetDatabase.LoadAllAssetsAtPath(kafkaFbx)
+                        .OfType<AnimationClip>()
+                        .Where(c => !c.name.StartsWith("__preview__"))
+                        .ToArray();
+
+                    if (clips.Length > 0)
+                    {
+                        walkState.motion = clips[0];
+                        Debug.Log($"[BotanikaBuilder] Kafka: Walk clip '{clips[0].name}' assigned ({clips.Length} clips total)");
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[BotanikaBuilder] Kafka: no animation clips found in FBX!");
+                    }
+
+                    // Transitions: Idle → Walk (IsWalking=true), Walk → Idle (IsWalking=false)
+                    var toWalk = idleState.AddTransition(walkState);
+                    toWalk.AddCondition(AnimatorConditionMode.If, 0, "IsWalking");
+                    toWalk.hasExitTime = false;
+                    toWalk.duration = 0.15f;
+
+                    var toIdle = walkState.AddTransition(idleState);
+                    toIdle.AddCondition(AnimatorConditionMode.IfNot, 0, "IsWalking");
+                    toIdle.hasExitTime = false;
+                    toIdle.duration = 0.15f;
+
+                    animator.runtimeAnimatorController = controller;
+                    AssetDatabase.SaveAssets();
+                    Debug.Log("[BotanikaBuilder] Kafka: AnimatorController created (Idle ↔ Walk)");
                 }
                 else
                 {
-                    Debug.LogWarning($"[BotanikaBuilder] Kafka: animator={animator != null}, ctrl={animCtrl != null}");
+                    Debug.LogWarning("[BotanikaBuilder] Kafka: no Animator found on model!");
                 }
 
-                // Preserve Tripo3D original textures/colors
-                Debug.Log("[BotanikaBuilder] Kafka: model + animation + textures loaded");
+                Debug.Log("[BotanikaBuilder] Kafka: model loaded");
             }
             else
             {
-                // Fallback: simple capsule if FBX not found
                 Debug.LogWarning($"[BotanikaBuilder] Kafka FBX not found at {kafkaFbx}, using capsule fallback");
                 var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
                 body.name = "KafkaBody";
@@ -403,9 +445,7 @@ namespace Afterhumans.EditorTools
                 Object.DestroyImmediate(body.GetComponent<Collider>());
             }
 
-            // Follow behavior
             kafka.AddComponent<Afterhumans.Kafka.KafkaFollowSimple>();
-
             Debug.Log($"[BotanikaBuilder] Kafka spawned at {PosKafka}");
         }
 
