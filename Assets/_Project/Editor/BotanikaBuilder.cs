@@ -1055,6 +1055,69 @@ namespace Afterhumans.EditorTools
             Debug.Log("[BotanikaBuilder] Sprint 9 ATMOSPHERE done — particles, props, graffiti, LED");
         }
 
+        // ============================================================
+        // SPRINT AA: PBR TEXTURE UPGRADE
+        // Replace procedural textures with downloaded PBR (Poly Haven, ambientCG)
+        // ============================================================
+
+        [MenuItem("Afterhumans/v2/Sprint AA — PBR Textures")]
+        public static void SprintAA_PbrTextures()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+            // First create AA materials
+            AAMaterialSetup.SetupAllMaterials();
+
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox == null)
+            {
+                Debug.LogError("[BotanikaBuilder] Sprint AA: Botanika_Greybox not found");
+                return;
+            }
+
+            // Load AA materials
+            var matFloor   = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/AA/Mat_Floor_WoodWorn.mat");
+            var matWalls   = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/AA/Mat_Walls_Plaster.mat");
+            var matCeiling = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/AA/Mat_Ceiling_White.mat");
+            var matPillars = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/AA/Mat_Pillars_Concrete.mat");
+            var matGlass   = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Project/Materials/AA/Mat_Glass_Window.mat");
+
+            // Apply to scene objects by name
+            foreach (var rend in greybox.GetComponentsInChildren<Renderer>(true))
+            {
+                var name = rend.gameObject.name;
+
+                if (name == "Floor" && matFloor != null)
+                    rend.sharedMaterial = matFloor;
+                else if (name == "Ceiling" && matCeiling != null)
+                    rend.sharedMaterial = matCeiling;
+                else if (name.StartsWith("Wall_") && name.Contains("_L") || name.Contains("_R") || name.Contains("_F") || name.Contains("_B"))
+                {
+                    if (matPillars != null) rend.sharedMaterial = matPillars;
+                }
+                else if (name.StartsWith("Wall_") && (name.Contains("Top") || name.Contains("Bot")))
+                {
+                    if (matPillars != null) rend.sharedMaterial = matPillars;
+                }
+                else if (name.StartsWith("Glass_") && matGlass != null)
+                    rend.sharedMaterial = matGlass;
+            }
+
+            // Also apply wall material to remaining wall objects
+            foreach (var rend in greybox.GetComponentsInChildren<Renderer>(true))
+            {
+                var name = rend.gameObject.name;
+                if (name.StartsWith("Wall_") && rend.sharedMaterial != matPillars && rend.sharedMaterial != matGlass)
+                {
+                    if (matWalls != null) rend.sharedMaterial = matWalls;
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[BotanikaBuilder] Sprint AA PBR TEXTURES done — floor, walls, ceiling, pillars, glass upgraded");
+        }
+
         private static void CreateDustParticles(GameObject parent)
         {
             var go = new GameObject("DustParticles");

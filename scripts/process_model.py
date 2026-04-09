@@ -78,10 +78,19 @@ def main():
     mesh_obj = None
     armature_obj = None
     for obj in bpy.data.objects:
-        if obj.type == "MESH" and mesh_obj is None:
-            mesh_obj = obj
+        if obj.type == "MESH":
+            # Pick largest mesh (skip helper proxies like Icosphere)
+            verts = len(obj.data.vertices)
+            if mesh_obj is None or verts > len(mesh_obj.data.vertices):
+                mesh_obj = obj
         elif obj.type == "ARMATURE" and armature_obj is None:
             armature_obj = obj
+
+    # Delete small helper meshes (Icosphere etc.)
+    for obj in list(bpy.data.objects):
+        if obj.type == "MESH" and obj != mesh_obj and len(obj.data.vertices) < 500:
+            print(f"  Removing helper mesh: {obj.name} ({len(obj.data.vertices)} verts)")
+            bpy.data.objects.remove(obj, do_unlink=True)
 
     if mesh_obj is None:
         print("ERROR: No mesh found in file!")
@@ -178,9 +187,22 @@ def main():
         action.name = new_name
         print(f"  {old} → {new_name}")
 
-    # Step 9: Export FBX
+    # Step 9a: Unpack textures to .fbm/ so FBX references them
     output_path = os.path.abspath(args.output)
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    fbm_dir = output_path.replace('.fbx', '.fbm')
+    os.makedirs(fbm_dir, exist_ok=True)
+
+    for img in bpy.data.images:
+        if img.size[0] == 0 or img.name == 'Render Result':
+            continue
+        safe_name = img.name.replace('/', '_').replace('\\', '_')
+        tex_path = os.path.join(fbm_dir, f"{safe_name}.png")
+        img.filepath_raw = tex_path
+        img.file_format = 'PNG'
+        img.save()
+        print(f"  Texture saved: {safe_name}.png ({img.size[0]}x{img.size[1]})")
+
     print(f"[9/10] Exporting to {output_path}...")
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.export_scene.fbx(
@@ -198,7 +220,7 @@ def main():
         bake_anim_use_all_actions=is_animated,
         bake_anim_simplify_factor=0.1,
         path_mode='COPY',
-        embed_textures=True,
+        embed_textures=False,  # Separate .fbm/ folder so Unity finds textures
     )
 
     # Step 10: Final report
