@@ -1,16 +1,15 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
-using Afterhumans.InputSystems;
 
 namespace Afterhumans.Kafka
 {
     /// <summary>
     /// Player-as-Kafka direct WASD controller for the sandbox meadow scene.
-    /// W/S = forward/back, A/D = turn, Shift = sprint. Drives the KafkaAnimator
-    /// IsWalking bool so Idle ↔ Walk plays correctly.
+    /// W/S = forward/back, A/D = turn, Shift = sprint.
     ///
-    /// This is separate from KafkaFollowSimple/KafkaFollow (companion behavior).
-    /// When this component is attached, Kafka is the player — not a follower.
+    /// Uses the legacy Input Manager (Input.GetAxis / Input.GetKey) because the
+    /// project is configured with ProjectSettings.activeInputHandlers = 0 (Old).
+    /// Don't replace with the New Input System wrapper here — it silently fails
+    /// in standalone builds when that setting is 0.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public class KafkaDirectController : MonoBehaviour
@@ -30,8 +29,6 @@ namespace Afterhumans.Kafka
 
         private CharacterController _cc;
         private Animator _animator;
-        private Vector2 _moveInput;
-        private bool _sprinting;
         private float _currentSpeed;
         private float _verticalVelocity;
 
@@ -43,59 +40,27 @@ namespace Afterhumans.Kafka
                 Debug.LogWarning("[KafkaDirectController] No Animator found in children.");
         }
 
-        private void OnEnable()
-        {
-            var input = AfterhumansInputWrapper.Instance;
-            input.EnableGameplay();
-            if (input.Move != null)
-            {
-                input.Move.performed += OnMove;
-                input.Move.canceled += OnMove;
-            }
-            if (input.Sprint != null)
-            {
-                input.Sprint.performed += OnSprint;
-                input.Sprint.canceled += OnSprint;
-            }
-        }
-
-        private void OnDisable()
-        {
-            var input = AfterhumansInputWrapper.Instance;
-            if (input.Move != null)
-            {
-                input.Move.performed -= OnMove;
-                input.Move.canceled -= OnMove;
-            }
-            if (input.Sprint != null)
-            {
-                input.Sprint.performed -= OnSprint;
-                input.Sprint.canceled -= OnSprint;
-            }
-        }
-
-        private void OnMove(InputAction.CallbackContext ctx) => _moveInput = ctx.ReadValue<Vector2>();
-        private void OnSprint(InputAction.CallbackContext ctx) => _sprinting = ctx.ReadValueAsButton();
-
         private void Update()
         {
             float dt = Time.deltaTime;
 
-            float turn = _moveInput.x * turnSpeedDeg * dt;
-            transform.Rotate(0f, turn, 0f, Space.World);
+            float horizontal = Input.GetAxisRaw("Horizontal"); // A/D + arrows
+            float vertical = Input.GetAxisRaw("Vertical");     // W/S + arrows
+            bool sprinting = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-            float forwardInput = Mathf.Clamp(_moveInput.y, -1f, 1f);
-            float targetSpeed = forwardInput * (_sprinting ? runSpeed : walkSpeed);
+            transform.Rotate(0f, horizontal * turnSpeedDeg * dt, 0f, Space.World);
+
+            float targetSpeed = Mathf.Clamp(vertical, -1f, 1f) * (sprinting ? runSpeed : walkSpeed);
             _currentSpeed = Mathf.MoveTowards(_currentSpeed, targetSpeed, acceleration * dt);
 
-            Vector3 horizontal = transform.forward * _currentSpeed;
+            Vector3 horizontalVel = transform.forward * _currentSpeed;
 
             if (_cc.isGrounded && _verticalVelocity < 0f)
                 _verticalVelocity = -2f;
             else
                 _verticalVelocity -= gravity * dt;
 
-            Vector3 motion = horizontal + Vector3.up * _verticalVelocity;
+            Vector3 motion = horizontalVel + Vector3.up * _verticalVelocity;
             _cc.Move(motion * dt);
 
             if (_animator != null)

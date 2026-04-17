@@ -201,9 +201,10 @@ namespace Afterhumans.EditorTools
             freeLook.Follow = target;
             freeLook.LookAt = target;
 
-            freeLook.m_Orbits[0] = new CinemachineFreeLook.Orbit(3.2f, 2.4f);
-            freeLook.m_Orbits[1] = new CinemachineFreeLook.Orbit(1.4f, 3.5f);
-            freeLook.m_Orbits[2] = new CinemachineFreeLook.Orbit(0.3f, 2.6f);
+            // Tighter orbit so Kafka (0.6m tall) fills ~1/4 of the frame.
+            freeLook.m_Orbits[0] = new CinemachineFreeLook.Orbit(2.0f, 1.6f);   // top
+            freeLook.m_Orbits[1] = new CinemachineFreeLook.Orbit(1.0f, 2.2f);   // middle
+            freeLook.m_Orbits[2] = new CinemachineFreeLook.Orbit(0.25f, 1.8f);  // bottom
 
             freeLook.m_XAxis.m_MaxSpeed = 300f;
             freeLook.m_XAxis.m_InputAxisName = "Mouse X";
