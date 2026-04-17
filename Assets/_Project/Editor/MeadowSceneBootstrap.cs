@@ -133,7 +133,9 @@ namespace Afterhumans.EditorTools
                 urpLit = Shader.Find("Standard");
             }
             var mat = new Material(urpLit) { name = "Mat_Meadow_Greybox" };
-            mat.color = new Color(0.48f, 0.63f, 0.36f);
+            var c = new Color(0.48f, 0.63f, 0.36f);
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", c);
+            mat.color = c;
             if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.15f);
             if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
             AssetDatabase.CreateAsset(mat, GroundMaterialPath);

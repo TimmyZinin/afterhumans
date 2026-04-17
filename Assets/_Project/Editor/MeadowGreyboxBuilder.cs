@@ -222,11 +222,41 @@ namespace Afterhumans.EditorTools
             EnsureAssetFolder(Path.GetDirectoryName(path));
             Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             var mat = new Material(shader) { name = Path.GetFileNameWithoutExtension(path) };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
             mat.color = color;
             if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.1f);
             if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
             AssetDatabase.CreateAsset(mat, path);
             return mat;
+        }
+
+        [MenuItem("Afterhumans/Greybox/Refresh Material Colors")]
+        public static void RefreshMaterialColors()
+        {
+            ApplyColor(TrunkMatPath, new Color(0.35f, 0.25f, 0.18f));
+            ApplyColor(CrownMatPath, new Color(0.29f, 0.55f, 0.23f));
+            ApplyColor(RockMatPath,  new Color(0.55f, 0.53f, 0.50f));
+            ApplyColor(BushMatPath,  new Color(0.41f, 0.65f, 0.38f));
+            ApplyColor("Assets/_Project/Materials/Nature/Mat_Meadow_Greybox.mat", new Color(0.48f, 0.68f, 0.36f));
+            AssetDatabase.SaveAssets();
+            Debug.Log("[MeadowGreybox] Material colors refreshed; switched to URP/Unlit for flat colors.");
+        }
+
+        private static void ApplyColor(string path, Color color)
+        {
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (mat == null) return;
+
+            // Switch to URP/Unlit — greybox materials should show albedo flatly.
+            var unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            if (unlit != null && mat.shader != unlit)
+            {
+                mat.shader = unlit;
+            }
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
+            if (mat.HasProperty("_Color")) mat.SetColor("_Color", color);
+            mat.color = color;
+            EditorUtility.SetDirty(mat);
         }
 
         private static void EnsureAssetFolder(string assetDir)
