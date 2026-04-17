@@ -29,6 +29,12 @@
 
 Pre-production завершён (Блок 1). **Production в процессе (Блок 2, Этап 8 — Unity install)**.
 
+### Meadow Sandbox (отдельный полигон)
+
+Параллельно с Episode 0 есть sandbox-сцена `Scene_MeadowForest_Greybox.unity` — полянка 80×80м с лесом, где Кафка бегает под прямым управлением WASD. Используется для прототипирования окружения и будущей интеграции пака **Stylized Nature MegaKit** (Quaternius). Не попадает в main Episode 0 build. Подробно: [`docs/MEADOW_SANDBOX.md`](docs/MEADOW_SANDBOX.md).
+
+Быстрый запуск: в Unity меню `Afterhumans → Meadow → Bootstrap Sandbox Scene`, затем `Afterhumans → Greybox → Build Meadow Forest`.
+
 ## Структура репо
 
 ```
