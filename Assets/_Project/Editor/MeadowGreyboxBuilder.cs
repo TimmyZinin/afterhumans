@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using URandom = UnityEngine.Random;
 
 namespace Afterhumans.EditorTools
@@ -32,11 +34,24 @@ namespace Afterhumans.EditorTools
         private const float RingInner = 25f;
         private const float RingOuter = 38f;
         private const int Seed = 42;
+        private const string ScenePath = "Assets/_Project/Scenes/Scene_MeadowForest_Greybox.unity";
 
         [MenuItem("Afterhumans/Greybox/Build Meadow Forest")]
         public static void Build()
         {
             Debug.Log("[MeadowGreybox] Starting...");
+
+            var active = EditorSceneManager.GetActiveScene();
+            if (active.path != ScenePath)
+            {
+                if (!File.Exists(ScenePath))
+                {
+                    Debug.LogError($"[MeadowGreybox] Scene not found at {ScenePath}. Run 'Bootstrap Sandbox Scene' first.");
+                    return;
+                }
+                Debug.Log($"[MeadowGreybox] Opening {ScenePath}");
+                active = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            }
 
             EnsureTagExists();
             var trunkMat = LoadOrCreate(TrunkMatPath, new Color(0.35f, 0.25f, 0.18f));
@@ -53,7 +68,7 @@ namespace Afterhumans.EditorTools
 
             URandom.InitState(Seed);
 
-            var treeParent = MakeChild(root.transform, "Trees");
+            var treeParent = MakeChild(root.transform, "Trees").transform;
             for (int i = 0; i < RingTreeCount; i++)
             {
                 Vector2 p = RandomRing(RingInner, RingOuter);
@@ -66,22 +81,22 @@ namespace Afterhumans.EditorTools
                 SpawnTree(treeParent, $"Tree_Scatter_{i:00}", new Vector3(p.x, 0f, p.y), trunkMat, crownMat);
             }
 
-            var rockParent = MakeChild(root.transform, "Rocks");
+            var rockParent = MakeChild(root.transform, "Rocks").transform;
             for (int i = 0; i < RockCount; i++)
             {
                 Vector2 p = RandomRing(InnerRadius + 1f, ScatterOuter);
                 SpawnRock(rockParent, $"Rock_{i:00}", new Vector3(p.x, 0f, p.y), rockMat);
             }
 
-            var bushParent = MakeChild(root.transform, "Bushes");
+            var bushParent = MakeChild(root.transform, "Bushes").transform;
             for (int i = 0; i < BushCount; i++)
             {
                 Vector2 p = RandomRing(InnerRadius, ScatterOuter);
                 SpawnBush(bushParent, $"Bush_{i:00}", new Vector3(p.x, 0f, p.y), bushMat);
             }
 
-            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
-                UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
+            EditorSceneManager.MarkSceneDirty(active);
+            EditorSceneManager.SaveScene(active);
             AssetDatabase.SaveAssets();
 
             Debug.Log($"[MeadowGreybox] DONE. Spawned {TreeCount} trees, {RockCount} rocks, {BushCount} bushes under {root.name}.");

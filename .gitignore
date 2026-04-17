@@ -92,3 +92,6 @@ Assets/_Project/Vendor/Megascans/
 .env.local
 *.key
 *.pem
+
+# Stylized Nature MegaKit (Quaternius, CC0) — vendored locally, regen via scripts/download-assets.sh or from Downloads zip
+/Assets/ThirdParty/StylizedNature/
