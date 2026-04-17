@@ -48,7 +48,9 @@ namespace Afterhumans.Kafka
             float vertical = Input.GetAxisRaw("Vertical");     // W/S + arrows
             bool sprinting = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-            transform.Rotate(0f, horizontal * turnSpeedDeg * dt, 0f, Space.World);
+            // A = turn left (CCW), D = turn right (CW). Invert the sign so world rotation
+            // matches the player's intuition when the camera is behind Kafka.
+            transform.Rotate(0f, -horizontal * turnSpeedDeg * dt, 0f, Space.World);
 
             float targetSpeed = Mathf.Clamp(vertical, -1f, 1f) * (sprinting ? runSpeed : walkSpeed);
             _currentSpeed = Mathf.MoveTowards(_currentSpeed, targetSpeed, acceleration * dt);

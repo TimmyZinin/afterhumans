@@ -163,7 +163,9 @@ namespace Afterhumans.EditorTools
                 var inst = (GameObject)PrefabUtility.InstantiatePrefab(fbx);
                 inst.transform.SetParent(root.transform, worldPositionStays: false);
                 inst.transform.localPosition = Vector3.zero;
-                inst.transform.localRotation = Quaternion.identity;
+                // kafka_corgi.fbx is oriented so the right side faces +Z by default.
+                // Rotate -90° around Y so the nose faces +Z (= transform.forward in Unity).
+                inst.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
 
                 var animator = inst.GetComponent<Animator>() ?? inst.GetComponentInChildren<Animator>();
                 if (animator == null) animator = inst.AddComponent<Animator>();
@@ -208,6 +210,7 @@ namespace Afterhumans.EditorTools
 
             freeLook.m_XAxis.m_MaxSpeed = 300f;
             freeLook.m_XAxis.m_InputAxisName = "Mouse X";
+            freeLook.m_XAxis.Value = 180f; // start camera behind Kafka
             freeLook.m_YAxis.m_MaxSpeed = 2f;
             freeLook.m_YAxis.m_InputAxisName = "Mouse Y";
             freeLook.m_YAxis.m_InvertInput = false;
