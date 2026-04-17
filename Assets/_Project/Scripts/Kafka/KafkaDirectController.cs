@@ -44,11 +44,10 @@ namespace Afterhumans.Kafka
         {
             float dt = Time.deltaTime;
 
-            // Negate both axes to match the visual orientation of the FBX/camera pair in
-            // this sandbox: W should push Kafka forward (away from camera), S backward,
-            // A turn left, D turn right.
-            float horizontal = -Input.GetAxisRaw("Horizontal"); // A/D + arrows
-            float vertical = -Input.GetAxisRaw("Vertical");     // W/S + arrows
+            // W/S are negated to match the FBX rotation (-90° Y); A/D left alone so
+            // A turns left and D turns right when viewing Kafka from behind.
+            float horizontal = Input.GetAxisRaw("Horizontal"); // A/D + arrows
+            float vertical = -Input.GetAxisRaw("Vertical");    // W/S + arrows
             bool sprinting = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
             transform.Rotate(0f, horizontal * turnSpeedDeg * dt, 0f, Space.World);
