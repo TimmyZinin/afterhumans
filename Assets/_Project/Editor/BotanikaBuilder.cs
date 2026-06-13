@@ -377,6 +377,111 @@ namespace Afterhumans.EditorTools
         }
 
         // ============================================================
+        // ART PASS (AP-01/AP-02) — PBR surfaces on the NEW nave + real glass
+        // vault. Run AFTER BuildGreybox (+ optionally Sprint3_Lighting).
+        // Headless: -executeMethod Afterhumans.EditorTools.BotanikaBuilder.BuildArt
+        // ============================================================
+        public static void BuildArt()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox == null)
+            {
+                Debug.LogError("[BotanikaBuilder] BuildArt: Botanika_Greybox not found — run BuildGreybox first");
+                return;
+            }
+
+            ProceduralTextures.ClearCache();
+            var tile      = ProceduralTextures.TileFloor();
+            var tileN     = ProceduralTextures.TileFloorNormal();
+            var plaster   = ProceduralTextures.PlasterWall();
+            var plasterN  = ProceduralTextures.PlasterWallNormal();
+
+            // FLOOR — warm weathered stone tile, large tiling for a 28x14 hall.
+            RetexturePbr(greybox, "Floor", tile, tileN,
+                new Color(0.72f, 0.55f, 0.40f), 7f, 0.18f);
+
+            // COLUMNS — matte aged concrete (slightly cool stone).
+            RetexturePbr(greybox, "Column_", plaster, plasterN,
+                new Color(0.62f, 0.60f, 0.58f), 1.5f, 0.10f);
+
+            // SOLID WALLS (north server backdrop + south entrance panels/lintel)
+            // — warm plaster. Glass walls handled separately below.
+            RetexturePbr(greybox, "Wall_North", plaster, plasterN,
+                new Color(0.78f, 0.70f, 0.58f), 3f, 0.10f);
+            RetexturePbr(greybox, "Wall_South_", plaster, plasterN,
+                new Color(0.78f, 0.70f, 0.58f), 3f, 0.10f);
+
+            // GLASS VAULT + GABLE ENDS + GLASS SIDE WALLS — real translucent amber
+            // glass so the sunset reads THROUGH the greenhouse roof.
+            RetextureGlass(greybox, "Vault_",      new Color(0.85f, 0.68f, 0.45f, 0.22f));
+            RetextureGlass(greybox, "Gable_",      new Color(0.85f, 0.68f, 0.45f, 0.22f));
+            RetextureGlass(greybox, "Wall_Glass",  new Color(0.80f, 0.72f, 0.62f, 0.20f));
+
+            // SERVER RACK + DOOR — dark metal.
+            RetexturePbr(greybox, "ServerRack", null, null,
+                new Color(0.22f, 0.23f, 0.26f), 1f, 0.45f);
+            RetexturePbr(greybox, "DoorToCity", null, null,
+                new Color(0.28f, 0.22f, 0.18f), 1f, 0.25f);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[BotanikaBuilder] ART PASS done — PBR floor/columns/walls + translucent glass vault");
+        }
+
+        /// <summary>Opaque URP/Lit retexture with albedo + normal + smoothness.</summary>
+        private static void RetexturePbr(GameObject parent, string nameContains,
+            Texture2D albedo, Texture2D normal, Color tint, float tile, float smoothness)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            foreach (var rend in parent.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!rend.gameObject.name.Contains(nameContains)) continue;
+                var mat = new Material(shader);
+                mat.name = nameContains + "_PBR";
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+                if (albedo != null)
+                {
+                    mat.SetTexture("_BaseMap", albedo);
+                    mat.SetTextureScale("_BaseMap", new Vector2(tile, tile));
+                }
+                if (normal != null && mat.HasProperty("_BumpMap"))
+                {
+                    mat.SetTexture("_BumpMap", normal);
+                    mat.SetTextureScale("_BumpMap", new Vector2(tile, tile));
+                    mat.EnableKeyword("_NORMALMAP");
+                }
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", smoothness);
+                rend.sharedMaterial = mat;
+            }
+        }
+
+        /// <summary>Translucent amber glass (URP/Lit transparent) that lets the
+        /// sunset show through; keeps shadowCasting OFF set in the greybox.</summary>
+        private static void RetextureGlass(GameObject parent, string nameContains, Color tint)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            foreach (var rend in parent.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!rend.gameObject.name.Contains(nameContains)) continue;
+                var mat = new Material(shader);
+                mat.name = nameContains + "_Glass";
+                mat.SetFloat("_Surface", 1f);  // Transparent
+                mat.SetFloat("_Blend", 0f);    // Alpha
+                mat.SetOverrideTag("RenderType", "Transparent");
+                mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                mat.SetInt("_ZWrite", 0);
+                mat.renderQueue = 3000;
+                mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.85f); // glassy
+                if (mat.HasProperty("_Cull")) mat.SetFloat("_Cull", 0f); // double-sided
+                rend.sharedMaterial = mat;
+            }
+        }
+
+        // ============================================================
         // SPRINT 2: GAMEPLAY
         // NPC capsules + Kafka + Dialogue + Interaction + Door gate
         // Goal: walk up to NPC, press E, read dialogue, Kafka follows
