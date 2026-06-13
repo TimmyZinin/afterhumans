@@ -2,6 +2,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 
 namespace Afterhumans.EditorTools
@@ -296,6 +297,111 @@ namespace Afterhumans.EditorTools
 
                 byte[] png = tex.EncodeToPNG();
                 File.WriteAllBytes(outPath, png);
+
+                RenderTexture.active = prevActive;
+                cam.targetTexture = null;
+                rt.Release();
+                Object.DestroyImmediate(rt);
+                Object.DestroyImmediate(tex);
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        // =====================================================================
+        // LIT CAPTURE — renders the scene with its OWN lighting (sun + HDRI +
+        // point lights + post-FX Volume). No diagnostic overrides. Use AFTER the
+        // lighting pass (Sprint3_Lighting) to show the real look.
+        // =====================================================================
+        public static void CaptureLit()
+        {
+            Directory.CreateDirectory(OutputDir);
+            EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
+
+            var origin = ResolvePlayerOrigin();
+            origin.y = EyeLevel;
+
+            // 1. Eye-level, looking north down the nave (player POV).
+            CaptureLitShot(origin,
+                Quaternion.LookRotation(new Vector3(0f, 0.04f, 1f), Vector3.up),
+                "10_lit_forward.png");
+
+            // 2. Raised HERO shot — under the ridge (Y=6, ridge is 8) and forward
+            // of the south end (Z=-11) so the camera is NOT inside the gable cap;
+            // looks down the nave, floor as a clean plane, colonnade to the glow.
+            CaptureLitShot(new Vector3(0f, 6f, -11f),
+                Quaternion.LookRotation(new Vector3(0.03f, -0.33f, 1f), Vector3.up),
+                "11_lit_hero.png");
+
+            // 3. Mid-nave eye level (between the column pairs).
+            CaptureLitShot(new Vector3(2.5f, EyeLevel, -4f),
+                Quaternion.LookRotation(new Vector3(-0.25f, 0.02f, 1f), Vector3.up),
+                "12_lit_mid.png");
+
+            Debug.Log("[CameraProbe] LIT capture done (3 shots) → " + OutputDir);
+        }
+
+        private static void CaptureLitShot(Vector3 pos, Quaternion rot, string fileName)
+        {
+            var go = new GameObject("AH_TempLitCam");
+            try
+            {
+                go.hideFlags = HideFlags.HideAndDontSave;
+                go.transform.position = pos;
+                go.transform.rotation = rot;
+
+                var cam = go.AddComponent<Camera>();
+                cam.fieldOfView = 60f;
+                cam.nearClipPlane = 0.05f;
+                cam.farClipPlane = 1000f;
+                // Use the scene skybox (HDRI) — real look, no flat fill.
+                cam.clearFlags = CameraClearFlags.Skybox;
+                cam.allowHDR = true;
+                cam.allowMSAA = false;
+
+                // Apply the scene's global post-FX Volume to THIS camera so the
+                // hero shot gets ACES/Bloom/etc (URP additional-cam render).
+                var addData = cam.GetUniversalAdditionalCameraData();
+                if (addData != null) addData.renderPostProcessing = true;
+
+                var rt = new RenderTexture(Width, Height, 24,
+                    RenderTextureFormat.ARGB32);
+                rt.antiAliasing = 1;
+                rt.Create();
+
+                var prevActive = RenderTexture.active;
+                cam.targetTexture = rt;
+
+                var srp = UnityEngine.Rendering
+                    .GraphicsSettings.currentRenderPipeline;
+                if (srp != null)
+                {
+                    var req = new UnityEngine.Rendering
+                        .RenderPipeline.StandardRequest { destination = rt };
+                    if (UnityEngine.Rendering.RenderPipeline
+                            .SupportsRenderRequest(cam, req))
+                        UnityEngine.Rendering.RenderPipeline
+                            .SubmitRenderRequest(cam, req);
+                    else
+                        cam.Render();
+                }
+                else
+                {
+                    cam.Render();
+                }
+
+                GL.Flush();
+                RenderTexture.active = rt;
+                var tex = new Texture2D(Width, Height, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, Width, Height), 0, 0);
+                tex.Apply();
+                var c = tex.GetPixel(Width / 2, Height / 2);
+                Debug.Log($"[CameraProbe] LIT px center={c} → {fileName}");
+
+                File.WriteAllBytes(Path.Combine(OutputDir, fileName),
+                    tex.EncodeToPNG());
 
                 RenderTexture.active = prevActive;
                 cam.targetTexture = null;

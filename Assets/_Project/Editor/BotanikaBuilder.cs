@@ -152,10 +152,13 @@ namespace Afterhumans.EditorTools
 
             // ===== SIDE GLASS WALLS at X = +/-7 (eave height 4 m) =====
             float sideH = EaveHeight;
-            MakeBox(root, "Wall_GlassEast", new Vector3(NaveHalfW, sideH * 0.5f, 0),
+            var wallE = MakeBox(root, "Wall_GlassEast", new Vector3(NaveHalfW, sideH * 0.5f, 0),
                 new Vector3(0.15f, sideH, NaveLength), glassGrey);
-            MakeBox(root, "Wall_GlassWest", new Vector3(-NaveHalfW, sideH * 0.5f, 0),
+            var wallW = MakeBox(root, "Wall_GlassWest", new Vector3(-NaveHalfW, sideH * 0.5f, 0),
                 new Vector3(0.15f, sideH, NaveLength), glassGrey);
+            // Glass side walls let sunlight through too.
+            wallE.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            wallW.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
             // ===== SOLID NORTH WALL at Z = +14 (server-zone backdrop) =====
             // Full gable-height wall so the apex is closed off behind the gate.
@@ -295,7 +298,11 @@ namespace Afterhumans.EditorTools
             var go = new GameObject(name);
             go.transform.SetParent(parent.transform, worldPositionStays: false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+            var vr = go.AddComponent<MeshRenderer>();
+            vr.sharedMaterial = mat;
+            // Glass roof must NOT cast shadows — sunlight pours THROUGH the vault
+            // into the nave (otherwise the closed shell blacks out the interior).
+            vr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             // Roof collider so the player/camera cannot poke through the vault.
             var mc = go.AddComponent<MeshCollider>();
             mc.sharedMesh = mesh;
@@ -331,7 +338,9 @@ namespace Afterhumans.EditorTools
             var go = new GameObject(name);
             go.transform.SetParent(parent.transform, worldPositionStays: false);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
-            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+            var gr = go.AddComponent<MeshRenderer>();
+            gr.sharedMaterial = mat;
+            gr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // glass gable lets light through
             ColliderHelper.MarkStaticProp(go);
         }
 
@@ -706,29 +715,47 @@ namespace Afterhumans.EditorTools
             else if (GameObject.Find("Botanika_Greybox") == null)
                 Debug.LogWarning("[BotanikaBuilder] Sprint 3: Botanika_Greybox not found — run Sprint 1 first");
 
-            // === DIRECTIONAL LIGHT (Sun) — Art Bible §4.1 ===
+            // === DIRECTIONAL LIGHT (Sun) — low sunset key, the HERO of the scene ===
             var sunGo = new GameObject("Sun_Directional");
             sunGo.transform.SetParent(root.transform);
             var sun = sunGo.AddComponent<Light>();
             sun.type = LightType.Directional;
-            // CRITICAL-3 fix: exact Art Bible §4.1 values
-            sun.color = ArtBibleSunColor;
-            sun.intensity = ArtBibleSunIntensity;
-            sun.transform.rotation = Quaternion.Euler(ArtBibleSunRotation);
+            sun.color = new Color(1.0f, 0.78f, 0.50f);  // warm 3200K sunset
+            sun.intensity = 1.5f;                        // dominant, no blown walls
+            // ~30° — pours from ABOVE-along the nave (through the vault), still
+            // angled enough for long shadows. (Tim-proxy: light read as a side
+            // lamp; the greenhouse needs it coming from overhead through glass.)
+            sun.transform.rotation = Quaternion.Euler(30f, -22f, 0f);
             sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.7f;
+            sun.shadowStrength = 0.85f;
             RenderSettings.sun = sun;
 
-            // === RENDER SETTINGS — exact Art Bible §4.1 ===
-            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = ArtBibleAmbientColor; // #F5D8A3
-            RenderSettings.ambientIntensity = ArtBibleAmbientIntensity; // 0.4
+            // RIM / back light — cool, low, from behind to catch column edges
+            // (Tim-proxy: columns read as flat cardboard tubes, no edge light).
+            var rimGo = new GameObject("Light_Rim");
+            rimGo.transform.SetParent(root.transform);
+            var rim = rimGo.AddComponent<Light>();
+            rim.type = LightType.Directional;
+            rim.color = new Color(0.6f, 0.72f, 0.95f); // cool counter
+            rim.intensity = 0.5f;
+            rim.transform.rotation = Quaternion.Euler(12f, 150f, 0f); // from far end, low
+            rim.shadows = LightShadows.None;
 
-            // Fog — Art Bible §4.1
+            // === RENDER SETTINGS — gradient ambient = warm sky / COOL shadows ===
+            // (Flat ambient flattened everything; gradient gives the warm/cool
+            //  contrast the AAA QA flagged as missing.)
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.55f, 0.42f, 0.28f);     // warm bounce from above
+            RenderSettings.ambientEquatorColor = new Color(0.30f, 0.28f, 0.26f); // neutral mid
+            RenderSettings.ambientGroundColor = new Color(0.16f, 0.18f, 0.24f);  // COOL shadow fill
+            RenderSettings.ambientIntensity = 1.0f;
+
+            // Fog — denser warm haze for depth/atmosphere down the long nave
+            // (AAA QA: interior air too dry, depth only geometric).
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = ArtBibleFogDensity; // 0.015
-            RenderSettings.fogColor = ArtBibleFogColor;
+            RenderSettings.fogDensity = 0.032f; // denser dusty air in ALL shots (Tim-proxy)
+            RenderSettings.fogColor = new Color(0.80f, 0.63f, 0.42f); // warm sunset haze
 
             // === SKYBOX ===
             // Sprint 4: warm sunset interior HDRI from 3d-artist sourcing.
@@ -746,7 +773,7 @@ namespace Afterhumans.EditorTools
                 {
                     var skyMat = new Material(skyShader);
                     skyMat.SetTexture("_MainTex", hdri);
-                    skyMat.SetFloat("_Exposure", 0.8f); // slightly dim so interior isn't washed out
+                    skyMat.SetFloat("_Exposure", 0.32f); // dim sky so edges don't clip to white
                     RenderSettings.skybox = skyMat;
                 }
                 // Camera uses skybox
@@ -759,19 +786,31 @@ namespace Afterhumans.EditorTools
                 Debug.LogWarning($"[BotanikaBuilder] HDRI not found at {hdriPath}");
             }
 
-            // === ACCENT POINT LIGHTS ===
-            // Near Sasha's sofa — warm reading light
-            CreatePointLight(root, "Light_Sofa", new Vector3(1.8f, 2.2f, 3.5f),
-                new Color(1f, 0.85f, 0.55f), 2.0f, 4f);
-            // Nikolai's corner — dim warm
-            CreatePointLight(root, "Light_Nikolai", new Vector3(-4.5f, 2.2f, 4f),
-                new Color(1f, 0.78f, 0.45f), 1.5f, 3f);
-            // Server rack — cool accent (contrast)
-            CreatePointLight(root, "Light_Server", new Vector3(5.2f, 1.5f, -3.5f),
-                new Color(0.6f, 0.75f, 1f), 1.0f, 2.5f);
-            // Kitchen — warm
-            CreatePointLight(root, "Light_Kitchen", new Vector3(4.5f, 2.0f, -2.5f),
-                new Color(1f, 0.82f, 0.5f), 1.5f, 3f);
+            // === ACCENT POINT LIGHTS — the SUN is the key; these are low accents
+            // only (previously they blew the whole nave to cream). ===
+            var warm = new Color(1f, 0.82f, 0.52f);
+            var warmDeep = new Color(1f, 0.74f, 0.42f);
+            var cool = new Color(0.62f, 0.74f, 0.92f); // less saturated blue (Tim-proxy: random blue pools)
+            // Sasha sofa (center, south) — small warm pool
+            CreatePointLight(root, "Light_Sofa", new Vector3(0f, 2.4f, -2f), warm, 1.6f, 5f);
+            // Kirill kitchen (east)
+            CreatePointLight(root, "Light_Kitchen", new Vector3(3.4f, 2.4f, -6f), warm, 1.3f, 4.5f);
+            // Nikolai far center — warm GLOW at the far end that beckons down the
+            // dark entry POV (forward shot).
+            CreatePointLight(root, "Light_Nikolai", new Vector3(-0.8f, 2.6f, 8f), warmDeep, 2.8f, 9f);
+            // Server rack (east passage) — FOCUSED cool accent = the one cold note
+            // against the warm hall (AAA QA: cold was too diffuse).
+            CreatePointLight(root, "Light_Server", new Vector3(5f, 3.2f, 2f), cool, 3.8f, 5.5f); // raised off the floor
+            // Warm fill at the player spawn — lift the entry POV out of near-black
+            // so the front columns read (keep it moodier than the rest).
+            CreatePointLight(root, "Light_Spawn", new Vector3(0f, 2.5f, -10.5f), warm, 3f, 13f);
+
+            // === GOD RAYS — deferred to art pass (AP-01) ===
+            // Additive-quad fake shafts read as flat blown-white slabs in URP;
+            // believable god-rays need a volumetric raymarch shader, which ships
+            // with the glass-vault material work. Atmosphere here comes from the
+            // dense warm fog + sun-from-above instead.
+            // CreateLightShafts(root);
 
             // === POST-PROCESSING VOLUME ===
             SetupPostProcessing(root);
@@ -801,6 +840,68 @@ namespace Afterhumans.EditorTools
             light.intensity = intensity;
             light.range = range;
             light.shadows = LightShadows.None; // perf: only sun casts shadows
+        }
+
+        /// <summary>
+        /// Fakes volumetric god-rays (URP has no built-in light shafts without
+        /// HDRP): additive, faintly warm, soft-edged quad "beams" descending from
+        /// the vault to the floor at the SUN's angle, scattered down the nave.
+        /// Each beam is a crossed pair of quads so it reads as a volume from any
+        /// camera angle. Combined with the warm fog this gives dusty sunbeams.
+        /// </summary>
+        private static void CreateLightShafts(GameObject parent)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit")
+                         ?? Shader.Find("Sprites/Default");
+            var mat = new Material(shader);
+            mat.name = "GodRay_Additive";
+            if (mat.HasProperty("_BaseColor"))
+                mat.SetColor("_BaseColor", new Color(1f, 0.82f, 0.5f, 1f));
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", null);
+            // Transparent + ADDITIVE blend (glow, never darkens).
+            mat.SetFloat("_Surface", 1f);     // Transparent
+            mat.SetFloat("_Blend", 2f);       // Additive
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            mat.SetInt("_ZWrite", 0);
+            mat.renderQueue = 3100;
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+
+            var shaftRoot = new GameObject("GodRays");
+            shaftRoot.transform.SetParent(parent.transform);
+
+            // Beams angled to match the sun (down-and-along the nave), placed
+            // between column pairs where light would break through the vault.
+            var beamSpots = new[]
+            {
+                new Vector3(-2.0f, 4.0f, -4f),
+                new Vector3( 2.2f, 4.0f,  1f),
+                new Vector3(-1.4f, 4.0f,  6f),
+                new Vector3( 1.0f, 4.0f, -8f),
+            };
+            var beamRot = Quaternion.Euler(62f, -18f, 0f); // steep shaft, sun-aligned
+            int i = 0;
+            foreach (var spot in beamSpots)
+            {
+                // Crossed quads = pseudo-volume beam.
+                for (int k = 0; k < 2; k++)
+                {
+                    var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    q.name = $"Shaft_{i}_{k}";
+                    Object.DestroyImmediate(q.GetComponent<Collider>());
+                    q.transform.SetParent(shaftRoot.transform);
+                    q.transform.position = spot;
+                    q.transform.rotation = beamRot * Quaternion.Euler(0f, k * 90f, 0f);
+                    q.transform.localScale = new Vector3(1.6f, 9f, 1f); // narrow, tall shaft
+                    var r = q.GetComponent<Renderer>();
+                    r.sharedMaterial = mat;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    r.receiveShadows = false;
+                }
+                i++;
+            }
+            Debug.Log($"[BotanikaBuilder] God rays: {beamSpots.Length} dusty sunbeams placed");
         }
 
         private static void SetupPostProcessing(GameObject parent)
@@ -842,10 +943,10 @@ namespace Afterhumans.EditorTools
         {
             // Bloom — stronger for stylized glow on lights/emissive
             var bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
-            bloom.intensity.Override(0.8f);  // Sprint 10: was 0.5
-            bloom.threshold.Override(0.85f); // Sprint 10: was 1.0 — more objects glow
-            bloom.scatter.Override(0.75f);
-            bloom.tint.Override(new Color(1f, 0.92f, 0.78f)); // warm bloom
+            bloom.intensity.Override(1.15f);  // glow on far-end light + warm highlights
+            bloom.threshold.Override(0.7f);   // lower → highlights bloom (AAA QA: bloom not reading)
+            bloom.scatter.Override(0.62f); // tighter core (was 0.8 — far-end glow too cottony)
+            bloom.tint.Override(new Color(1f, 0.9f, 0.72f)); // warm bloom
 
             // Tonemapping ACES
             var tone = profile.Add<UnityEngine.Rendering.Universal.Tonemapping>(true);
@@ -854,9 +955,10 @@ namespace Afterhumans.EditorTools
             // Color Adjustments
             var color = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
             // LOW-2 fix: exact Art Bible §5 values
-            color.saturation.Override(10f); // Art Bible: +10 ✓
-            color.contrast.Override(5f);    // Art Bible: +5 (was 8)
-            color.postExposure.Override(0.2f);
+            color.saturation.Override(20f);  // richer sunset amber
+            color.contrast.Override(12f);    // tonal punch
+            color.postExposure.Override(-0.32f); // kill remaining edge clipping
+            color.colorFilter.Override(new Color(1f, 0.96f, 0.9f)); // warm filter, de-green the cream
 
             // White Balance
             var wb = profile.Add<UnityEngine.Rendering.Universal.WhiteBalance>(true);
@@ -865,13 +967,19 @@ namespace Afterhumans.EditorTools
 
             // Shadows/Midtones/Highlights — Art Bible exact
             var smh = profile.Add<UnityEngine.Rendering.Universal.ShadowsMidtonesHighlights>(true);
-            smh.shadows.Override(new Vector4(0.42f, 0.48f, 0.52f, 0f));   // cool shadows
-            smh.highlights.Override(new Vector4(0.96f, 0.85f, 0.64f, 0f)); // warm highlights
+            smh.shadows.Override(new Vector4(0.40f, 0.46f, 0.55f, 0f));   // cooler blue shadows
+            smh.midtones.Override(new Vector4(1.0f, 0.93f, 0.86f, 0f));   // warm midtones (de-green cream → honey)
+            smh.highlights.Override(new Vector4(1.0f, 0.82f, 0.54f, 0f)); // amber-orange highlight peak
+
+            // Lift the deep shadows slightly (warm) so the forward POV floor isn't
+            // crushed to pure black, without touching midtones/highlights.
+            var lgg = profile.Add<UnityEngine.Rendering.Universal.LiftGammaGain>(true);
+            lgg.lift.Override(new Vector4(1.04f, 1.0f, 0.95f, 0.05f)); // warm +lift, forward floor readable
 
             // Vignette — stronger for cinematic feel
             var vig = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
-            vig.intensity.Override(0.3f);  // Sprint 10: was 0.22
-            vig.smoothness.Override(0.4f);
+            vig.intensity.Override(0.45f); // stronger — collects the frame, tames the bright side wall
+            vig.smoothness.Override(0.45f);
 
             // Film Grain — cinematic
             var grain = profile.Add<UnityEngine.Rendering.Universal.FilmGrain>(true);

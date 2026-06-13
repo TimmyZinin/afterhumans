@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<title>Afterhumans — M1 серый макет Ботаники</title>
+<style>
+  body{margin:0;background:#15171a;color:#e8e6e0;font:16px/1.5 -apple-system,Segoe UI,sans-serif;padding:32px}
+  h1{font-size:24px;margin:0 0 4px} h2{font-size:15px;color:#9aa0a6;font-weight:500;margin:0 0 24px}
+  .note{background:#21262b;border-left:3px solid #c8924a;padding:14px 18px;border-radius:6px;margin:0 0 28px;max-width:1100px}
+  .hero{display:block;width:100%;max-width:1100px;border-radius:8px;margin:0 0 8px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1100px;margin-top:24px}
+  .cap{font-size:13px;color:#9aa0a6;margin:4px 0 18px}
+  figure{margin:0} figure img{width:100%;border-radius:8px;display:block}
+  b{color:#f0c98a}
+</style></head><body>
+<h1>Afterhumans — серый макет Ботаники (M1)</h1>
+<h2>Большой неф 28 × 14 м, свод 8 м, 4 колонны · собрано и отрендерено headless на сервере · QA-гейт 9/10 + 9/10</h2>
+
+<div class="note">
+<b>Что это:</b> голая серая геометрия — БЕЗ света, текстур и арта (это будет дальше).
+Этап M1 проверяет одно: <b>правильный размер</b>. Кадры сняты камерой с уровня глаз игрока (1.65 м).
+Свет тут диагностический и неравномерный (forward темнее, бока пересвечены) — это артефакт рендера на сервере без GPU, НЕ финальный свет.
+</div>
+
+<figure>
+  <img class="hero" src="view_1_forward.png" alt="вперёд">
+  <div class="cap"><b>Вид ВПЕРЁД, вдоль нефа</b> (осветлено для просмотра). Видно: длинная перспектива вглубь · 4 колонны (2 ближние толстые + 2 дальние тонкие) · закрытый двускатный свод над головой · в торце стена с серверным боксом · маленькая капсула у пола = <b>человек ростом 1.8 м</b> для масштаба (видно, какой неф огромный).</div>
+</figure>
+
+<div class="grid">
+  <figure><img src="02_probe_2_right.png" alt="вправо"><div class="cap">Вправо — восточная стена + скат свода (пересвечено диагностикой)</div></figure>
+  <figure><img src="02_probe_4_left.png" alt="влево"><div class="cap">Влево — западная стена + скат свода</div></figure>
+  <figure><img src="02_probe_1_forward.png" alt="вперёд оригинал"><div class="cap">Вперёд — как рендерит сервер (тёмный оригинал)</div></figure>
+  <figure><img src="02_probe_3_back.png" alt="назад"><div class="cap">Назад/юг — взгляд в дверной проём (вход), небо за ним by-design</div></figure>
+</div>
+
+</body></html>
