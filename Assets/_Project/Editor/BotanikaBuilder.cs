@@ -19,14 +19,52 @@ namespace Afterhumans.EditorTools
         private const string ScenePath = "Assets/_Project/Scenes/Scene_Botanika.unity";
 
         // ============================================================
-        // SHARED CONSTANTS — single source of truth for all sprints
-        // FIX: CRITICAL-1 from mm-review — positions must match across sprints
+        // BOTANIKA NAVE GRID (G-01) — SINGLE SOURCE OF TRUTH
+        // ============================================================
+        // Coords: Unity left-handed, meters. +Z = NORTH = forward.
+        // The space is a LARGE greenhouse nave (oranzhereya-nef), NOT a room.
+        //
+        //   Floor:   X  -7 .. +7  (width 14)    Z  -14 .. +14  (length 28)
+        //   Center corridor ~7 m clear down the middle.
+        //   Vault:   gable glass roof. Apex Y = 8 at X = 0.
+        //            Eaves  Y = 4 at X = +/-7. ONE mesh per slope (not 96 panels).
+        //   Columns: 4 steel columns at X = +/-3.5, Z = +/-5 (visual r~0.3).
+        //   Walls:   side glass walls at X = +/-7.
+        //            solid NORTH wall at Z = +14 (server zone backdrop).
+        //            SOUTH entrance wall at Z = -14 (with central doorway).
+        //   Spawn:   Player + Kafka at SOUTH, Z = -12, facing NORTH (+Z).
+        //   Door:    locked gate to City at NORTH, Z = +13.
+        //
+        //   NPC zones on this grid:
+        //     Sasha  sofa, center   Z = -2
+        //     Mila   west           X = -4,  Z = +1
+        //     Kirill kitchen, east  X = +4,  Z = -6
+        //     Nikolai far center    Z = +8   (gate keeper)
+        //     Stas   near door      Z = +10..11
+        //     Server rack east      X = +5,  Z = +2
         // ============================================================
 
-        // Room structure
-        private const float WallHeight = 9.6f;
-        private const float RoomWidth = 12f;
-        private const float RoomDepth = 10f;
+        // Nave shell dimensions
+        private const float NaveWidth   = 14f;   // X span: -7 .. +7
+        private const float NaveHalfW   = 7f;    // |X| extent
+        private const float NaveLength  = 28f;   // Z span: -14 .. +14
+        private const float NaveHalfL   = 14f;   // |Z| extent
+        private const float VaultApex   = 8f;    // roof height at X = 0
+        private const float EaveHeight  = 4f;    // roof height at X = +/-7 (side wall top)
+
+        // Legacy alias — later art sprints (Sprint 8 CreateWindowGlass) read this.
+        // Maps to eave height of the new nave so those sprints still compile.
+        private const float WallHeight  = EaveHeight;
+
+        // Column grid
+        private const float ColumnX     = 3.5f;  // |X| of columns
+        private const float ColumnZ     = 5f;    // |Z| of columns
+        private const float ColumnVisR  = 0.3f;  // visual radius
+        private const float ColumnColR  = 0.25f; // collider radius
+
+        // Z anchors
+        private const float SpawnZ      = -12f;  // player + Kafka spawn (south)
+        private const float DoorZ       = 13f;   // locked gate to City (north)
 
         // Asset paths
         private const string FurnitureFbx = "Assets/_Project/Vendor/Kenney/furniture-kit/Models/FBX format";
@@ -34,29 +72,29 @@ namespace Afterhumans.EditorTools
         private const string CharacterFbx = "Assets/_Project/Vendor/Kenney/blocky-characters/Models/FBX format";
         private const string CharacterTex = CharacterFbx + "/Textures";
 
-        // Furniture positions — used by BOTH greybox AND FBX placement
-        private static readonly Vector3 PosSofa       = new Vector3(0, 0, 3.8f);
-        private static readonly Vector3 PosSofaEast    = new Vector3(4.8f, 0, 0);
-        private static readonly Vector3 PosCoffeeTable = new Vector3(0, 0, 2.5f);
-        private static readonly Vector3 PosFloorLamp   = new Vector3(2.0f, 0, 3.8f);
-        private static readonly Vector3 PosDesk        = new Vector3(-4, 0, 1.5f);
-        private static readonly Vector3 PosChairMila   = new Vector3(-2.8f, 0, 1.5f);
-        private static readonly Vector3 PosKitchen     = new Vector3(4.5f, 0, -2.5f);
-        private static readonly Vector3 PosTableNikolai = new Vector3(-4.5f, 0, 4.2f);
-        private static readonly Vector3 PosChairNikolai = new Vector3(-3.5f, 0, 4.2f);
-        private static readonly Vector3 PosBookcaseNW  = new Vector3(-5.2f, 0, 4.5f);
-        private static readonly Vector3 PosBookcaseNE  = new Vector3(5.2f, 0, 4.5f);
-        private static readonly Vector3 PosBookcaseW   = new Vector3(-5.2f, 0, 0);
-        private static readonly Vector3 PosServerRack  = new Vector3(5.2f, 0, -3.5f);
+        // Furniture positions — recomputed onto the NAVE grid (used by later art sprints)
+        private static readonly Vector3 PosSofa        = new Vector3(0, 0, -2f);     // Sasha sofa, center
+        private static readonly Vector3 PosSofaEast     = new Vector3(4.5f, 0, -3f);
+        private static readonly Vector3 PosCoffeeTable  = new Vector3(0, 0, -3.2f);
+        private static readonly Vector3 PosFloorLamp    = new Vector3(2.0f, 0, -2f);
+        private static readonly Vector3 PosDesk         = new Vector3(-4.2f, 0, 1f);  // Mila west
+        private static readonly Vector3 PosChairMila    = new Vector3(-3.4f, 0, 1f);
+        private static readonly Vector3 PosKitchen      = new Vector3(4.2f, 0, -6f);  // Kirill kitchen east
+        private static readonly Vector3 PosTableNikolai = new Vector3(-1.0f, 0, 8f);  // Nikolai far center
+        private static readonly Vector3 PosChairNikolai = new Vector3(-0.2f, 0, 8f);
+        private static readonly Vector3 PosBookcaseNW   = new Vector3(-5.5f, 0, 8f);
+        private static readonly Vector3 PosBookcaseNE   = new Vector3(5.5f, 0, 8f);
+        private static readonly Vector3 PosBookcaseW    = new Vector3(-5.8f, 0, 0);
+        private static readonly Vector3 PosServerRack   = new Vector3(5f, 0, 2f);     // server east passage
 
-        // NPC positions
-        private static readonly Vector3 PosSasha   = new Vector3(0, 0, 2.0f);
-        private static readonly Vector3 PosMila    = new Vector3(-2.2f, 0, 1.5f);
-        private static readonly Vector3 PosKirill  = new Vector3(3.0f, 0, -2.5f);
-        private static readonly Vector3 PosNikolai = new Vector3(-3.0f, 0, 3.5f);
-        private static readonly Vector3 PosStas    = new Vector3(1.5f, 0, -4f);
-        private static readonly Vector3 PosKafka   = new Vector3(1, 0, -2.5f);
-        private static readonly Vector3 PosPlayer  = new Vector3(0, 0, -3);
+        // NPC positions — recomputed onto the NAVE grid
+        private static readonly Vector3 PosSasha   = new Vector3(0, 0, -2f);     // sofa, center
+        private static readonly Vector3 PosMila    = new Vector3(-3.6f, 0, 1f);  // west
+        private static readonly Vector3 PosKirill  = new Vector3(3.4f, 0, -6f);  // kitchen, east
+        private static readonly Vector3 PosNikolai = new Vector3(-0.8f, 0, 8f);  // far center, gate keeper
+        private static readonly Vector3 PosStas    = new Vector3(1.5f, 0, 10.5f);// near door
+        private static readonly Vector3 PosKafka   = new Vector3(1.2f, 0, SpawnZ + 0.5f); // beside spawn
+        private static readonly Vector3 PosPlayer  = new Vector3(0, 0, SpawnZ);  // south spawn
 
         // Art Bible §4.1 lighting values — exact match
         private static readonly Color ArtBibleSunColor = new Color(1.0f, 0.87f, 0.68f); // 3200K
@@ -76,9 +114,20 @@ namespace Afterhumans.EditorTools
         [MenuItem("Afterhumans/v2/Sprint 1 — Greybox")]
         public static void Sprint1_Greybox()
         {
+            BuildGreybox();
+        }
+
+        /// <summary>
+        /// Builds the LARGE Botanika nave greybox (M1, G-02). Pure grey geometry,
+        /// correct scale, NO art. Headless-callable via -executeMethod
+        /// (Afterhumans.EditorTools.BotanikaBuilder.BuildGreybox) — no MenuItem-only
+        /// state, no editor-window dependencies.
+        /// </summary>
+        public static void BuildGreybox()
+        {
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
-            // HIGH-5 fix: WIPE ENTIRE SCENE with explicit warning
+            // WIPE ENTIRE SCENE — full rebuild from the GRID.
             var roots = scene.GetRootGameObjects();
             if (roots.Length > 0)
                 Debug.Log($"[BotanikaBuilder] WARNING: Clearing {roots.Length} root objects from scene (full rebuild)");
@@ -86,122 +135,98 @@ namespace Afterhumans.EditorTools
                 Object.DestroyImmediate(go);
 
             var root = new GameObject("Botanika_Greybox");
-            var grey = MakeGreyMaterial();
-            var darkGrey = MakeMaterial("DarkGrey", new Color(0.35f, 0.35f, 0.35f));
-            var green = MakeMaterial("Plant", new Color(0.25f, 0.45f, 0.2f));
+            var grey      = MakeGreyMaterial();                                    // floor / walls
+            var steelGrey = MakeMaterial("Steel", new Color(0.38f, 0.40f, 0.42f), 0.3f); // columns
+            var glassGrey = MakeMaterial("GlassPlaceholder", new Color(0.62f, 0.66f, 0.64f), 0.2f, doubleSided: true); // vault + glass walls (double-sided so the roof is visible from inside)
+            var darkGrey  = MakeMaterial("DarkGrey", new Color(0.30f, 0.30f, 0.32f)); // server / door
 
-            // === STRUCTURE: floor, HIGH walls, ceiling, panoramic windows ===
-            float wallH = WallHeight;
-            float halfH = wallH / 2f;
+            // ===== FLOOR — 28 (Z) x 14 (X), center at origin, top at Y=0 =====
+            var floor = MakeBox(root, "Floor", new Vector3(0, -0.05f, 0),
+                new Vector3(NaveWidth, 0.1f, NaveLength), grey);
+            // BoxCollider from the primitive is fine, but the plan asks for a MeshCollider
+            // on the walkable floor — swap to a convex-off MeshCollider for accuracy.
+            Object.DestroyImmediate(floor.GetComponent<Collider>());
+            var floorMc = floor.AddComponent<MeshCollider>();
+            floorMc.convex = false;
+            ColliderHelper.MarkStaticProp(floor);
 
-            MakeBox(root, "Floor", new Vector3(0, -0.05f, 0), new Vector3(12, 0.1f, 10), grey);
+            // ===== SIDE GLASS WALLS at X = +/-7 (eave height 4 m) =====
+            float sideH = EaveHeight;
+            MakeBox(root, "Wall_GlassEast", new Vector3(NaveHalfW, sideH * 0.5f, 0),
+                new Vector3(0.15f, sideH, NaveLength), glassGrey);
+            MakeBox(root, "Wall_GlassWest", new Vector3(-NaveHalfW, sideH * 0.5f, 0),
+                new Vector3(0.15f, sideH, NaveLength), glassGrey);
 
-            // Ceiling (solid, visible, not transparent)
-            MakeBox(root, "Ceiling", new Vector3(0, wallH, 0), new Vector3(12, 0.15f, 10), grey);
+            // ===== SOLID NORTH WALL at Z = +14 (server-zone backdrop) =====
+            // Full gable-height wall so the apex is closed off behind the gate.
+            MakeBox(root, "Wall_North", new Vector3(0, VaultApex * 0.5f, NaveHalfL),
+                new Vector3(NaveWidth, VaultApex, 0.2f), grey);
 
-            // North wall: 2 pillars + panoramic window gap in between
-            MakeBox(root, "Wall_North_L", new Vector3(-4.5f, halfH, 5), new Vector3(3, wallH, 0.2f), grey);
-            MakeBox(root, "Wall_North_R", new Vector3(4.5f, halfH, 5), new Vector3(3, wallH, 0.2f), grey);
-            MakeBox(root, "Wall_North_Top", new Vector3(0, wallH - 0.5f, 5), new Vector3(6, 1, 0.2f), grey); // lintel above window
-            MakeBox(root, "Wall_North_Bot", new Vector3(0, 0.4f, 5), new Vector3(6, 0.8f, 0.2f), grey); // sill below window
-            // Window = gap between sill and lintel (no geometry = see through to skybox)
+            // ===== SOUTH ENTRANCE WALL at Z = -14 (doorway gap in center) =====
+            // Two side panels + lintel; central 4 m gap is the entrance.
+            float doorGapHalf = 2f; // 4 m wide doorway
+            float sidePanelW = (NaveHalfW - doorGapHalf); // each side panel width
+            float sidePanelCenterX = doorGapHalf + sidePanelW * 0.5f;
+            MakeBox(root, "Wall_South_L", new Vector3(-sidePanelCenterX, sideH * 0.5f, -NaveHalfL),
+                new Vector3(sidePanelW, sideH, 0.2f), grey);
+            MakeBox(root, "Wall_South_R", new Vector3(sidePanelCenterX, sideH * 0.5f, -NaveHalfL),
+                new Vector3(sidePanelW, sideH, 0.2f), grey);
+            MakeBox(root, "Wall_South_Lintel", new Vector3(0, sideH - 0.4f, -NaveHalfL),
+                new Vector3(doorGapHalf * 2f, 0.8f, 0.2f), grey);
+            // Invisible blocker across the south doorway — player cannot leave south.
+            var southBlock = MakeBox(root, "SouthDoorBlock", new Vector3(0, sideH * 0.5f, -NaveHalfL),
+                new Vector3(doorGapHalf * 2f, sideH, 0.2f), grey);
+            southBlock.GetComponent<Renderer>().enabled = false; // collider stays, invisible
 
-            // South wall: doorway in center + windows on sides
-            MakeBox(root, "Wall_South_L", new Vector3(-4.5f, halfH, -5), new Vector3(3, wallH, 0.2f), grey);
-            MakeBox(root, "Wall_South_R", new Vector3(4.5f, halfH, -5), new Vector3(3, wallH, 0.2f), grey);
-            MakeBox(root, "Wall_South_Top", new Vector3(0, wallH - 0.5f, -5), new Vector3(6, 1, 0.2f), grey);
-            // Invisible wall blocking doorway exit (player can't leave yet)
-            var doorBlock = MakeBox(root, "DoorBlock", new Vector3(0, halfH, -5), new Vector3(6, wallH, 0.2f), grey);
-            doorBlock.GetComponent<Renderer>().enabled = false; // invisible but collider stays
+            // ===== GABLE GLASS VAULT — ONE mesh per slope (apex Y=8 @ X=0) =====
+            BuildVaultSlope(root, "Vault_East", +1, glassGrey);  // +X slope
+            BuildVaultSlope(root, "Vault_West", -1, glassGrey);  // -X slope
+            // Gable end caps (triangular) — close the vault at north/south ends.
+            BuildGableEnd(root, "Gable_North", NaveHalfL, glassGrey);
+            BuildGableEnd(root, "Gable_South", -NaveHalfL, glassGrey);
 
-            // East wall: 2 pillars + panoramic window
-            MakeBox(root, "Wall_East_F", new Vector3(6, halfH, -3.5f), new Vector3(0.2f, wallH, 3), grey);
-            MakeBox(root, "Wall_East_B", new Vector3(6, halfH, 3.5f), new Vector3(0.2f, wallH, 3), grey);
-            MakeBox(root, "Wall_East_Top", new Vector3(6, wallH - 0.5f, 0), new Vector3(0.2f, 1, 4), grey);
-            MakeBox(root, "Wall_East_Bot", new Vector3(6, 0.4f, 0), new Vector3(0.2f, 0.8f, 4), grey);
+            // ===== 4 STEEL COLUMNS at X=+/-3.5, Z=+/-5 (full height to apex region) =====
+            // Column rises from floor toward the vault; height tied to local roof Y.
+            MakeColumn(root, "Column_NE", new Vector3( ColumnX, 0,  ColumnZ), steelGrey);
+            MakeColumn(root, "Column_NW", new Vector3(-ColumnX, 0,  ColumnZ), steelGrey);
+            MakeColumn(root, "Column_SE", new Vector3( ColumnX, 0, -ColumnZ), steelGrey);
+            MakeColumn(root, "Column_SW", new Vector3(-ColumnX, 0, -ColumnZ), steelGrey);
 
-            // West wall: same pattern
-            MakeBox(root, "Wall_West_F", new Vector3(-6, halfH, -3.5f), new Vector3(0.2f, wallH, 3), grey);
-            MakeBox(root, "Wall_West_B", new Vector3(-6, halfH, 3.5f), new Vector3(0.2f, wallH, 3), grey);
-            MakeBox(root, "Wall_West_Top", new Vector3(-6, wallH - 0.5f, 0), new Vector3(0.2f, 1, 4), grey);
-            MakeBox(root, "Wall_West_Bot", new Vector3(-6, 0.4f, 0), new Vector3(0.2f, 0.8f, 4), grey);
+            // ===== SERVER RACK placeholder (east passage, far north) =====
+            MakeBox(root, "ServerRack", PosServerRack + Vector3.up * 0.9f,
+                new Vector3(0.6f, 1.8f, 0.5f), darkGrey);
 
-            // Chandelier (simple box in center of ceiling)
-            var chandelierMat = MakeMaterial("Chandelier", new Color(0.9f, 0.8f, 0.5f), 0.5f);
-            MakeBox(root, "Chandelier", new Vector3(0, wallH - 1.5f, 0), new Vector3(1.5f, 0.3f, 1.5f), chandelierMat);
-            // Light source at chandelier
-            var chandLight = new GameObject("ChandelierLight");
-            chandLight.transform.SetParent(root.transform);
-            chandLight.transform.position = new Vector3(0, wallH - 1.8f, 0);
-            var cl = chandLight.AddComponent<Light>();
-            cl.type = LightType.Point;
-            cl.color = new Color(1f, 0.9f, 0.7f);
-            cl.intensity = 3f;
-            cl.range = 12f;
+            // ===== LOCKED DOOR placeholder — gate to City at NORTH Z=+13 =====
+            var door = MakeBox(root, "DoorToCity_Placeholder", new Vector3(0, 1.4f, DoorZ),
+                new Vector3(2.4f, 2.8f, 0.15f), darkGrey);
+            // Solid collider = locked (player can't pass until Nikolai opens it in Sprint 2/7).
+            ColliderHelper.MarkStaticProp(door);
 
-            // === FURNITURE: Kenney FBX (mat=null → preserve original FBX materials) ===
-            PlaceFbx(root, $"{FurnitureFbx}/loungeDesignSofa.fbx", "Sofa_Sasha",
-                PosSofa, Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/loungeSofa.fbx", "Sofa_East",
-                PosSofaEast, Quaternion.Euler(0, -90, 0), Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/tableCoffeeGlassSquare.fbx", "CoffeeTable",
-                PosCoffeeTable, Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/lampRoundFloor.fbx", "FloorLamp",
-                PosFloorLamp, Quaternion.identity, Vector3.one);
-
-            // === NPC ZONES — Kenney FBX ===
-            PlaceFbx(root, $"{FurnitureFbx}/desk.fbx", "Desk_Mila",
-                PosDesk, Quaternion.Euler(0, 90, 0), Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/chairDesk.fbx", "Chair_Mila",
-                PosChairMila, Quaternion.Euler(0, -90, 0), Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/kitchenCabinetCornerRound.fbx", "Kitchen_Counter",
-                PosKitchen, Quaternion.Euler(0, -90, 0), Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/tableRound.fbx", "Table_Nikolai",
-                PosTableNikolai, Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/chairCushion.fbx", "Chair_Nikolai",
-                PosChairNikolai, Quaternion.Euler(0, 135, 0), Vector3.one);
-
-            // === BOOKCASES — Kenney FBX ===
-            PlaceFbx(root, $"{FurnitureFbx}/bookcaseOpen.fbx", "Bookcase_NW",
-                PosBookcaseNW, Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/bookcaseOpen.fbx", "Bookcase_NE",
-                PosBookcaseNE, Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{FurnitureFbx}/bookcaseOpenLow.fbx", "Bookcase_W",
-                PosBookcaseW, Quaternion.Euler(0, 90, 0), Vector3.one);
-
-            // === SERVER RACK ===
-            MakeBox(root, "ServerRack", PosServerRack + Vector3.up * 0.8f, new Vector3(0.5f, 1.6f, 0.4f), darkGrey);
-
-            // === PLANTS — Kenney nature-kit FBX (preserve original materials) ===
-            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "Plant_NW",
-                new Vector3(-5.0f, 0, 3.0f), Quaternion.identity, Vector3.one * 1.3f);
-            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "Plant_NE",
-                new Vector3(5.0f, 0, 3.0f), Quaternion.Euler(0, 90, 0), Vector3.one * 1.1f);
-            PlaceFbx(root, $"{NatureFbx}/plant_bushLarge.fbx", "Plant_SW",
-                new Vector3(-5.0f, 0, -3.5f), Quaternion.Euler(0, 45, 0), Vector3.one);
-            PlaceFbx(root, $"{NatureFbx}/plant_bushDetailed.fbx", "Plant_SE",
-                new Vector3(5.0f, 0, -1.0f), Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{NatureFbx}/plant_bushSmall.fbx", "Plant_W1",
-                new Vector3(-5.3f, 0, -1.0f), Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{NatureFbx}/plant_bushSmall.fbx", "Plant_W2",
-                new Vector3(-5.3f, 0, 1.0f), Quaternion.Euler(0, 60, 0), Vector3.one);
-            PlaceFbx(root, $"{NatureFbx}/plant_bushSmall.fbx", "Plant_E1",
-                new Vector3(5.3f, 0, 1.5f), Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{NatureFbx}/tree_palmShort.fbx", "Plant_N1",
-                new Vector3(-2.0f, 0, 4.5f), Quaternion.identity, Vector3.one * 1.2f);
-            PlaceFbx(root, $"{NatureFbx}/tree_palmShort.fbx", "Plant_N2",
-                new Vector3(2.5f, 0, 4.5f), Quaternion.Euler(0, -45, 0), Vector3.one);
-            PlaceFbx(root, $"{NatureFbx}/flower_redA.fbx", "Flower_1",
-                new Vector3(-1.5f, 0, 0.5f), Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{NatureFbx}/flower_yellowA.fbx", "Flower_2",
-                new Vector3(1.5f, 0, -0.5f), Quaternion.identity, Vector3.one);
-            PlaceFbx(root, $"{NatureFbx}/flower_purpleA.fbx", "Flower_3",
-                new Vector3(3.0f, 0, 4.0f), Quaternion.identity, Vector3.one);
-
-            // --- PLAYER ---
+            // ===== PLAYER + camera (spawn south, facing north +Z) =====
             SetupPlayer();
 
-            // --- MINIMAL LIGHT (just to see) ---
+            // ===== KAFKA spawn marker (beside player, south) =====
+            // Greybox: a small grey capsule placeholder; Sprint 2 replaces with model.
+            var kafkaMarker = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            kafkaMarker.name = "Kafka_SpawnMarker";
+            kafkaMarker.transform.SetParent(root.transform, worldPositionStays: false);
+            kafkaMarker.transform.position = PosKafka + new Vector3(0, 0.45f, 0);
+            kafkaMarker.transform.localScale = new Vector3(0.35f, 0.45f, 0.6f);
+            kafkaMarker.GetComponent<Renderer>().sharedMaterial = darkGrey;
+            Object.DestroyImmediate(kafkaMarker.GetComponent<Collider>());
+
+            // ===== SCALE REFERENCE — human silhouette 1.8 m (greybox only) =====
+            // A standing 1.8 m capsule near the gate zone gives the eye an
+            // unambiguous human-scale anchor inside the 28 m nave.
+            var scaleRef = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            scaleRef.name = "ScaleRef_Human_1m8";
+            scaleRef.transform.SetParent(root.transform, worldPositionStays: false);
+            scaleRef.transform.position = new Vector3(-1.5f, 0.9f, 6f); // near Nikolai zone
+            scaleRef.transform.localScale = new Vector3(0.5f, 0.9f, 0.5f); // 1.8 m tall
+            scaleRef.GetComponent<Renderer>().sharedMaterial = steelGrey;
+            Object.DestroyImmediate(scaleRef.GetComponent<Collider>());
+
+            // ===== MINIMAL LIGHT (just to see the greybox) =====
             var lightGo = new GameObject("Sun_Temp");
             lightGo.transform.SetParent(root.transform);
             var light = lightGo.AddComponent<Light>();
@@ -216,7 +241,130 @@ namespace Afterhumans.EditorTools
             // Save
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
-            Debug.Log("[BotanikaBuilder] Sprint 1 GREYBOX done — floor, walls, furniture blocks, player");
+
+            int objCount = root.GetComponentsInChildren<Transform>(true).Length;
+            Debug.Log($"[BotanikaBuilder] Sprint 1 GREYBOX done — LARGE nave " +
+                      $"{NaveWidth}x{NaveLength}m, vault apex {VaultApex}m, 4 columns, " +
+                      $"glass walls, north/south walls, player+Kafka spawn @ Z={SpawnZ}, " +
+                      $"locked door @ Z={DoorZ}. Object count under root: {objCount}");
+        }
+
+        /// <summary>
+        /// Builds ONE roof slope as a single quad mesh (NOT 96 panels).
+        /// side = +1 → +X slope (eave at X=+7), side = -1 → -X slope (eave at X=-7).
+        /// Apex line is at X=0, Y=VaultApex; eave line at X=+/-7, Y=EaveHeight.
+        /// </summary>
+        private static void BuildVaultSlope(GameObject parent, string name, int side, Material mat)
+        {
+            float ax = 0f;            // apex X
+            float ay = VaultApex;     // apex Y
+            // Eave overlaps slightly INSIDE and BELOW the 4 m side-wall top so the
+            // wall↔roof seam is sealed (kills the sky sliver / corner gap QA flagged).
+            float ex = side * (NaveHalfW - 0.1f); // eave X — behind wall inner face
+            float ey = EaveHeight - 0.3f;         // eave Y — below wall top (overlap)
+            float z0 = -NaveHalfL;    // south edge
+            float z1 = NaveHalfL;     // north edge
+
+            var verts = new Vector3[]
+            {
+                new Vector3(ax, ay, z0), // 0 apex-south
+                new Vector3(ax, ay, z1), // 1 apex-north
+                new Vector3(ex, ey, z1), // 2 eave-north
+                new Vector3(ex, ey, z0), // 3 eave-south
+            };
+
+            // Wind so the normal faces DOWN/INWARD (visible from inside the nave).
+            // For +X slope inside-normal points toward -X/+down; flip order by side.
+            int[] tris = side > 0
+                ? new[] { 0, 1, 2, 0, 2, 3 }
+                : new[] { 0, 2, 1, 0, 3, 2 };
+
+            var uvs = new Vector2[]
+            {
+                new Vector2(0, 0), new Vector2(0, 1),
+                new Vector2(1, 1), new Vector2(1, 0),
+            };
+
+            var mesh = new Mesh { name = name + "_Mesh" };
+            mesh.vertices = verts;
+            mesh.triangles = tris;
+            mesh.uv = uvs;
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+            // Roof collider so the player/camera cannot poke through the vault.
+            var mc = go.AddComponent<MeshCollider>();
+            mc.sharedMesh = mesh;
+            mc.convex = false;
+            ColliderHelper.MarkStaticProp(go);
+        }
+
+        /// <summary>
+        /// Triangular gable end cap (one mesh) at a given Z, closing the vault
+        /// between the side-wall eaves and the apex.
+        /// </summary>
+        private static void BuildGableEnd(GameObject parent, string name, float z, Material mat)
+        {
+            // Eave verts overlap the side walls (match BuildVaultSlope) so the
+            // triangular gable cap fully seals the end with no gap to the sky.
+            var verts = new Vector3[]
+            {
+                new Vector3(-(NaveHalfW - 0.1f), EaveHeight - 0.3f, z), // 0 west eave
+                new Vector3( 0f,                 VaultApex,         z), // 1 apex
+                new Vector3( (NaveHalfW - 0.1f), EaveHeight - 0.3f, z), // 2 east eave
+            };
+            // Face inward: north cap (z>0) normal points -Z, south cap (z<0) points +Z.
+            int[] tris = z > 0 ? new[] { 0, 1, 2 } : new[] { 0, 2, 1 };
+            var uvs = new Vector2[] { new Vector2(0, 0), new Vector2(0.5f, 1), new Vector2(1, 0) };
+
+            var mesh = new Mesh { name = name + "_Mesh" };
+            mesh.vertices = verts;
+            mesh.triangles = tris;
+            mesh.uv = uvs;
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform, worldPositionStays: false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+            ColliderHelper.MarkStaticProp(go);
+        }
+
+        /// <summary>
+        /// Steel column: visual cylinder (r=ColumnVisR) with a CapsuleCollider
+        /// (r=ColumnColR). Height reaches the local roof Y at the column's X
+        /// (linear interp apex→eave), so it visually meets the vault.
+        /// </summary>
+        private static void MakeColumn(GameObject parent, string name, Vector3 basePos, Material mat)
+        {
+            // Local roof height at |X|=ColumnX (linear apex@X0 → eave@X7).
+            float t = Mathf.Abs(ColumnX) / NaveHalfW;
+            float roofY = Mathf.Lerp(VaultApex, EaveHeight, t);
+            float h = roofY; // full height floor → roof
+
+            var col = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            col.name = name;
+            col.transform.SetParent(parent.transform, worldPositionStays: false);
+            col.transform.position = basePos + new Vector3(0, h * 0.5f, 0);
+            // Unity cylinder is 2 m tall at scale 1 → scale Y by h/2.
+            col.transform.localScale = new Vector3(ColumnVisR * 2f, h * 0.5f, ColumnVisR * 2f);
+            col.GetComponent<Renderer>().sharedMaterial = mat;
+
+            // Replace default capsule/mesh collider with a tighter CapsuleCollider.
+            // CapsuleCollider.radius is LOCAL; world radius = local * max(scaleX,scaleZ).
+            // scaleX = scaleZ = ColumnVisR*2, so local = desiredWorld / (ColumnVisR*2).
+            Object.DestroyImmediate(col.GetComponent<Collider>());
+            var cc = col.AddComponent<CapsuleCollider>();
+            cc.direction = 1;        // Y axis
+            cc.radius = ColumnColR / (ColumnVisR * 2f); // → world radius ≈ ColumnColR (0.25)
+            cc.height = 2f;          // local height (cylinder is 2 units tall pre-scale)
+            cc.center = Vector3.zero;
+            ColliderHelper.MarkStaticProp(col);
         }
 
         // ============================================================
@@ -276,7 +424,7 @@ namespace Afterhumans.EditorTools
             // --- DOOR GATE ---
             var door = new GameObject("DoorGate");
             door.transform.SetParent(root.transform);
-            door.transform.position = new Vector3(0, 1, -5.2f);
+            door.transform.position = new Vector3(0, 1.4f, DoorZ); // NORTH gate to City, Z = +13
             var doorCol = door.AddComponent<BoxCollider>();
             doorCol.isTrigger = true;
             doorCol.size = new Vector3(3, 3, 1);
@@ -583,8 +731,14 @@ namespace Afterhumans.EditorTools
             RenderSettings.fogColor = ArtBibleFogColor;
 
             // === SKYBOX ===
-            var hdriPath = "Assets/_Project/Vendor/PolyHaven/kloppenheim_06_puresky_2k.hdr";
+            // Sprint 4: warm sunset interior HDRI from 3d-artist sourcing.
+            var hdriPath = "Assets/_Project/Vendor/PolyHaven/HDRI/sunset_botanika_4k.exr";
             var hdri = AssetDatabase.LoadAssetAtPath<Texture2D>(hdriPath);
+            if (hdri == null)
+            {
+                hdriPath = "Assets/_Project/Vendor/PolyHaven/rogland_sunset_2k.hdr";
+                hdri = AssetDatabase.LoadAssetAtPath<Texture2D>(hdriPath);
+            }
             if (hdri != null)
             {
                 var skyShader = Shader.Find("Skybox/Panoramic");
@@ -1390,13 +1544,22 @@ namespace Afterhumans.EditorTools
             return MakeMaterial("Greybox", new Color(0.5f, 0.5f, 0.5f));
         }
 
-        private static Material MakeMaterial(string name, Color color, float smoothness = 0.1f)
+        private static Material MakeMaterial(string name, Color color, float smoothness = 0.1f,
+            bool doubleSided = false)
         {
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             var mat = new Material(shader);
             mat.name = name;
             if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", color);
             if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", smoothness);
+            if (doubleSided)
+            {
+                // Render BOTH faces — single-quad roof slopes are seen from inside
+                // the nave regardless of triangle winding (URP/Lit _Cull 0 = Off).
+                if (mat.HasProperty("_Cull")) mat.SetFloat("_Cull", 0f);
+                if (mat.HasProperty("_RenderFace")) mat.SetFloat("_RenderFace", 0f);
+                mat.doubleSidedGI = true;
+            }
             return mat;
         }
 
@@ -1421,7 +1584,8 @@ namespace Afterhumans.EditorTools
 
             var player = new GameObject("Player");
             player.tag = "Player";
-            player.transform.position = new Vector3(0, 0, -3);
+            player.transform.position = PosPlayer;                 // south spawn, Z = -12
+            player.transform.rotation = Quaternion.Euler(0, 0, 0); // facing NORTH (+Z)
 
             // CharacterController
             var cc = player.AddComponent<CharacterController>();
@@ -1449,7 +1613,7 @@ namespace Afterhumans.EditorTools
             // FPS Controller
             var fps = player.AddComponent<Afterhumans.Player.SimpleFirstPersonController>();
 
-            Debug.Log("[BotanikaBuilder] Player setup at (0, 0, -3) with camera at eye height");
+            Debug.Log($"[BotanikaBuilder] Player setup at {PosPlayer} facing +Z (north), camera at eye height");
         }
     }
 }
