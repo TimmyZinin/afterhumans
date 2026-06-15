@@ -6,6 +6,9 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
 using System.Linq;
+using System.IO;
+using Cinemachine;
+using Afterhumans.Kafka;
 
 namespace Afterhumans.EditorTools
 {
@@ -118,6 +121,431 @@ namespace Afterhumans.EditorTools
         }
 
         /// <summary>
+        /// Full scene rebuild in ONE Unity process: greybox geometry + glazing frame,
+        /// then art retexture, then sunset lighting + post-FX. Each phase re-opens and
+        /// re-saves the scene, so the chain is correct. Saves cold-start cost on the
+        /// headless render box. Headless: -executeMethod
+        /// Afterhumans.EditorTools.BotanikaBuilder.BuildFull
+        /// </summary>
+        public static void BuildFull()
+        {
+            Debug.Log("[BotanikaBuilder] BuildFull: 1/3 greybox+frame");
+            BuildGreybox();
+            Debug.Log("[BotanikaBuilder] BuildFull: 2/3 art retexture");
+            BuildArt();
+            Debug.Log("[BotanikaBuilder] BuildFull: 3/3 lighting + post-fx");
+            Sprint3_Lighting();
+            Debug.Log("[BotanikaBuilder] BuildFull: DONE");
+        }
+
+        /// <summary>
+        /// SURGICAL additive pass: inject the low groundcover tier + far-end deep-fill into the
+        /// ALREADY-BUILT scene without a full regenerate (BuildHero builds the SAVED scene, and a
+        /// full sprint re-run risks regressing the accepted look). Idempotent: skips if already
+        /// present. Reuses the in-scene fern/leaf/potted materials so it matches exactly.
+        /// Headless: -executeMethod Afterhumans.EditorTools.BotanikaBuilder.AddGroundFoliage
+        /// </summary>
+        public static void AddGroundFoliage()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox == null) { Debug.LogError("[AddGroundFoliage] no Botanika_Greybox"); return; }
+            var realAssets = greybox.transform.Find("RealAssets");
+            if (realAssets == null) { Debug.LogError("[AddGroundFoliage] no RealAssets root"); return; }
+            // Re-runnable: CLEAR any prior groundcover/deep-fill first (an older ComposeRealAssets
+            // baked a sparse Foli_Ground set into the saved scene) so OUR denser version wins and
+            // re-runs never duplicate.
+            var toKill = new System.Collections.Generic.List<GameObject>();
+            foreach (Transform t in realAssets)
+                if (t.name.StartsWith("Foli_Ground") || t.name.StartsWith("Foli_Deep")
+                    || t.name.StartsWith("Foli_WallIvy") || t.name.StartsWith("Foli_FarBush"))
+                    toKill.Add(t.gameObject);
+            foreach (var g in toKill) Object.DestroyImmediate(g);
+            Debug.Log($"[AddGroundFoliage] cleared {toKill.Count} prior groundcover/deep objects");
+
+            // reuse EXACT in-scene materials (so the new plants match the accepted look)
+            Material MatOf(params string[] names)
+            {
+                foreach (var n in names)
+                {
+                    var t = realAssets.Find(n);
+                    if (t != null)
+                    {
+                        var r = t.GetComponentInChildren<Renderer>(true);
+                        if (r != null && r.sharedMaterial != null) return r.sharedMaterial;
+                    }
+                }
+                return null;
+            }
+            Material matFern   = MatOf("Foli_FgFrameL", "Foli_WallFernW_0", "Foli_CamFrameL");
+            Material matLeaf   = MatOf("Foli_MonA", "Foli_MonB", "Foli_ViewMonL");
+            Material matPotted = MatOf("Foli_TubA", "Foli_TubB", "Foli_ViewTubL");
+
+            const string TF = "Assets/_Project/Vendor/TexFBX/";
+            GameObject Load(string p)
+            {
+                if (!File.Exists(p)) return null;
+                var a = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                if (a != null) return a;
+                foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(p)) if (sub is GameObject go) return go;
+                return null;
+            }
+            var fernFbx = Load(TF + "fern.fbx");
+            var monFbx  = Load(TF + "monstera_pot_clean.fbx");
+            var potFbx  = Load(TF + "potted_plant.fbx");
+
+            void Place(string label, GameObject src, Vector3 pos, float yawDeg, float targetH, Material tint)
+            {
+                if (src == null) { Debug.LogWarning($"[AddGroundFoliage] MISSING {label}"); return; }
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(src, realAssets) ?? Object.Instantiate(src, realAssets);
+                go.name = label;
+                go.transform.rotation = Quaternion.Euler(0, yawDeg, 0);
+                go.transform.position = pos;
+                go.transform.localScale = Vector3.one;
+                var rends = go.GetComponentsInChildren<Renderer>(true);
+                if (rends.Length == 0) { Debug.LogWarning($"[AddGroundFoliage] {label} no renderers"); return; }
+                var b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
+                float s = targetH / Mathf.Max(0.001f, b.size.y);
+                go.transform.localScale = Vector3.one * s;
+                b = go.GetComponentsInChildren<Renderer>(true)[0].bounds;
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true)) b.Encapsulate(r.bounds);
+                go.transform.position += new Vector3(0, pos.y - b.min.y, 0);
+                if (tint != null) foreach (var r in go.GetComponentsInChildren<Renderer>(true)) r.sharedMaterial = tint;
+            }
+
+            // low floor-hugging groundcover (≤0.55 m) clumped on both flanks down the whole path
+            for (int i = 0; i < 14; i++)
+            {
+                float z = -7f + i * 1.15f;
+                float side = (i % 2 == 0) ? 1f : -1f;
+                float x  =  side * (1.8f + ((i * 13) % 7) * 0.45f);
+                float h  = 0.40f + ((i * 5) % 4) * 0.05f;
+                Place($"Foli_Ground_{i}",  fernFbx, new Vector3(x,  0f, z),       (i * 41f) % 360f, h, matFern);
+                float x2 = -side * (2.5f + ((i * 9) % 5) * 0.40f);
+                Place($"Foli_GroundB_{i}", fernFbx, new Vector3(x2, 0f, z + 0.6f), (i * 57f + 30f) % 360f, 0.38f + ((i * 3) % 4) * 0.05f, matFern);
+            }
+            // DEEP FILL — enrich the far end (z 6..9, glass wall / maze-rug) so it isn't an empty floor
+            Place("Foli_DeepMonL",  monFbx, new Vector3(-2.4f, 0f, 6.0f),  30f, 1.10f, matLeaf);
+            Place("Foli_DeepMonR",  monFbx, new Vector3( 2.5f, 0f, 6.6f), 300f, 1.05f, matLeaf);
+            Place("Foli_DeepMonC",  monFbx, new Vector3(-0.2f, 0f, 8.2f), 160f, 1.15f, matLeaf);
+            Place("Foli_DeepFernL", fernFbx,new Vector3(-3.8f, 0f, 7.4f),  80f, 1.00f, matFern);
+            Place("Foli_DeepFernR", fernFbx,new Vector3( 3.9f, 0f, 7.8f), 250f, 1.00f, matFern);
+            Place("Foli_DeepTubL",  potFbx, new Vector3(-1.7f, 0f, 8.7f),   0f, 0.72f, matPotted);
+            Place("Foli_DeepTubR",  potFbx, new Vector3( 1.8f, 0f, 9.0f), 120f, 0.72f, matPotted);
+
+            // ====================================================================
+            // DENSE FERN CARPET — floor reads as overgrown beds flanking the path,
+            // not a bare deck (acceptance: "empty floor between plants"). A double
+            // row of low ferns on BOTH flanks the full length (z -10..10), a far
+            // tier (z 8..13), and a foreground frame at the south corners. All names
+            // use Foli_Ground*/Foli_Deep*/Foli_FarBush* prefixes so the clear-block
+            // above wipes them on re-run (idempotent — no dupes). ~80 ferns total.
+            // Beds hug the flanks only (|x| > 1.0) so the central corridor stays clear.
+            // ====================================================================
+            {
+                int fc = 0;
+                // --- double row carpet down the whole path, z -10..10, step 0.7 ---
+                // inner row x ~ ±1.2, outer row x ~ ±2.0, alternating L/R lead.
+                for (float z = -10f; z <= 10f + 0.01f; z += 0.7f)
+                {
+                    int row = Mathf.RoundToInt((z + 10f) / 0.7f);
+                    float jitter = ((row * 13) % 5) * 0.06f;        // 0..0.24 stagger
+                    // inner band (close to corridor edge, low clumps)
+                    float xi = 1.2f + jitter;                        // 1.2..1.44
+                    float hi = 0.36f + ((row * 7) % 4) * 0.05f;      // 0.36..0.51
+                    Place($"Foli_GroundCarpetL_{fc}", fernFbx, new Vector3(-xi, 0f, z),            (row * 41f) % 360f,        hi, matFern);
+                    Place($"Foli_GroundCarpetR_{fc}", fernFbx, new Vector3( xi, 0f, z + 0.35f),    (row * 53f + 20f) % 360f,  hi + 0.04f, matFern);
+                    // outer band (x ~ ±2.0), slightly taller, offset z so it interleaves
+                    float xo = 2.0f + ((row * 9) % 4) * 0.07f;       // 2.0..2.21
+                    float ho = 0.42f + ((row * 5) % 4) * 0.05f;      // 0.42..0.57
+                    Place($"Foli_GroundCarpetOL_{fc}", fernFbx, new Vector3(-xo, 0f, z + 0.18f),   (row * 67f + 90f) % 360f,  ho, matFern);
+                    Place($"Foli_GroundCarpetOR_{fc}", fernFbx, new Vector3( xo, 0f, z + 0.52f),   (row * 71f + 140f) % 360f, ho - 0.03f, matFern);
+                    fc++;
+                }
+                // --- far tier: extra ferns deep (z 8..13) so the far bed reads full ---
+                int ft = 0;
+                for (float z = 8f; z <= 13f + 0.01f; z += 0.85f)
+                {
+                    float xf = 1.3f + ((ft * 11) % 4) * 0.30f;       // 1.3..2.2
+                    float hf = 0.46f + ((ft * 3) % 4) * 0.05f;       // 0.46..0.61
+                    Place($"Foli_DeepCarpetL_{ft}", fernFbx, new Vector3(-xf, 0f, z),         (ft * 47f) % 360f,        hf, matFern);
+                    Place($"Foli_DeepCarpetR_{ft}", fernFbx, new Vector3( xf, 0f, z + 0.3f),  (ft * 59f + 40f) % 360f,  hf, matFern);
+                    ft++;
+                }
+                // --- foreground frame: taller ferns at the south corners (z -11..-8) ---
+                int fg = 0;
+                for (float z = -11f; z <= -8f + 0.01f; z += 0.75f)
+                {
+                    float xg = 3.0f + ((fg * 7) % 4) * 0.4f;         // 3.0..4.2
+                    float hg = 0.50f + ((fg * 5) % 3) * 0.05f;       // 0.50..0.60
+                    Place($"Foli_FarBushFgL_{fg}", fernFbx, new Vector3(-xg, 0f, z),        (fg * 37f + 25f) % 360f,  hg, matFern);
+                    Place($"Foli_FarBushFgR_{fg}", fernFbx, new Vector3( xg, 0f, z + 0.2f), (fg * 43f + 200f) % 360f, hg, matFern);
+                    fg++;
+                }
+                Debug.Log($"[AddGroundFoliage] dense fern carpet: {fc * 4 + ft * 2 + fg * 2} ferns placed (|x|>1.0)");
+            }
+
+            // VERTICAL GREENERY — the #1 ref gap (both density judges): the glass walls read bare.
+            // Denser ivy curtain on BOTH glass walls along the whole path, two height bands, close
+            // z-spacing → walls read overgrown. Matches the existing accepted Foli_EaveIvy pattern.
+            var vineFbx = Load(TF + "hanging_vine.fbx");
+            Material matVine = MatOf("Foli_ColIvy_0", "Foli_EaveIvyW_0", "Hero_Vine_C1", "Hero_Vine_R1");
+            for (int i = 0; i < 8; i++)
+            {
+                float z = -6f + i * 2.0f;                  // -6..+8 down the nave
+                float yW = 2.4f + (i % 2) * 0.9f;          // two draping bands
+                float yE = 2.4f + ((i + 1) % 2) * 0.9f;
+                Place($"Foli_WallIvyW_{i}", vineFbx, new Vector3(-6.15f, yW, z),      80f,  1.7f, matVine);
+                Place($"Foli_WallIvyE_{i}", vineFbx, new Vector3( 6.15f, yE, z + 1f), 280f, 1.7f, matVine);
+            }
+            // far-end mid bushes — break up the empty deck/rug island at the glass wall (judge #2)
+            Place("Foli_FarBushL", fernFbx, new Vector3(-1.5f, 0f, 7.6f), 100f, 1.20f, matFern);
+            Place("Foli_FarBushR", fernFbx, new Vector3( 1.6f, 0f, 8.4f), 250f, 1.20f, matFern);
+            Place("Foli_FarBushM", monFbx,  new Vector3( 0.0f, 0f, 9.2f), 180f, 1.10f, matLeaf);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[AddGroundFoliage] groundcover + deep-fill injected (matFern=" + (matFern!=null) + " matLeaf=" + (matLeaf!=null) + " matPotted=" + (matPotted!=null) + ")");
+        }
+
+        /// <summary>
+        /// SURGICAL: вернуть NPC-людей С ГОЛОВАМИ в сохранённую сцену. Старые Hunyuan3D-люди
+        /// приходили безголовыми/кривыми → их скрыли, сцена опустела от людей. Здесь —
+        /// СТИЛИЗОВАННЫЕ призрачные фигуры (капсулы-конечности + sphere-ГОЛОВА), человеко-
+        /// масштаб ~1.72м, матовые десатурированные материалы (тема «Послелюди» — следы людей).
+        /// Чистые примитивы → headless-safe, всегда рендерятся. Идемпотентно (чистит NPC_Hero*).
+        /// Headless: -executeMethod Afterhumans.EditorTools.BotanikaBuilder.AddNPCs
+        /// </summary>
+        public static void AddNPCs()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox == null) { Debug.LogError("[AddNPCs] no Botanika_Greybox"); return; }
+            var realAssets = greybox.transform.Find("RealAssets");
+            if (realAssets == null) { Debug.LogError("[AddNPCs] no RealAssets root"); return; }
+
+            var toKill = new System.Collections.Generic.List<GameObject>();
+            foreach (Transform t in realAssets)
+                if (t.name.StartsWith("NPC_Hero")) toKill.Add(t.gameObject);
+            foreach (var g in toKill) Object.DestroyImmediate(g);
+            Debug.Log($"[AddNPCs] cleared {toKill.Count} prior NPC_Hero figures");
+
+            foreach (var t in greybox.GetComponentsInChildren<Transform>(true))
+                if (t.name.Contains("Hero_Person") || t.name.Contains("Hero_NpcRead"))
+                    foreach (var r in t.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+
+            var skinMat  = DecorMat("NPC_HeroSkin",  new Color(0.40f, 0.33f, 0.28f), 0.08f);
+            var clothA   = DecorMat("NPC_HeroClothA", new Color(0.20f, 0.24f, 0.30f), 0.06f);
+            var clothB   = DecorMat("NPC_HeroClothB", new Color(0.30f, 0.22f, 0.18f), 0.06f);
+            var clothC   = DecorMat("NPC_HeroClothC", new Color(0.22f, 0.25f, 0.20f), 0.06f);
+            var pantsMat = DecorMat("NPC_HeroPants",  new Color(0.13f, 0.13f, 0.15f), 0.06f);
+
+            void Limb(Transform p, string nm, Vector3 lpos, Vector3 euler, float r, float len, Material m)
+            {
+                var c = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                c.name = nm; Object.DestroyImmediate(c.GetComponent<Collider>());
+                c.transform.SetParent(p, false);
+                c.transform.localPosition = lpos;
+                c.transform.localRotation = Quaternion.Euler(euler);
+                c.transform.localScale = new Vector3(r, len * 0.5f, r);
+                c.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            void Ball(Transform p, string nm, Vector3 lpos, float d, Material m)
+            {
+                var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                s.name = nm; Object.DestroyImmediate(s.GetComponent<Collider>());
+                s.transform.SetParent(p, false);
+                s.transform.localPosition = lpos; s.transform.localScale = Vector3.one * d;
+                s.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            GameObject AddPerson(string nm, Vector3 basePos, float facing, bool seated, Material cloth)
+            {
+                var go = new GameObject(nm);
+                go.transform.SetParent(realAssets, false);
+                go.transform.position = basePos;
+                go.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                var t = go.transform;
+                if (seated)
+                {
+                    float seatH = 0.5f;
+                    Limb(t, nm + "_torso", new Vector3(0f, seatH + 0.34f, 0.00f), new Vector3(8f, 0, 0), 0.30f, 0.78f, cloth);
+                    Ball(t, nm + "_head",  new Vector3(0f, seatH + 0.88f, 0.05f), 0.26f, skinMat);
+                    Limb(t, nm + "_thighL", new Vector3(-0.13f, seatH,        0.28f), new Vector3(90f, 0, 0), 0.16f, 0.62f, pantsMat);
+                    Limb(t, nm + "_thighR", new Vector3( 0.13f, seatH,        0.28f), new Vector3(90f, 0, 0), 0.16f, 0.62f, pantsMat);
+                    Limb(t, nm + "_shinL",  new Vector3(-0.13f, seatH - 0.28f, 0.50f), new Vector3(2f, 0, 0), 0.14f, 0.55f, pantsMat);
+                    Limb(t, nm + "_shinR",  new Vector3( 0.13f, seatH - 0.28f, 0.50f), new Vector3(2f, 0, 0), 0.14f, 0.55f, pantsMat);
+                    Limb(t, nm + "_armL",   new Vector3(-0.30f, seatH + 0.42f, 0.18f), new Vector3(60f, 0, 8f),  0.11f, 0.55f, cloth);
+                    Limb(t, nm + "_armR",   new Vector3( 0.30f, seatH + 0.42f, 0.18f), new Vector3(60f, 0, -8f), 0.11f, 0.55f, cloth);
+                }
+                else
+                {
+                    Limb(t, nm + "_legL",  new Vector3(-0.13f, 0.42f, 0f), Vector3.zero, 0.16f, 0.86f, pantsMat);
+                    Limb(t, nm + "_legR",  new Vector3( 0.13f, 0.42f, 0f), Vector3.zero, 0.16f, 0.86f, pantsMat);
+                    Limb(t, nm + "_torso", new Vector3(0f, 1.12f, 0f), Vector3.zero, 0.30f, 0.82f, cloth);
+                    Ball(t, nm + "_head",  new Vector3(0f, 1.66f, 0f), 0.26f, skinMat);
+                    Limb(t, nm + "_armL",  new Vector3(-0.32f, 1.12f, 0.02f), new Vector3(6f, 0, 6f),  0.11f, 0.74f, cloth);
+                    Limb(t, nm + "_armR",  new Vector3( 0.32f, 1.12f, 0.02f), new Vector3(6f, 0, -6f), 0.11f, 0.74f, cloth);
+                }
+                return go;
+            }
+
+            AddPerson("NPC_HeroLounger", new Vector3(0.15f, 0.02f, -1.85f), 175f, true,  clothA);
+            AddPerson("NPC_HeroWest",    new Vector3(-4.1f, 0.02f, -0.3f),   70f, false, clothB);
+            AddPerson("NPC_HeroEast",    new Vector3( 4.3f, 0.02f,  0.5f),  250f, false, clothC);
+            AddPerson("NPC_HeroReader",  new Vector3(-1.9f, 0.02f, -4.4f),  150f, true,  clothB);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[AddNPCs] 4 stylized human NPCs (WITH HEADS) placed + saved");
+        }
+
+        /// <summary>
+        /// SURGICAL: тёплые ФЕСТОННЫЕ ГИРЛЯНДЫ (string/festoon lights) — провисающие
+        /// нити маленьких эмиссивных лампочек, как в уютных заросших оранжереях/кафе.
+        /// Аддитивно и низкорисково (лучше чем baked GI/raymarch для WebGL). Каждая нить —
+        /// цепочка эмиссивных сфер по параболе провисания (catenary) на высоте ~3-4м, чтобы
+        /// попадать в follow-кадр над корги. Эмиссия видна и в headless (как god-ray квады);
+        /// настоящий свет дают НЕСКОЛЬКО реальных point-light'ов (тёплых, без теней, ≤12) —
+        /// они работают только в GPU-билде (headless soft-GL их игнорит).
+        /// Чистые примитивы + процедурные материалы → никакого Shader Graph/импортов.
+        /// Идемпотентно (удаляет прежний "FestoonLights"). Без коллайдеров, без теней.
+        /// Headless: -executeMethod Afterhumans.EditorTools.BotanikaBuilder.AddFestoonLights
+        /// </summary>
+        public static void AddFestoonLights()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox == null) { Debug.LogError("[AddFestoonLights] no Botanika_Greybox"); return; }
+            var realAssets = greybox.transform.Find("RealAssets");
+            if (realAssets == null) { Debug.LogError("[AddFestoonLights] no RealAssets root"); return; }
+
+            // idempotent: nuke a prior pass so re-runs never duplicate
+            var prior = realAssets.Find("FestoonLights");
+            if (prior != null) Object.DestroyImmediate(prior.gameObject);
+            var root = new GameObject("FestoonLights");
+            root.transform.SetParent(realAssets, false);
+
+            // warm bulb emissive material (shared by every bulb) — reuses MakeEmissive:
+            // URP/Lit, _EMISSION keyword + RealtimeEmissive + _EmissionColor (HasProperty-guarded).
+            // EmissionColor (1,0.78,0.45) * ~2.6 → glows + drives bloom in the post stack.
+            var bulbMat = MakeEmissive("Festoon_Bulb", new Color(1f, 0.78f, 0.45f), 2.6f, new Color(0.12f, 0.09f, 0.05f));
+            // thin warm-dark wire material (matte) for the sagging cords between bulbs.
+            var wireMat = DecorMat("Festoon_Wire", new Color(0.07f, 0.06f, 0.05f), 0.15f);
+            var warm = new Color(1f, 0.74f, 0.42f);
+
+            int bulbCount = 0, wireCount = 0, lightCount = 0;
+            const int LIGHT_CAP = 12; // WebGL perf guard — keep real point-lights ≤ ~12
+
+            // one emissive sphere bulb (no collider, no shadow casting)
+            void Bulb(Vector3 pos, float d)
+            {
+                var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                s.name = $"Festoon_Bulb_{bulbCount++}";
+                Object.DestroyImmediate(s.GetComponent<Collider>());
+                s.transform.SetParent(root.transform, false);
+                s.transform.position = pos;
+                s.transform.localScale = Vector3.one * d;
+                var r = s.GetComponent<Renderer>();
+                r.sharedMaterial = bulbMat;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+            }
+            // a thin cord segment (scaled cylinder) connecting two points — optional eye-candy
+            void Wire(Vector3 a, Vector3 b)
+            {
+                var c = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                c.name = $"Festoon_Wire_{wireCount++}";
+                Object.DestroyImmediate(c.GetComponent<Collider>());
+                c.transform.SetParent(root.transform, false);
+                Vector3 mid = (a + b) * 0.5f;
+                Vector3 dir = b - a;
+                float len = dir.magnitude;
+                c.transform.position = mid;
+                if (len > 0.0001f) c.transform.rotation = Quaternion.FromToRotation(Vector3.up, dir.normalized);
+                c.transform.localScale = new Vector3(0.012f, len * 0.5f, 0.012f); // cylinder is 2 units tall by default
+                var r = c.GetComponent<Renderer>();
+                r.sharedMaterial = wireMat;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+            }
+            // one warm point-light (real glow on GPU only; no shadows for perf)
+            void AddPoint(Vector3 pos, float intensity, float range)
+            {
+                if (lightCount >= LIGHT_CAP) return;
+                var go = new GameObject($"Festoon_Light_{lightCount}");
+                go.transform.SetParent(root.transform, false);
+                go.transform.position = pos;
+                var l = go.AddComponent<Light>();
+                l.type = LightType.Point;
+                l.color = warm;
+                l.intensity = intensity;
+                l.range = range;
+                l.shadows = LightShadows.None;
+                lightCount++;
+            }
+
+            // Strings the bulbs along a catenary sag between two anchor points.
+            //   t in [0,1], parabola: y = topY - sag*(1 - (2t-1)^2)  (deepest at t=0.5)
+            // Drops ~lightEvery-th bulb a real warm point-light (≤ LIGHT_CAP total).
+            void Strand(Vector3 a, Vector3 b, float sag, int bulbs, int lightEvery)
+            {
+                float topY = Mathf.Max(a.y, b.y);
+                Vector3 prev = Vector3.zero; bool hasPrev = false;
+                for (int i = 0; i < bulbs; i++)
+                {
+                    float t = bulbs > 1 ? (float)i / (bulbs - 1) : 0.5f;
+                    Vector3 p = Vector3.Lerp(a, b, t);
+                    float u = 2f * t - 1f;                 // -1..+1
+                    p.y = topY - sag * (1f - u * u);       // catenary-ish sag (deepest mid-span)
+                    float d = 0.08f + ((i * 7) % 3) * 0.02f; // 0.08..0.12 bulb diameter
+                    Bulb(p, d);
+                    if (hasPrev) Wire(prev, p);
+                    if (lightEvery > 0 && i % lightEvery == 0) AddPoint(p + Vector3.down * 0.05f, 3.0f, 5.0f);
+                    prev = p; hasPrev = true;
+                }
+            }
+
+            // Geometry recap: nave z -14..+14, x -7..+7, floor y=0, ridge ~7m, eaves ~3.7m.
+            // Corgi spawns z=-12 walking +Z, follow-cam frames the path ahead → hang strands
+            // ACROSS the nave (eave x=-6 → +6) at ~3.6m so they arc over the corgi's head,
+            // plus one zig-zag runner DOWN the path so the cam always has bulbs in-frame.
+
+            // --- 4 cross-nave strands (eave-to-eave), spaced down the path ---
+            // sag pulls the mid-span down to ~2.9-3.1m (still above a ~1.7m NPC / corgi).
+            float[] crossZ = { -8f, -3f, 2f, 7f };
+            for (int s = 0; s < crossZ.Length; s++)
+            {
+                float z = crossZ[s];
+                float topY = 3.7f;                         // anchored at eave height
+                var a = new Vector3(-6.0f, topY, z);
+                var b = new Vector3( 6.0f, topY, z + 0.6f); // slight z-skew → not perfectly parallel
+                // ~13 bulbs across, point-light every 4th bulb (~3 lights/strand)
+                Strand(a, b, 0.75f, 13, 4);
+            }
+
+            // --- 1 zig-zag runner ALONG the path (z -10 → +10), bouncing x left/right ---
+            // chained short strands so bulbs are always somewhere ahead of the follow-cam.
+            {
+                float topY = 3.5f;
+                Vector3[] zig =
+                {
+                    new Vector3(-3.0f, topY, -10f),
+                    new Vector3( 3.0f, topY,  -5f),
+                    new Vector3(-3.0f, topY,   0f),
+                    new Vector3( 3.0f, topY,   5f),
+                    new Vector3(-3.0f, topY,  10f),
+                };
+                for (int i = 0; i < zig.Length - 1; i++)
+                    // 11 bulbs per leg, sag 0.55; lights only every 6th → keeps total ≤ cap
+                    Strand(zig[i], zig[i + 1], 0.55f, 11, 6);
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log($"[AddFestoonLights] {bulbCount} warm bulbs, {wireCount} wire segments, {lightCount} point-lights (cap {LIGHT_CAP}) placed + saved");
+        }
+
+        /// <summary>
         /// Builds the LARGE Botanika nave greybox (M1, G-02). Pure grey geometry,
         /// correct scale, NO art. Headless-callable via -executeMethod
         /// (Afterhumans.EditorTools.BotanikaBuilder.BuildGreybox) — no MenuItem-only
@@ -162,8 +590,9 @@ namespace Afterhumans.EditorTools
 
             // ===== SOLID NORTH WALL at Z = +14 (server-zone backdrop) =====
             // Full gable-height wall so the apex is closed off behind the gate.
-            MakeBox(root, "Wall_North", new Vector3(0, VaultApex * 0.5f, NaveHalfL),
+            var wallN = MakeBox(root, "Wall_North", new Vector3(0, VaultApex * 0.5f, NaveHalfL),
                 new Vector3(NaveWidth, VaultApex, 0.2f), grey);
+            wallN.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; // glass far gable
 
             // ===== SOUTH ENTRANCE WALL at Z = -14 (doorway gap in center) =====
             // Two side panels + lintel; central 4 m gap is the entrance.
@@ -188,12 +617,26 @@ namespace Afterhumans.EditorTools
             BuildGableEnd(root, "Gable_North", NaveHalfL, glassGrey);
             BuildGableEnd(root, "Gable_South", -NaveHalfL, glassGrey);
 
-            // ===== 4 STEEL COLUMNS at X=+/-3.5, Z=+/-5 (full height to apex region) =====
-            // Column rises from floor toward the vault; height tied to local roof Y.
-            MakeColumn(root, "Column_NE", new Vector3( ColumnX, 0,  ColumnZ), steelGrey);
-            MakeColumn(root, "Column_NW", new Vector3(-ColumnX, 0,  ColumnZ), steelGrey);
-            MakeColumn(root, "Column_SE", new Vector3( ColumnX, 0, -ColumnZ), steelGrey);
-            MakeColumn(root, "Column_SW", new Vector3(-ColumnX, 0, -ColumnZ), steelGrey);
+            // ===== GLAZING FRAME — dark timber rafters + mullions on the glass =====
+            // The Victorian-greenhouse silhouette the reference lives on.
+            var timber = MakeMaterial("Timber", new Color(0.16f, 0.12f, 0.09f), 0.1f); // dark wood
+            CreateGlazingFrame(root, timber);
+
+            // ===== ONE CENTRAL CONCRETE COLUMN (matches ref_botanika) =====
+            // The reference greenhouse has a single fat concrete pillar dead-center,
+            // floor → apex. Not 4 corner posts. Thick (r=0.55), smooth concrete.
+            {
+                var col = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                col.name = "Column_Central";
+                col.transform.SetParent(root.transform, worldPositionStays: false);
+                col.transform.position = new Vector3(0f, VaultApex * 0.5f, 0f);
+                col.transform.localScale = new Vector3(1.7f, VaultApex * 0.5f, 1.7f); // r=0.85 MASSIVE central anchor (acceptance: "column too thin, ref is a massive floor-to-ridge pillar")
+                col.GetComponent<Renderer>().sharedMaterial = steelGrey;
+                Object.DestroyImmediate(col.GetComponent<Collider>());
+                var cc = col.AddComponent<CapsuleCollider>();
+                cc.direction = 1; cc.radius = 0.85f / 1.7f; cc.height = 2f; cc.center = Vector3.zero;
+                ColliderHelper.MarkStaticProp(col);
+            }
 
             // ===== SERVER RACK placeholder (east passage, far north) =====
             MakeBox(root, "ServerRack", PosServerRack + Vector3.up * 0.9f,
@@ -345,6 +788,82 @@ namespace Afterhumans.EditorTools
         }
 
         /// <summary>
+        /// Dark-timber glazing frame: rafters on both vault slopes, a ridge beam,
+        /// and vertical mullions on the side glass — the Victorian-greenhouse
+        /// lattice the reference is built on. Thin boxes, no colliders.
+        /// </summary>
+        private static void CreateGlazingFrame(GameObject parent, Material mat)
+        {
+            var frameRoot = new GameObject("GlazingFrame");
+            frameRoot.transform.SetParent(parent.transform, worldPositionStays: false);
+            const float bar = 0.06f; // FINE Victorian glazing bars (acceptance: "glazing = childish LEGO, needs dozens of delicate Victorian mullions")
+
+            void Beam(string name, Vector3 a, Vector3 b, float thick)
+            {
+                var dir = b - a;
+                float len = dir.magnitude;
+                if (len < 0.01f) return;
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = name;
+                Object.DestroyImmediate(go.GetComponent<Collider>());
+                go.transform.SetParent(frameRoot.transform, worldPositionStays: false);
+                go.transform.position = a + dir * 0.5f;
+                go.transform.rotation = Quaternion.FromToRotation(Vector3.up, dir.normalized);
+                go.transform.localScale = new Vector3(thick, len, thick);
+                var r = go.GetComponent<Renderer>();
+                r.sharedMaterial = mat;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            }
+            // Helper: point on a slope at given X-sign and fraction f (0=eave,1=apex), at Z.
+            Vector3 SlopePt(int side, float f, float z) =>
+                new Vector3(side * NaveHalfW * (1f - f), Mathf.Lerp(EaveHeight, VaultApex, f), z);
+
+            // RAFTERS across the vault every ~1.0 m, both slopes (FINE Victorian spacing).
+            for (float z = -NaveHalfL + 0.6f; z <= NaveHalfL - 0.6f + 0.01f; z += 1.0f)
+            {
+                Beam($"Rafter_E_{z:0.0}", new Vector3(NaveHalfW, EaveHeight, z), new Vector3(0f, VaultApex, z), bar);
+                Beam($"Rafter_W_{z:0.0}", new Vector3(-NaveHalfW, EaveHeight, z), new Vector3(0f, VaultApex, z), bar);
+            }
+            // HORIZONTAL PURLINS along the slopes — 4 levels = denser cross-grid of panes.
+            foreach (float f in new[] { 0.2f, 0.4f, 0.6f, 0.8f })
+            {
+                Beam($"Purlin_E_{f:0.0}", SlopePt(+1, f, -NaveHalfL), SlopePt(+1, f, NaveHalfL), bar);
+                Beam($"Purlin_W_{f:0.0}", SlopePt(-1, f, -NaveHalfL), SlopePt(-1, f, NaveHalfL), bar);
+            }
+            // RIDGE beam along the apex (a touch thicker — structural spine).
+            Beam("Ridge", new Vector3(0f, VaultApex, -NaveHalfL), new Vector3(0f, VaultApex, NaveHalfL), 0.14f);
+            // EAVE beams where slope meets side wall.
+            Beam("Eave_E", new Vector3(NaveHalfW, EaveHeight, -NaveHalfL), new Vector3(NaveHalfW, EaveHeight, NaveHalfL), 0.12f);
+            Beam("Eave_W", new Vector3(-NaveHalfW, EaveHeight, -NaveHalfL), new Vector3(-NaveHalfW, EaveHeight, NaveHalfL), 0.12f);
+            // VERTICAL MULLIONS on both side glass walls — FINE grid every ~0.8 m.
+            for (float z = -NaveHalfL + 0.6f; z <= NaveHalfL - 0.6f + 0.01f; z += 0.8f)
+            {
+                Beam($"Mull_E_{z:0.0}", new Vector3(NaveHalfW, 0f, z), new Vector3(NaveHalfW, EaveHeight, z), bar * 0.85f);
+                Beam($"Mull_W_{z:0.0}", new Vector3(-NaveHalfW, 0f, z), new Vector3(-NaveHalfW, EaveHeight, z), bar * 0.85f);
+            }
+            // FIVE horizontal transoms on the side glass — denser pane grid.
+            foreach (float y in new[] { 0.8f, 1.6f, 2.4f, 3.2f, 4.0f })
+            {
+                Beam($"Transom_E_{y:0.0}", new Vector3(NaveHalfW, y, -NaveHalfL), new Vector3(NaveHalfW, y, NaveHalfL), bar * 0.85f);
+                Beam($"Transom_W_{y:0.0}", new Vector3(-NaveHalfW, y, -NaveHalfL), new Vector3(-NaveHalfW, y, NaveHalfL), bar * 0.85f);
+            }
+            // GABLE-END mullions (north & south) — fine vertical bars + 2 transoms.
+            foreach (int sgn in new[] { -1, 1 })
+            {
+                float zEnd = sgn * NaveHalfL;
+                for (float x = -NaveHalfW + 0.6f; x <= NaveHalfW - 0.6f + 0.01f; x += 0.8f)
+                {
+                    float topY = Mathf.Lerp(VaultApex, EaveHeight, Mathf.Abs(x) / NaveHalfW);
+                    Beam($"GableMull_{sgn}_{x:0.0}", new Vector3(x, 0f, zEnd), new Vector3(x, topY, zEnd), bar * 0.85f);
+                }
+                foreach (float y in new[] { 1.0f, 2.0f, 3.0f, 4.0f })
+                    Beam($"GableTransom_{sgn}_{y:0.0}", new Vector3(-NaveHalfW, y, zEnd), new Vector3(NaveHalfW, y, zEnd), bar * 0.85f);
+            }
+
+            Debug.Log("[BotanikaBuilder] Glazing frame: fine lattice (rafters+purlins+ridge+eaves+mullions+transoms+gable)");
+        }
+
+        /// <summary>
         /// Steel column: visual cylinder (r=ColumnVisR) with a CapsuleCollider
         /// (r=ColumnColR). Height reaches the local roof Y at the column's X
         /// (linear interp apex→eave), so it visually meets the vault.
@@ -391,42 +910,84 @@ namespace Afterhumans.EditorTools
                 return;
             }
 
-            ProceduralTextures.ClearCache();
-            var tile      = ProceduralTextures.TileFloor();
-            var tileN     = ProceduralTextures.TileFloorNormal();
-            var plaster   = ProceduralTextures.PlasterWall();
-            var plasterN  = ProceduralTextures.PlasterWallNormal();
+            // === REAL 2K PBR scans (PolyHaven / ambientCG) replace procedural noise
+            // that read flat/cheap on GPU. All files imported under Vendor/ with
+            // correct normal-map import type (textureType:1, sRGB:0). ===
+            const string PH  = "Assets/_Project/Vendor/PolyHaven/";
+            const string ACG = "Assets/_Project/Vendor/ambientCG/";
+            var wood       = RealTex(PH  + "Textures/wood_floor_worn/wood_floor_worn_diff_2k.png");
+            var woodN      = RealTex(PH  + "Textures/wood_floor_worn/wood_floor_worn_nor_2k.png");
+            var concrete   = RealTex(ACG + "Concrete012/Concrete012_2K-PNG_Color.png");
+            var concreteN  = RealTex(ACG + "Concrete012/Concrete012_2K-PNG_NormalGL.png");
+            var plaster    = RealTex(ACG + "PaintedPlaster017/PaintedPlaster017_2K-PNG_Color.png");
+            var plasterN   = RealTex(ACG + "PaintedPlaster017/PaintedPlaster017_2K-PNG_NormalGL.png");
+            var fabric     = RealTex(PH  + "Materials/fabric_sofa/fabric_sofa_albedo_2k.png");
+            var fabricN    = RealTex(PH  + "Materials/fabric_sofa/fabric_sofa_normal_2k.png");
 
-            // FLOOR — warm weathered stone tile, large tiling for a 28x14 hall.
-            RetexturePbr(greybox, "Floor", tile, tileN,
-                new Color(0.72f, 0.55f, 0.40f), 7f, 0.18f);
+            // FLOOR — real worn-wood planks. Higher tile so plank seams/grain READ at
+            // hero distance (acceptance: "uniform orange, no plank definition").
+            RetexturePbr(greybox, "Floor", wood, woodN,
+                new Color(0.56f, 0.42f, 0.30f), 3.6f, 0.16f);
 
-            // COLUMNS — matte aged concrete (slightly cool stone).
-            RetexturePbr(greybox, "Column_", plaster, plasterN,
-                new Color(0.62f, 0.60f, 0.58f), 1.5f, 0.10f);
+            // CENTRAL COLUMN — real aged concrete, higher tile + rougher so it reads as
+            // chipped concrete not a smooth beige post (acceptance: "smooth beige cylinder").
+            RetexturePbr(greybox, "Column_", concrete, concreteN,
+                new Color(0.64f, 0.62f, 0.58f), 4f, 0.06f);
 
-            // SOLID WALLS (north server backdrop + south entrance panels/lintel)
-            // — warm plaster. Glass walls handled separately below.
-            RetexturePbr(greybox, "Wall_North", plaster, plasterN,
-                new Color(0.78f, 0.70f, 0.58f), 3f, 0.10f);
+            // SOUTH entrance panels/lintel — real painted plaster. North wall is now
+            // GLASS (see below) so the far gable reads as greenhouse, not a slab.
             RetexturePbr(greybox, "Wall_South_", plaster, plasterN,
-                new Color(0.78f, 0.70f, 0.58f), 3f, 0.10f);
+                new Color(0.80f, 0.74f, 0.64f), 2.5f, 0.12f);
 
-            // GLASS VAULT + GABLE ENDS + GLASS SIDE WALLS — real translucent amber
-            // glass so the sunset reads THROUGH the greenhouse roof.
-            RetextureGlass(greybox, "Vault_",      new Color(0.85f, 0.68f, 0.45f, 0.22f));
-            RetextureGlass(greybox, "Gable_",      new Color(0.85f, 0.68f, 0.45f, 0.22f));
-            RetextureGlass(greybox, "Wall_Glass",  new Color(0.80f, 0.72f, 0.62f, 0.20f));
+            // GLASS VAULT + GABLE ENDS + GLASS SIDE WALLS + NORTH GABLE WALL — VERY
+            // CLEAR, faintly cool-neutral glass (low alpha + low whiteness) so the
+            // dark-green forest backdrop reads THROUGH it = depth (QA: glass opaque).
+            // WARM-NEUTRAL tint (was green → tinted the whole interior olive per
+            // acceptance). Faint warm so sunset reads through, no green cast.
+            // VERY clear so the bright golden skybox reads THROUGH the roof as the
+            // signature zone (acceptance: roof must be brightest, not dark murky panels).
+            RetextureGlass(greybox, "Vault_",      new Color(0.92f, 0.90f, 0.84f, 0.03f));
+            RetextureGlass(greybox, "Gable_",      new Color(0.92f, 0.90f, 0.84f, 0.03f));
+            RetextureGlass(greybox, "Wall_Glass",  new Color(0.90f, 0.88f, 0.82f, 0.04f));
+            RetextureGlass(greybox, "Wall_North",  new Color(0.92f, 0.88f, 0.80f, 0.05f));
 
-            // SERVER RACK + DOOR — dark metal.
+            // SERVER RACK + DOOR — dark metal (rack gets green LED emissive in decor).
             RetexturePbr(greybox, "ServerRack", null, null,
-                new Color(0.22f, 0.23f, 0.26f), 1f, 0.45f);
+                new Color(0.16f, 0.17f, 0.20f), 1f, 0.45f);
             RetexturePbr(greybox, "DoorToCity", null, null,
                 new Color(0.28f, 0.22f, 0.18f), 1f, 0.25f);
 
+            // Hide greybox-only scale/marker capsules in the art render (grey pills).
+            foreach (var n in new[] { "ScaleRef_Human_1m8", "Kafka_SpawnMarker" })
+            {
+                var t = greybox.transform.Find(n);
+                if (t != null) { var r = t.GetComponent<Renderer>(); if (r != null) r.enabled = false; }
+            }
+
+            // ===== DECOR — the ref's recognizable cluster (rug, sofa, desks+CRT,
+            // bookcase, plants, server LEDs). Emissive accents for green CRT glow. =====
+            BuildDecor(greybox);
+
+            // RUG — real woven fabric weave tinted deep persian-red (was a flat solid
+            // box). Runs AFTER BuildDecor which creates Rug_Persian.
+            RetexturePbr(greybox, "Rug_Persian", fabric, fabricN,
+                new Color(0.46f, 0.17f, 0.13f), 3f, 0.15f);
+
+            // ===== REAL 3D ASSETS (pilot) — swap procedural plants/server/books for
+            // genuine PBR meshes; tests headless texture survival. No Kenney. =====
+            ComposeRealAssets(greybox);
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
-            Debug.Log("[BotanikaBuilder] ART PASS done — PBR floor/columns/walls + translucent glass vault");
+            Debug.Log("[BotanikaBuilder] ART PASS done — concrete column, glass north, decor cluster");
+        }
+
+        /// <summary>Load an imported 2K PBR texture asset (real scan, not procedural).</summary>
+        private static Texture2D RealTex(string path)
+        {
+            var t = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (t == null) Debug.LogWarning("[BotanikaBuilder] RealTex MISSING: " + path);
+            return t;
         }
 
         /// <summary>Opaque URP/Lit retexture with albedo + normal + smoothness.</summary>
@@ -475,10 +1036,1066 @@ namespace Afterhumans.EditorTools
                 mat.renderQueue = 3000;
                 mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", tint);
-                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.85f); // glassy
+                // LOW smoothness — no white mirror sheen so the green backdrop shows
+                // THROUGH the glass (QA: glass read as opaque white wall).
+                if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.30f);
+                if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0f);
                 if (mat.HasProperty("_Cull")) mat.SetFloat("_Cull", 0f); // double-sided
                 rend.sharedMaterial = mat;
             }
+        }
+
+        /// <summary>
+        /// PILOT: instantiate real 3D assets (FBX→ModelImporter, GLB→glTFast) from
+        /// Vendor/, auto-scaled to a target height and dropped on the floor, to test
+        /// whether they render TEXTURED in the headless path (Sprint 4 risk: props
+        /// came in white). Disables the procedural counterparts it replaces.
+        /// </summary>
+        private static void ComposeRealAssets(GameObject greybox)
+        {
+            var root = new GameObject("RealAssets");
+            root.transform.SetParent(greybox.transform, worldPositionStays: false);
+
+            // Load an asset GameObject from the first existing path. NOTE: FBX carries
+            // geometry but NOT textures in our pipeline (Sprint 4 → white props), so
+            // for textured PBR assets we pass _clean.glb FIRST (glTFast keeps the
+            // embedded textures). FBX only as a geometry fallback.
+            GameObject Load(params string[] paths)
+            {
+                foreach (var p in paths)
+                {
+                    if (!File.Exists(p)) continue;
+                    var a = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                    if (a != null) return a;
+                    foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(p))
+                        if (sub is GameObject go) return go;
+                }
+                return null;
+            }
+            // Instantiate + auto-scale so the asset's world height == targetH, base on floor.
+            // tint: if non-null, override ALL renderers' material (headless import drops
+            // embedded textures → white props; a solid URP material beats white until
+            // the Blender-on-Contabo texture re-export lands).
+            GameObject Place(string label, GameObject src, Vector3 pos, float yawDeg, float targetH, Material tint = null)
+            {
+                if (src == null) { Debug.LogWarning($"[RealAssets] MISSING {label}"); return null; }
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(src, root.transform)
+                         ?? Object.Instantiate(src, root.transform);
+                go.name = label;
+                go.transform.rotation = Quaternion.Euler(0, yawDeg, 0);
+                go.transform.position = pos;
+                go.transform.localScale = Vector3.one;
+                // measure combined renderer bounds
+                var rends = go.GetComponentsInChildren<Renderer>(true);
+                if (rends.Length == 0) { Debug.LogWarning($"[RealAssets] {label} has NO renderers"); return go; }
+                var b = rends[0].bounds;
+                foreach (var r in rends) b.Encapsulate(r.bounds);
+                float h = Mathf.Max(0.001f, b.size.y);
+                float s = targetH / h;
+                go.transform.localScale = Vector3.one * s;
+                // re-measure to seat the base on the floor at pos.y
+                b = go.GetComponentsInChildren<Renderer>(true)[0].bounds;
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true)) b.Encapsulate(r.bounds);
+                float bottom = b.min.y;
+                go.transform.position += new Vector3(0, pos.y - bottom, 0);
+                if (tint != null)
+                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                        r.sharedMaterial = tint;
+                Debug.Log($"[RealAssets] {label} placed (scale {s:0.00}, src={src.name})");
+                return go;
+            }
+            // Hide the procedural items the real assets replace.
+            void Hide(params string[] nameContains)
+            {
+                foreach (var r in greybox.GetComponentsInChildren<Renderer>(true))
+                    foreach (var n in nameContains)
+                        if (r.gameObject.name.Contains(n)) { r.enabled = false; break; }
+            }
+            // Hide an ENTIRE placed object (FBX) by its ROOT name — Place()'d assets carry
+            // their renderers on child mesh nodes whose names don't match the root, so the
+            // simple Hide() above misses them (why headless NPCs stayed visible).
+            void HideTree(params string[] rootNames)
+            {
+                foreach (var t in greybox.GetComponentsInChildren<Transform>(true))
+                    foreach (var n in rootNames)
+                        if (t.name.Contains(n))
+                        {
+                            foreach (var r in t.GetComponentsInChildren<Renderer>(true)) r.enabled = false;
+                            break;
+                        }
+            }
+
+            // NO Kenney — Tim: primitive, not AAA. Real PBR geometry from Blender
+            // re-export (TexFBX/) with the EXTRACTED textures assigned programmatically
+            // (headless Unity won't auto-link FBX/GLB textures → we wire _BaseMap +
+            // _BumpMap from the dumped PNGs, which DO render in SubmitRenderRequest).
+            const string TF = "Assets/_Project/Vendor/TexFBX/";
+            const string TX = TF + "tex/";
+
+            // Build a textured URP/Lit material for an asset: pick its albedo PNG
+            // (…_diff/_Albedo, excluding glass/normal/rough/metal) + normal PNG.
+            Material TexMat(string assetBase, float smoothness, float metal, Color fallback)
+            {
+                var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                var m = new Material(sh) { name = assetBase + "_TexMat" };
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smoothness);
+                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", metal);
+                Texture2D albedo = null, normal = null;
+                if (Directory.Exists(TX))
+                {
+                    foreach (var f in Directory.GetFiles(TX, assetBase + "__*.png"))
+                    {
+                        var lf = Path.GetFileName(f).ToLower();
+                        bool isNorm = lf.Contains("_nor") || lf.Contains("normal");
+                        bool isAux = lf.Contains("rough") || lf.Contains("metal") ||
+                                     lf.Contains("glass") || lf.Contains("opacity");
+                        var t = AssetDatabase.LoadAssetAtPath<Texture2D>(f);
+                        if (t == null) continue;
+                        if (isNorm && normal == null) normal = t;
+                        else if (!isNorm && !isAux && albedo == null &&
+                                 (lf.Contains("diff") || lf.Contains("albedo"))) albedo = t;
+                    }
+                }
+                if (albedo != null) { m.SetTexture("_BaseMap", albedo); m.SetColor("_BaseColor", Color.white); }
+                else if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", fallback);
+                if (normal != null && m.HasProperty("_BumpMap"))
+                { m.SetTexture("_BumpMap", normal); m.EnableKeyword("_NORMALMAP"); m.SetFloat("_BumpScale", 1f); }
+                Debug.Log($"[RealAssets] TexMat {assetBase}: albedo={(albedo? albedo.name : "NONE")} normal={(normal? "y":"n")}");
+                return m;
+            }
+
+            var matLeaf  = TexMat("monstera_pot_clean",          0.25f, 0f,   new Color(0.20f,0.38f,0.17f));
+            var matBooks = TexMat("books_stack_3_clean",          0.2f, 0f,   new Color(0.42f,0.20f,0.15f));
+            var matLamp  = TexMat("edison_lamp_clean",            0.6f, 0.7f, new Color(0.52f,0.38f,0.18f));
+
+            // BOOKS on the coffee table — PolyHaven encyclopedia set (real PBR).
+            Place("Real_Books", Load(TF+"books_stack_3_clean.fbx"),
+                new Vector3(-0.3f, 0.44f, -3.7f), 20f, 0.20f, matBooks);
+            // EDISON LAMP on the west desk — articulated desk lamp (real PBR).
+            Place("Real_Lamp", Load(TF+"edison_lamp_clean.fbx"),
+                new Vector3(-4.6f, 0.78f, 1.5f), 15f, 0.5f, matLamp);
+            // SERVER RACK — keep PROCEDURAL (dark box + LED dots). The Tripo
+            // Polygonal-Mind asset is a VAPORWAVE rainbow computer (Trim_Vapor texture)
+            // = wrong aesthetic vs ref's dark utilitarian rack. Tripo a proper one later.
+            // (espresso removed — overlapped the procedural CRT workstation = z-fight)
+            // A couple of back-row monstera/calathea for depth density.
+            var monstera = Load(TF+"monstera_pot_clean.fbx");
+            Place("Real_Plant_1", monstera, new Vector3(-6.2f, 0f, 6.5f), 0f, 1.4f, matLeaf);
+            Place("Real_Plant_2", monstera, new Vector3(6.2f, 0f, 7.0f), 90f, 1.4f, matLeaf);
+
+            // ===== HERO 3D ASSETS (fal Hunyuan3D from Gemini ref-matched product shots,
+            // Blender-reexported FBX + dumped albedo). Replace the procedural greybox
+            // sofa/table/server with real models + add ferns/potted/CRT/bookshelves.
+            // (Tim: "поставить другой диван, другие растения", элементы из рефа.) =====
+            var matSofa   = TexMat("sofa",         0.30f, 0f,   new Color(0.40f,0.26f,0.17f));
+            var matTable  = TexMat("coffee_table", 0.25f, 0.1f, new Color(0.40f,0.30f,0.20f));
+            var matFern   = TexMat("fern",         0.22f, 0f,   new Color(0.20f,0.38f,0.17f));
+            var matPotted = TexMat("potted_plant", 0.22f, 0f,   new Color(0.20f,0.38f,0.17f));
+            var matServer = TexMat("server_rack",  0.40f, 0.3f, new Color(0.12f,0.13f,0.15f));
+            var matShelf  = TexMat("bookshelf",    0.20f, 0f,   new Color(0.40f,0.30f,0.20f));
+            var matCRT    = TexMat("crt_monitor",  0.30f, 0.1f, new Color(0.60f,0.58f,0.50f));
+
+            // Leather Chesterfield sofa — the centrepiece, facing the camera.
+            Place("Hero_Sofa",  Load(TF+"sofa.fbx"),         new Vector3(0f, 0f, -1.9f),  180f, 0.95f, matSofa);
+            // Coffee table in front of the sofa (closer to camera).
+            Place("Hero_Table", Load(TF+"coffee_table.fbx"), new Vector3(0f, 0f, -3.7f),    0f, 0.45f, matTable);
+            // Server rack — far right, front toward the centre.
+            Place("Hero_Server", Load(TF+"server_rack.fbx"), new Vector3(5.7f, 0f, 2.6f),  -90f, 2.2f, matServer);
+            // Bookshelves flanking the column behind it.
+            Place("Hero_ShelfL", Load(TF+"bookshelf.fbx"),   new Vector3(-3.1f, 0f, 5.8f), 180f, 2.3f, matShelf);
+            Place("Hero_ShelfR", Load(TF+"bookshelf.fbx"),   new Vector3( 3.1f, 0f, 5.8f), 180f, 2.3f, matShelf);
+            // CRT monitors on the two work desks (kept procedural desks below them).
+            Place("Hero_CRT_W", Load(TF+"crt_monitor.fbx"),  new Vector3(-4.2f, 0.78f, 1.0f),  65f, 0.42f, matCRT);
+            Place("Hero_CRT_E", Load(TF+"crt_monitor.fbx"),  new Vector3( 4.6f, 0.78f, -1.0f), 250f, 0.42f, matCRT);
+            // VEGETATION — Cycle N: the camera moved to z=-9.2, so the old foreground ferns
+            // (z=-8.6, x=±5.3) ended up 0.6 m to the side = OFF-SCREEN → judges saw "zero
+            // plants in a greenhouse". Re-placed as a BIG green frame in the bottom corners
+            // + densified the mid-ground around the sofa (judges: 5-10× the volume).
+            // Foreground frame (bottom-left / bottom-right corners, big):
+            Place("Hero_Fern_FgL", Load(TF+"fern.fbx"),         new Vector3(-3.9f, 0f, -7.1f),  25f, 1.45f, matFern);
+            Place("Hero_Fern_FgR", Load(TF+"fern.fbx"),         new Vector3( 4.0f, 0f, -6.9f), 310f, 1.45f, matFern);
+            // POT SCALE (Tim: "горшки оч большие" — pots were placed at 1.05-1.2 m tall vs the
+            // 0.78 m dog → they towered over the hero). Shortened below the dog's height so the
+            // corgi reads as the dominant near element. (Place's last arg = world HEIGHT in metres.)
+            Place("Hero_Pot_FgL",  Load(TF+"potted_plant.fbx"), new Vector3(-2.7f, 0f, -6.6f),  40f, 0.68f, matPotted);
+            Place("Hero_Pot_FgR",  Load(TF+"potted_plant.fbx"), new Vector3( 2.9f, 0f, -6.3f), 200f, 0.68f, matPotted);
+            // Mid-ground around the sofa cluster (fills the bare floor):
+            Place("Hero_Fern_M1",  Load(TF+"fern.fbx"),         new Vector3(-3.2f, 0f, -2.4f), 120f, 1.0f, matFern);
+            Place("Hero_Fern_M2",  Load(TF+"fern.fbx"),         new Vector3( 3.3f, 0f, -1.9f), 250f, 1.0f, matFern);
+            Place("Hero_Pot_L",    Load(TF+"potted_plant.fbx"), new Vector3(-4.6f, 0f, -4.0f),  40f, 0.62f, matPotted);
+            Place("Hero_Pot_R",    Load(TF+"potted_plant.fbx"), new Vector3( 4.7f, 0f, -4.4f), 200f, 0.62f, matPotted);
+            // Deeper scatter by the column / shelves (depth layering):
+            Place("Hero_Fern_D1",  Load(TF+"fern.fbx"),         new Vector3(-5.0f, 0f, 1.6f),  120f, 0.95f, matFern);
+            Place("Hero_Fern_D2",  Load(TF+"fern.fbx"),         new Vector3( 5.1f, 0f, 2.2f),  250f, 0.95f, matFern);
+            Place("Hero_Pot_D1",   Load(TF+"potted_plant.fbx"), new Vector3(-1.6f, 0f, 3.4f),   0f, 0.62f, matPotted);
+            Place("Hero_Pot_D2",   Load(TF+"potted_plant.fbx"), new Vector3( 1.7f, 0f, 3.9f),  180f, 0.62f, matPotted);
+
+            // Emissive LED dots on the real server + green glow on the real CRTs (real
+            // albedo LEDs don't emit; add glow so the practicals read, as the ref).
+            for (int s = 0; s < 9; s++)
+            {
+                float y = 0.5f + s * 0.22f;
+                var mled = (s % 3 == 0) ? MakeEmissive("SrvLEDr", new Color(1f,0.2f,0.16f), 4f, new Color(0.08f,0.03f,0.03f))
+                                        : MakeEmissive("SrvLEDg", new Color(0.4f,1f,0.45f), 3.4f, new Color(0.04f,0.06f,0.04f));
+                var g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                g.name = $"SrvLED_{s}"; Object.DestroyImmediate(g.GetComponent<Collider>());
+                g.transform.SetParent(root.transform);
+                g.transform.position = new Vector3(5.15f, y, 2.6f + (s%2==0?-0.18f:0.18f));
+                g.transform.localScale = new Vector3(0.06f, 0.05f, 0.025f);
+                g.GetComponent<Renderer>().sharedMaterial = mled;
+            }
+            // B3: green phosphor glow facing the CAMERA (south/-Z). Was facing +Z (away from
+            // the hero cam) → only the white FBX albedo showed = "white CRT". Moderate
+            // intensity 2.8 (was 4.0 → warm bloom washed it white). Pulled to the south face
+            // of each monitor and rotated 180° so the green reads toward the room.
+            var crtGlowMat = MakeEmissive("CRTGlowReal", new Color(0.30f,1.0f,0.42f), 2.8f, new Color(0.03f,0.10f,0.04f));
+            foreach (var (cx,cz,cy) in new[]{(-4.2f,1.18f,0.72f),(4.6f,1.18f,-1.16f)})
+            {
+                var g = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                g.name = "CRTGlow_Real"; Object.DestroyImmediate(g.GetComponent<Collider>());
+                g.transform.SetParent(root.transform);
+                g.transform.position = new Vector3(cx, cz, cy);
+                g.transform.rotation = Quaternion.Euler(0f, 180f, 0f); // face -Z toward the hero camera
+                g.transform.localScale = new Vector3(0.5f, 0.4f, 1f);
+                g.GetComponent<Renderer>().sharedMaterial = crtGlowMat;
+            }
+
+            // PRACTICAL POINT LIGHTS — Cycle N: judges ×5 want a warm/cool (teal-orange)
+            // interplay + the emissive practicals to actually cast colored light pools.
+            // On GPU (WebGL) point lights are real (headless soft-GL ignores them).
+            void AddPoint(string nm, Vector3 pos, Color col, float intensity, float range)
+            {
+                var go = new GameObject(nm);
+                go.transform.SetParent(root.transform);
+                go.transform.position = pos;
+                var l = go.AddComponent<Light>();
+                l.type = LightType.Point; l.color = col; l.intensity = intensity; l.range = range;
+                l.shadows = LightShadows.None;
+            }
+            // cool green glow off the CRTs + server (the cold note for teal-orange).
+            // Cycle S: lowered + less acid (judges: "point lights clip acid yellow-green").
+            AddPoint("Pt_CRT_W",  new Vector3(-4.2f, 1.2f, 0.9f),  new Color(0.42f, 0.85f, 0.55f), 1.4f, 3.0f);
+            AddPoint("Pt_CRT_E",  new Vector3( 4.6f, 1.2f, -0.9f), new Color(0.42f, 0.85f, 0.55f), 1.4f, 3.0f);
+            AddPoint("Pt_Server", new Vector3( 5.2f, 1.6f, 2.6f),  new Color(0.4f, 0.8f, 0.58f), 1.3f, 3.5f);
+            // warm task-lamp pool by the seating cluster (golden practical)
+            AddPoint("Pt_Lamp",   new Vector3(-1.6f, 1.4f, -3.2f), new Color(1f, 0.72f, 0.42f), 1.4f, 5.0f); // Cycle P: was 3.0 → blew the sofa/figure white
+            AddPoint("Pt_LampFill",new Vector3(1.4f, 1.2f, -5.0f), new Color(1f, 0.78f, 0.5f), 0.9f, 4.5f);
+
+            // ===== NPCs — judges ×ALL rounds CRITICAL: "пустая комната, ни одного человека"
+            // (ref has 4: lounger w/ laptop on the sofa, coder at CRT, barista, a desk
+            // silhouette). Stylized figures from primitives — they read as PEOPLE in the
+            // hero frame (silhouette + pose + clothing/skin), breaking the empty-greybox feel.
+            // Cycle P: DARKER, matte — Cycle O figures lit up to white "placeholder blobs"
+            // under the strong key (judges read them as unfinished). Ref loungers sit in
+            // half-shade, reading as dim silhouettes, not bright mannequins.
+            var skinMat  = DecorMat("NPC_Skin",  new Color(0.34f, 0.25f, 0.19f), 0.1f);
+            var clothA   = DecorMat("NPC_ClothA", new Color(0.16f, 0.20f, 0.26f), 0.08f); // dark denim
+            var clothB   = DecorMat("NPC_ClothB", new Color(0.26f, 0.18f, 0.14f), 0.08f); // dark rust
+            var clothC   = DecorMat("NPC_ClothC", new Color(0.18f, 0.21f, 0.17f), 0.08f); // dark olive
+            var pantsMat = DecorMat("NPC_Pants",  new Color(0.10f, 0.10f, 0.12f), 0.08f); // near-black jeans
+            void Limb(Transform p, string nm, Vector3 lpos, Vector3 euler, float r, float len, Material m)
+            {
+                var c = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                c.name = nm; Object.DestroyImmediate(c.GetComponent<Collider>());
+                c.transform.SetParent(p, false);
+                c.transform.localPosition = lpos;
+                c.transform.localRotation = Quaternion.Euler(euler);
+                c.transform.localScale = new Vector3(r, len * 0.5f, r); // capsule is 2 units tall
+                c.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            void Ball(Transform p, string nm, Vector3 lpos, float d, Material m)
+            {
+                var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                s.name = nm; Object.DestroyImmediate(s.GetComponent<Collider>());
+                s.transform.SetParent(p, false);
+                s.transform.localPosition = lpos; s.transform.localScale = Vector3.one * d;
+                s.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            // basePos = floor point; seated raises the pelvis to seatH.
+            void AddPerson(string nm, Vector3 basePos, float facing, bool seated, Material cloth)
+            {
+                var go = new GameObject(nm);
+                go.transform.SetParent(root.transform, false);
+                go.transform.position = basePos;
+                go.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                var t = go.transform;
+                if (seated)
+                {
+                    float seatH = 0.5f;
+                    Limb(t, nm+"_torso", new Vector3(0f, seatH + 0.34f, 0.0f), new Vector3(8f,0,0), 0.30f, 0.78f, cloth);
+                    Ball(t, nm+"_head",  new Vector3(0f, seatH + 0.86f, 0.05f), 0.26f, skinMat);
+                    // thighs forward, shins down
+                    Limb(t, nm+"_thighL", new Vector3(-0.13f, seatH, 0.28f), new Vector3(90f,0,0), 0.16f, 0.62f, pantsMat);
+                    Limb(t, nm+"_thighR", new Vector3( 0.13f, seatH, 0.28f), new Vector3(90f,0,0), 0.16f, 0.62f, pantsMat);
+                    Limb(t, nm+"_shinL",  new Vector3(-0.13f, seatH-0.28f, 0.5f), new Vector3(2f,0,0), 0.14f, 0.55f, pantsMat);
+                    Limb(t, nm+"_shinR",  new Vector3( 0.13f, seatH-0.28f, 0.5f), new Vector3(2f,0,0), 0.14f, 0.55f, pantsMat);
+                    // arms resting forward (toward a laptop)
+                    Limb(t, nm+"_armL", new Vector3(-0.30f, seatH+0.42f, 0.18f), new Vector3(60f,0,8f), 0.11f, 0.55f, cloth);
+                    Limb(t, nm+"_armR", new Vector3( 0.30f, seatH+0.42f, 0.18f), new Vector3(60f,0,-8f), 0.11f, 0.55f, cloth);
+                }
+                else
+                {
+                    Limb(t, nm+"_legL", new Vector3(-0.13f, 0.42f, 0f), Vector3.zero, 0.16f, 0.86f, pantsMat);
+                    Limb(t, nm+"_legR", new Vector3( 0.13f, 0.42f, 0f), Vector3.zero, 0.16f, 0.86f, pantsMat);
+                    Limb(t, nm+"_torso",new Vector3(0f, 1.12f, 0f), Vector3.zero, 0.30f, 0.82f, cloth);
+                    Ball(t, nm+"_head", new Vector3(0f, 1.66f, 0f), 0.26f, skinMat);
+                    Limb(t, nm+"_armL", new Vector3(-0.32f, 1.12f, 0.02f), new Vector3(6f,0,6f), 0.11f, 0.74f, cloth);
+                    Limb(t, nm+"_armR", new Vector3( 0.32f, 1.12f, 0.02f), new Vector3(6f,0,-6f), 0.11f, 0.74f, cloth);
+                }
+            }
+            // HERO lounger — REAL generated 3D human (Gemini→Hunyuan3D), replaces the
+            // primitive "mannequin" the judges flagged. Reclined on the sofa with a laptop.
+            var matPerson = TexMat("person", 0.2f, 0f, new Color(0.4f, 0.4f, 0.42f));
+            Place("Hero_Person", Load(TF+"person.fbx"), new Vector3(0.15f, 0.02f, -1.95f), 180f, 1.5f, matPerson);
+            // two more REAL humans (Hunyuan3D, apron+mug "maker") — replaces the primitive
+            // silhouettes. One at the left workbench, one at the right work-desk.
+            var matPerson2 = TexMat("person2", 0.2f, 0f, new Color(0.42f, 0.42f, 0.4f));
+            Place("Hero_Person2", Load(TF+"person2.fbx"), new Vector3(-4.3f, 0.02f, -0.3f),  75f, 1.45f, matPerson2);
+            Place("Hero_Person3", Load(TF+"person2.fbx"), new Vector3( 4.4f, 0.02f, 0.4f),  255f, 1.45f, matPerson2);
+
+            // REAL hanging ivy (Hunyuan3D) cascading from the rafters + down the column —
+            // replaces the procedural "beads on a string" (judges: overgrown greenhouse).
+            var matVine = TexMat("hanging_vine", 0.18f, 0f, new Color(0.18f, 0.34f, 0.16f));
+            Place("Hero_Vine_C1", Load(TF+"hanging_vine.fbx"), new Vector3(-0.7f, 4.0f, 0.2f), 0f,   1.6f, matVine);
+            Place("Hero_Vine_C2", Load(TF+"hanging_vine.fbx"), new Vector3( 0.8f, 4.2f, 0.6f), 140f, 1.5f, matVine);
+            Place("Hero_Vine_R1", Load(TF+"hanging_vine.fbx"), new Vector3(-4.2f, 3.9f, 4.5f), 60f,  1.7f, matVine);
+            Place("Hero_Vine_R2", Load(TF+"hanging_vine.fbx"), new Vector3( 4.4f, 3.9f, 3.0f), 220f, 1.7f, matVine);
+            Place("Hero_Vine_R3", Load(TF+"hanging_vine.fbx"), new Vector3( 2.0f, 4.3f, -2.0f), 300f, 1.4f, matVine);
+
+            // ===== D1+D2: FOLIAGE DENSITY — make the hall read as an OVERGROWN greenhouse
+            // (reference is lush; current scene read sparse). ADDITIVE: real assets only, names
+            // start "Foli_" so the later Hide() never touches them. Three moves:
+            //   (1) IVY CLIMBING the central concrete column (floor→ridge) + the eave lines;
+            //   (2) DENSITY x3 — ferns/monstera/potted scattered in floor/mid/deep tiers;
+            //   (3) FOREGROUND FRAMING plants at the hero-camera edges (blurred by DoF).
+            var vineFbx = Load(TF+"hanging_vine.fbx");
+            var fernFbx = Load(TF+"fern.fbx");
+            var monFbx  = Load(TF+"monstera_pot_clean.fbx");
+            var potFbx  = Load(TF+"potted_plant.fbx");
+
+            // (1) IVY up the central column (r=0.85) — hug at r≈1.0, four heights, alternating
+            // sides, drape downward. Reads as creeper swallowing the pillar.
+            float[] ivyH = { 1.2f, 2.8f, 4.4f, 6.0f, 7.2f };
+            for (int i = 0; i < ivyH.Length; i++)
+            {
+                float ang = (i * 67f) * Mathf.Deg2Rad;
+                float r = 1.0f;
+                var p = new Vector3(Mathf.Cos(ang) * r, ivyH[i], Mathf.Sin(ang) * r);
+                Place($"Foli_ColIvy_{i}", vineFbx, p, i * 67f + 90f, 1.3f + 0.15f * (i % 3), matVine);
+                // opposite side too
+                var p2 = new Vector3(-Mathf.Cos(ang) * r, ivyH[i] - 0.4f, -Mathf.Sin(ang) * r);
+                Place($"Foli_ColIvyB_{i}", vineFbx, p2, i * 67f + 270f, 1.25f, matVine);
+            }
+            // ivy along the high eave lines (both glass walls), draping inward
+            for (int i = 0; i < 4; i++)
+            {
+                float z = -9f + i * 6f;
+                Place($"Foli_EaveIvyW_{i}", vineFbx, new Vector3(-6.4f, 3.7f, z), 80f, 1.5f, matVine);
+                Place($"Foli_EaveIvyE_{i}", vineFbx, new Vector3( 6.4f, 3.7f, z + 3f), 280f, 1.5f, matVine);
+            }
+
+            // (2) DENSITY — tiered scatter. Deterministic jitter from index → natural variety.
+            // floor tier along both glass walls (recedes into depth)
+            for (int i = 0; i < 6; i++)
+            {
+                float z = -6.5f + i * 3.4f;
+                float jx = ((i * 7) % 5) * 0.12f;
+                Place($"Foli_WallFernW_{i}", fernFbx, new Vector3(-6.0f + jx, 0f, z), 70f + i * 23f, 0.95f + 0.1f * (i % 3), matFern);
+                Place($"Foli_WallFernE_{i}", fernFbx, new Vector3( 6.0f - jx, 0f, z + 1.7f), 250f - i * 19f, 0.95f + 0.1f * ((i + 1) % 3), matFern);
+            }
+            // monstera clusters (scaled down vs the 0.78 m dog — were 1.35-1.5 m, towered over it)
+            Place("Foli_MonA", monFbx, new Vector3(-1.6f, 0f, 0.9f),  20f, 1.05f, matLeaf);
+            Place("Foli_MonB", monFbx, new Vector3( 1.7f, 0f, -0.6f), 200f, 1.0f, matLeaf);
+            Place("Foli_MonC", monFbx, new Vector3(-2.7f, 0f, 3.6f),  120f, 1.0f, matLeaf);
+            Place("Foli_MonD", monFbx, new Vector3( 2.9f, 0f, 4.4f),  300f, 1.0f, matLeaf);
+            // potted accents (shortened below the dog's height — Tim: pots too big)
+            Place("Foli_TubA", potFbx, new Vector3(-4.6f, 0f, -1.2f), 0f,   0.78f, matPotted);
+            Place("Foli_TubB", potFbx, new Vector3( 4.7f, 0f, -0.4f), 90f,  0.78f, matPotted);
+            Place("Foli_TubC", potFbx, new Vector3(-3.4f, 0f, 6.2f),  180f, 0.78f, matPotted);
+            Place("Foli_TubD", potFbx, new Vector3( 3.6f, 0f, 7.0f),  240f, 0.78f, matPotted);
+
+            // (3) FOREGROUND FRAMING — big ferns at the hero-cam edges (z≈-9.2 looking +Z),
+            // pushed to the frame corners so they bracket the shot and soften via DoF.
+            Place("Foli_FgFrameL", fernFbx, new Vector3(-5.3f, 0f, -8.4f), 30f, 1.6f, matFern);
+            Place("Foli_FgFrameR", fernFbx, new Vector3( 5.4f, 0f, -8.2f), 320f, 1.6f, matFern);
+            Place("Foli_FgMonL",   monFbx,  new Vector3(-4.6f, 0f, -8.9f), 60f, 1.2f, matLeaf);
+
+            // FOLLOW-CAM AWARE (judge: density went to walls/column OUTSIDE the gameplay frustum →
+            // view around the dog stayed bare). The follow-cam sits ~behind+above the corgi (spawn
+            // 0.3,0,-7.4 facing +Z), so fill the SEATING/SPAWN cone it actually frames: flanking
+            // plants beside the dog's view + low vines drooping into the top of frame + tighter
+            // foreground bracketing. Kept ≥1.6 m off the spawn so nothing clips the dog.
+            // foreground bracket (just ahead of the cam, at the frame edges → overgrown-tunnel depth)
+            Place("Foli_CamFrameL", fernFbx, new Vector3(-3.0f, 0f, -8.9f), 25f, 1.9f, matFern);
+            Place("Foli_CamFrameR", fernFbx, new Vector3( 3.2f, 0f, -8.9f), 330f, 1.9f, matFern);
+            // flanks of the spawn view (left/right of where the dog faces)
+            Place("Foli_ViewFernL1", fernFbx, new Vector3(-2.6f, 0f, -6.2f), 60f, 1.2f, matFern);
+            Place("Foli_ViewFernR1", fernFbx, new Vector3( 2.7f, 0f, -6.0f), 290f, 1.2f, matFern);
+            Place("Foli_ViewMonL",   monFbx,  new Vector3(-2.7f, 0f, -4.6f), 40f, 1.4f, matLeaf);
+            // moved further off the dog's right side (judge: leaf crowded the silhouette) + a touch smaller
+            Place("Foli_ViewMonR",   monFbx,  new Vector3( 3.4f, 0f, -3.6f), 300f, 1.3f, matLeaf);
+            Place("Foli_ViewFernL2", fernFbx, new Vector3(-3.4f, 0f, -3.0f), 110f, 1.1f, matFern);
+            Place("Foli_ViewFernR2", fernFbx, new Vector3( 3.5f, 0f, -2.6f), 250f, 1.1f, matFern);
+            Place("Foli_ViewTubL",   potFbx,  new Vector3(-1.8f, 0f, -5.4f), 0f, 1.0f, matPotted);
+            Place("Foli_ViewTubR",   potFbx,  new Vector3( 1.9f, 0f, -5.6f), 120f, 1.0f, matPotted);
+
+            // (4) GROUNDCOVER TIER + DEEP FILL (game-final judge: after the pots shrank the scene
+            // read sparse/flat and the far +Z end the dog walks toward — walk5 by the glass wall —
+            // was bare). ADDITIVE, "Foli_" so Hide() skips them, kept OFF the path centre (|x|>1.6)
+            // so nothing clips the corgi. Restores DENSITY without bringing back any tall pots.
+            // low floor-hugging groundcover (≤0.55 m) clumped on both flanks down the whole path
+            for (int i = 0; i < 14; i++)
+            {
+                float z = -7f + i * 1.15f;
+                float side = (i % 2 == 0) ? 1f : -1f;
+                float x  =  side * (1.8f + ((i * 13) % 7) * 0.45f);   // 1.8..4.5 off-centre, jittered
+                float h  = 0.40f + ((i * 5) % 4) * 0.05f;            // 0.40..0.55 m groundcover
+                Place($"Foli_Ground_{i}",  fernFbx, new Vector3(x,  0f, z),       (i * 41f) % 360f, h, matFern);
+                float x2 = -side * (2.5f + ((i * 9) % 5) * 0.40f);
+                Place($"Foli_GroundB_{i}", fernFbx, new Vector3(x2, 0f, z + 0.6f), (i * 57f + 30f) % 360f, 0.38f + ((i * 3) % 4) * 0.05f, matFern);
+            }
+            // DEEP FILL — enrich the far end (z 6..9, glass wall / maze-rug) so it isn't an empty floor
+            Place("Foli_DeepMonL",  monFbx, new Vector3(-2.4f, 0f, 6.0f),  30f, 1.10f, matLeaf);
+            Place("Foli_DeepMonR",  monFbx, new Vector3( 2.5f, 0f, 6.6f), 300f, 1.05f, matLeaf);
+            Place("Foli_DeepMonC",  monFbx, new Vector3(-0.2f, 0f, 8.2f), 160f, 1.15f, matLeaf);
+            Place("Foli_DeepFernL", fernFbx,new Vector3(-3.8f, 0f, 7.4f),  80f, 1.00f, matFern);
+            Place("Foli_DeepFernR", fernFbx,new Vector3( 3.9f, 0f, 7.8f), 250f, 1.00f, matFern);
+            Place("Foli_DeepTubL",  potFbx, new Vector3(-1.7f, 0f, 8.7f),   0f, 0.72f, matPotted);
+            Place("Foli_DeepTubR",  potFbx, new Vector3( 1.8f, 0f, 9.0f), 120f, 0.72f, matPotted);
+            // hanging vines into the UPPER follow-cam frame — but pulled to the SIDES and raised
+            // (judge regression: a low centred canopy shadowed the dog → hero sank into shadow).
+            // Now they bracket the frame edges, leaving a LIGHT GAP over the dog's centre line so
+            // the golden hour reaches the corgi; vertical greenery kept on both flanks.
+            Place("Foli_ViewVine1", vineFbx, new Vector3(-2.4f, 3.3f, -5.2f), 20f, 1.4f, matVine);
+            Place("Foli_ViewVine2", vineFbx, new Vector3( 2.5f, 3.3f, -4.6f), 200f, 1.4f, matVine);
+            Place("Foli_ViewVine3", vineFbx, new Vector3(-2.8f, 3.4f, -6.8f), 110f, 1.3f, matVine);
+            Place("Foli_ViewVine4", vineFbx, new Vector3( 2.8f, 3.4f, -7.0f), 300f, 1.3f, matVine);
+
+            // WARM HERO KEY — golden-hour light punching down onto the corgi through the canopy gap
+            // so the hero stays readable (judge: dog lost to shadow). Tracks the spawn/seating cone.
+            AddPoint("Foli_HeroKey", new Vector3(0.3f, 2.5f, -6.2f), new Color(1f, 0.80f, 0.52f), 2.4f, 6.5f);
+            AddPoint("Foli_HeroFill", new Vector3(0.3f, 1.6f, -7.6f), new Color(1f, 0.82f, 0.55f), 1.3f, 4.0f);
+
+            // GROUNDCOVER — low small ferns scattered between the pots to hide the "placed pots"
+            // look and weave the clumps into a continuous overgrown mass (judge: discrete pots vs
+            // ref's continuous weave). Deterministic jitter, kept off the dog's centre line.
+            for (int i = 0; i < 8; i++)
+            {
+                float side = (i % 2 == 0) ? -1f : 1f;
+                float x = side * (1.4f + ((i * 5) % 4) * 0.45f);
+                float z = -7.0f + i * 0.55f + ((i * 3) % 3) * 0.3f;
+                Place($"Foli_Ground_{i}", fernFbx, new Vector3(x, 0f, z), (i * 47f) % 360f, 0.55f + 0.12f * (i % 3), matFern);
+            }
+
+            // ===== DETAIL ASSETS (new Hunyuan3D pass — books/globe/crates/lab-glass + 4th NPC).
+            // 4th human: woman reading cross-legged ON THE RUG, foreground-left (ref: people
+            // dotted around the lounge). Real 3D model.
+            var matRead = TexMat("npc_reading", 0.2f, 0f, new Color(0.5f, 0.46f, 0.42f));
+            Place("Hero_NpcRead", Load(TF+"npc_reading.fbx"), new Vector3(-1.9f, 0.02f, -4.6f), 150f, 1.35f, matRead);
+            // real book pile on the floor by the rug + one on a shelf level
+            var matBookPile = TexMat("book_pile", 0.18f, 0f, new Color(0.4f, 0.3f, 0.22f));
+            Place("Hero_Books_Fl", Load(TF+"book_pile.fbx"), new Vector3(1.7f, 0.02f, -4.5f),  20f, 0.5f, matBookPile);
+            Place("Hero_Books_Sh", Load(TF+"book_pile.fbx"), new Vector3(-2.6f, 0.63f, 5.85f), -8f, 0.42f, matBookPile);
+            // vintage globe on the floor by the left bench (decoration)
+            var matGlobe = TexMat("old_globe", 0.35f, 0.2f, new Color(0.55f, 0.45f, 0.32f));
+            Place("Hero_Globe", Load(TF+"old_globe.fbx"), new Vector3(-5.6f, 0.02f, 2.0f), 30f, 1.0f, matGlobe);
+            // stacked wooden crates (lived-in storage), right side back
+            var matCrate = TexMat("wood_crate", 0.2f, 0f, new Color(0.45f, 0.38f, 0.28f));
+            Place("Hero_Crates", Load(TF+"wood_crate.fbx"), new Vector3(5.7f, 0.02f, 5.0f), -25f, 0.95f, matCrate);
+            // lab glassware on the left workbench next to the copper still
+            var matLab = TexMat("lab_glass", 0.45f, 0.2f, new Color(0.5f, 0.55f, 0.5f));
+            Place("Hero_LabGlass", Load(TF+"lab_glass.fbx"), new Vector3(-4.85f, 0.82f, -0.7f), 60f, 0.42f, matLab);
+
+            // a laptop glow on the lounger's lap (cool screen accent)
+            var lapGlow = MakeEmissive("LapGlow", new Color(0.6f, 0.85f, 1f), 1.8f, new Color(0.04f,0.05f,0.06f));
+            var lq = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            lq.name = "NPC_LapGlow"; Object.DestroyImmediate(lq.GetComponent<Collider>());
+            lq.transform.SetParent(root.transform, false);
+            lq.transform.position = new Vector3(0.55f, 0.95f, -2.05f);
+            lq.transform.rotation = Quaternion.Euler(55f, 180f, 0f);
+            lq.transform.localScale = new Vector3(0.4f, 0.28f, 1f);
+            lq.GetComponent<Renderer>().sharedMaterial = lapGlow;
+            AddPoint("Pt_Laptop", new Vector3(0.55f, 1.1f, -2.0f), new Color(0.6f,0.82f,1f), 1.3f, 2.2f);
+
+            // ===== SET-DRESSING CLUTTER — judges ×ALL rounds CRITICAL: scene ~90% empty vs
+            // the lived-in ref. Procedural lived-in props: book stacks, mugs, bottles,
+            // cable runs, a copper still (the ref's alchemy apparatus), papers. Cheap boxes/
+            // cylinders but they break the "empty pavilion" read and add story density.
+            Material bookA = DecorMat("ClutBookA", new Color(0.45f,0.20f,0.16f),0.1f);
+            Material bookB = DecorMat("ClutBookB", new Color(0.22f,0.28f,0.34f),0.1f);
+            Material bookC = DecorMat("ClutBookC", new Color(0.30f,0.34f,0.22f),0.1f);
+            Material bookD = DecorMat("ClutBookD", new Color(0.52f,0.42f,0.22f),0.1f);
+            Material ceram = DecorMat("ClutCeramic", new Color(0.62f,0.58f,0.50f),0.3f);
+            Material glassB = DecorMat("ClutGlass", new Color(0.30f,0.42f,0.34f),0.7f);
+            Material copper = DecorMat("ClutCopper", new Color(0.72f,0.42f,0.22f),0.6f);
+            var blackCable = DecorMat("ClutCable", new Color(0.06f,0.06f,0.07f),0.2f);
+            var bkMats = new[]{bookA,bookB,bookC,bookD};
+            void Cube(string nm, Vector3 p, Vector3 s, float rotY, Material m)
+            {
+                var c = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                c.name = nm; Object.DestroyImmediate(c.GetComponent<Collider>());
+                c.transform.SetParent(root.transform, false);
+                c.transform.position = p; c.transform.rotation = Quaternion.Euler(0,rotY,0);
+                c.transform.localScale = s; c.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            void Cylr(string nm, Vector3 p, float r, float h, Material m)
+            {
+                var c = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                c.name = nm; Object.DestroyImmediate(c.GetComponent<Collider>());
+                c.transform.SetParent(root.transform, false);
+                c.transform.position = p; c.transform.localScale = new Vector3(r,h*0.5f,r);
+                c.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            // book STACKS on the floor + rug edges + shelves (lived-in litter)
+            int bs = 0;
+            void BookStack(Vector3 at, int n, float rot)
+            {
+                for (int q=0;q<n;q++)
+                    Cube($"Clut_Book_{bs++}", at + new Vector3(0, 0.05f + q*0.065f, 0),
+                        new Vector3(0.30f, 0.055f, 0.40f), rot + q*7f, bkMats[(bs)%4]);
+            }
+            BookStack(new Vector3(-1.7f,0,-4.6f), 4, 12f);   // floor by the rug
+            BookStack(new Vector3(-2.0f,0,-4.2f), 3, -20f);
+            BookStack(new Vector3( 1.9f,0,-4.8f), 3, 28f);
+            BookStack(new Vector3( 0.55f,0.5f,-3.7f), 2, 0f); // on the coffee table
+            BookStack(new Vector3(-2.55f,0.62f,5.8f), 3, 4f); // on a shelf level
+            // mugs + bottles on the coffee table & floor
+            Cylr("Clut_Mug1", new Vector3(0.1f,0.55f,-3.55f), 0.05f,0.10f, ceram);
+            Cylr("Clut_Mug2", new Vector3(0.32f,0.55f,-3.85f),0.05f,0.09f, ceram);
+            Cylr("Clut_Bottle1", new Vector3(-1.0f,0.13f,-4.9f),0.045f,0.26f, glassB);
+            Cylr("Clut_Bottle2", new Vector3( 1.3f,0.13f,-5.0f),0.05f,0.30f, glassB);
+            Cylr("Clut_Bottle3", new Vector3( 4.7f,0.13f,-3.6f),0.05f,0.28f, glassB);
+            // cable runs across the floor (thin flattened cylinders as a leading line)
+            Cube("Clut_Cable1", new Vector3(2.6f,0.02f,0.4f), new Vector3(0.04f,0.02f,5.0f), 18f, blackCable);
+            Cube("Clut_Cable2", new Vector3(3.0f,0.02f,-0.2f), new Vector3(0.04f,0.02f,4.2f), -8f, blackCable);
+            Cube("Clut_Cable3", new Vector3(-3.4f,0.02f,1.2f), new Vector3(0.04f,0.02f,3.6f), 24f, blackCable);
+            // COPPER STILL / alchemy apparatus (left workbench zone, the ref's signature)
+            var benchMat = DecorMat("ClutBench", new Color(0.34f,0.24f,0.16f), 0.16f);
+            Cube("Clut_Bench", new Vector3(-5.3f,0.4f,-1.0f), new Vector3(1.4f,0.8f,0.7f), 8f, benchMat);
+            Cylr("Clut_Still_Body", new Vector3(-5.3f,1.05f,-1.0f),0.22f,0.34f, copper);
+            Ball2("Clut_Still_Dome", new Vector3(-5.3f,1.28f,-1.0f),0.34f, copper);
+            Cylr("Clut_Still_Neck", new Vector3(-5.1f,1.45f,-0.95f),0.04f,0.28f, copper);
+            Cylr("Clut_Flask", new Vector3(-4.85f,0.88f,-1.0f),0.06f,0.14f, glassB);
+            // papers scattered
+            Cube("Clut_Paper1", new Vector3(-1.3f,0.025f,-3.9f), new Vector3(0.3f,0.005f,0.42f), 22f, ceram);
+            Cube("Clut_Paper2", new Vector3( 0.9f,0.025f,-4.4f), new Vector3(0.3f,0.005f,0.42f), -34f, ceram);
+
+            // local sphere helper for the still dome (the earlier Ball() needs a parent)
+            // (defined as Ball2 to avoid clashing with the NPC-local Ball)
+            void Ball2(string nm, Vector3 p, float d, Material m)
+            {
+                var s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                s.name = nm; Object.DestroyImmediate(s.GetComponent<Collider>());
+                s.transform.SetParent(root.transform, false);
+                s.transform.position = p; s.transform.localScale = new Vector3(d,d*0.7f,d);
+                s.GetComponent<Renderer>().sharedMaterial = m;
+            }
+
+            // WATCH OUT — REAL spray-paint graffiti decal (Gemini) on the camera-facing
+            // column face (ref signature). The concrete bg of the image blends into the
+            // column; the dripping orange letters read as the painted tag.
+            var paintMat = (Material)null;
+            {
+                var ps = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                paintMat = new Material(ps) { name = "WatchOutDecal" };
+                var wtex = RealTex("Assets/_Project/Vendor/Backdrops/watchout.png");
+                if (wtex != null) { paintMat.SetTexture("_BaseMap", wtex); paintMat.SetColor("_BaseColor", Color.white); }
+                else { paintMat.EnableKeyword("_EMISSION"); paintMat.SetColor("_EmissionColor", new Color(1f,0.45f,0.12f)*1.6f); }
+                if (paintMat.HasProperty("_Smoothness")) paintMat.SetFloat("_Smoothness", 0.04f);
+            }
+            var pw = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            pw.name="Clut_WatchOut"; Object.DestroyImmediate(pw.GetComponent<Collider>());
+            pw.transform.SetParent(root.transform,false);
+            pw.transform.position = new Vector3(-0.2f, 2.0f, -0.9f); // on the south column face, facing camera
+            pw.transform.rotation = Quaternion.Euler(0,180f,2f);
+            pw.transform.localScale = new Vector3(1.5f,0.78f,1f); // 2:1 image aspect
+            pw.GetComponent<Renderer>().sharedMaterial = paintMat;
+
+            // HERO CORGI "Kafka" — the game's character + the reference's foreground
+            // anchor (acceptance ×5: "no corgi, empty foreground"). Real Tripo model +
+            // baked textures, placed front-centre facing the camera.
+            var corgiSh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var corgiMat = new Material(corgiSh) { name = "Corgi_Mat" };
+            var cAlb = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/_Project/Models/kafka_textures/cardiganwelshcorgi3dmodel_basecolor.png");
+            var cNor = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/_Project/Models/kafka_textures/cardiganwelshcorgi3dmodel_normal.png");
+            if (cAlb != null) { corgiMat.SetTexture("_BaseMap", cAlb); corgiMat.SetColor("_BaseColor", Color.white); }
+            else if (corgiMat.HasProperty("_BaseColor")) corgiMat.SetColor("_BaseColor", new Color(0.55f, 0.40f, 0.26f));
+            if (cNor != null && corgiMat.HasProperty("_BumpMap")) { corgiMat.SetTexture("_BumpMap", cNor); corgiMat.EnableKeyword("_NORMALMAP"); }
+            if (corgiMat.HasProperty("_Smoothness")) corgiMat.SetFloat("_Smoothness", 0.25f);
+            // G2 (final): the Blender IK-walk FBX exported with NO action and Unity dropped its
+            // skinned renderer (dog vanished 3×). Abandoned. Back to the PROVEN kafka_corgi.fbx
+            // (renders + Tim confirmed visible). The gait is now driven PROCEDURALLY on this exact
+            // skeleton by CorgiProceduralAnimator — a 4-beat lateral-sequence walk with hip-sweep
+            // push-off (fixes "топает, не отталкивается") and phase that reverses with backward
+            // motion (fixes "лунная походка"). No FBX swap → cannot vanish.
+            const string corgiFbx = "Assets/_Project/Models/kafka_corgi.fbx";
+            var corgi = Load(corgiFbx, "Assets/_Project/Models/kafka_corgi.fbx");
+            // nose points along +X → yaw -90 aligns it with root.forward (+Z).
+            var corgiMesh = Place("Hero_CorgiMesh", corgi, new Vector3(0.3f, 0f, -7.4f), -90f, 0.78f, corgiMat);
+            GameObject corgiGO = null;
+            if (corgiMesh != null)
+            {
+                var corgiRoot = new GameObject("Hero_Corgi");
+                corgiRoot.transform.SetParent(corgiMesh.transform.parent, false);
+                corgiRoot.transform.position = corgiMesh.transform.position;
+                corgiRoot.transform.rotation = Quaternion.identity; // root.forward = +Z (nose); controller drives yaw
+                corgiMesh.transform.SetParent(corgiRoot.transform, worldPositionStays: true);
+                // controllable body
+                var cc = corgiRoot.AddComponent<CharacterController>();
+                cc.radius = 0.25f; cc.height = 0.6f; cc.center = new Vector3(0f, 0.3f, 0f);
+                cc.slopeLimit = 50f; cc.stepOffset = 0.2f;
+                // EXACT meadow mechanic (Tim: "сделай как на полянке — там камера была лучше"):
+                // KafkaDirectController on the root + Cinemachine FreeLook behind. It also sets
+                // IsWalking on the child Animator, so the Walk clip drives the legs.
+                corgiRoot.AddComponent<KafkaDirectController>();
+                // ANIMATION: legs + head + tail are driven PROCEDURALLY in LateUpdate
+                // (CorgiProceduralAnimator) directly on the Tripo skeleton — no Animator clip
+                // needed (the baked Walk_10 was a stiff tiptoe and the IK-FBX path kept breaking
+                // the renderer). We keep an Animator with NO controller only so the rig stays a
+                // skinned hierarchy; the SkinnedMeshRenderer reads the bone transforms our script
+                // sets each frame. applyRootMotion off → movement is the CharacterController.
+                var anim = corgiMesh.GetComponent<Animator>();
+                if (anim == null) anim = corgiMesh.AddComponent<Animator>();
+                anim.runtimeAnimatorController = null;
+                anim.applyRootMotion = false;
+                if (corgiMesh.GetComponent<CorgiStateAnimator>() == null)
+                    corgiMesh.AddComponent<CorgiStateAnimator>();
+
+                // VANISH FIX (Build K): the IK-baked FBX moves with the camera but the mesh was
+                // invisible — the SkinnedMeshRenderer's localBounds came out stale/degenerate from
+                // the Blender bake, so Unity frustum-culled it. updateWhenOffscreen=true forces
+                // Unity to recompute bounds from the live deformed mesh every frame → never wrongly
+                // culled. Also widen localBounds as belt-and-suspenders. Diagnostic log tells us
+                // (a) how many skinned renderers exist and (b) their bounds (culling vs below-floor).
+                var smrs = corgiRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                Debug.Log($"[CorgiDiag] SkinnedMeshRenderers under Hero_Corgi = {smrs.Length}");
+                foreach (var smr in smrs)
+                {
+                    smr.updateWhenOffscreen = true;
+                    smr.enabled = true;
+                    var lb = smr.localBounds;
+                    Debug.Log($"[CorgiDiag]   '{smr.name}' enabled={smr.enabled} mesh={(smr.sharedMesh!=null?smr.sharedMesh.name:"NULL")} localBounds center={lb.center} size={lb.size}");
+                    // ensure a sane bounds box so even with updateWhenOffscreen off it would render
+                    if (lb.size.x < 0.05f || lb.size.y < 0.05f || lb.size.z < 0.05f)
+                        smr.localBounds = new Bounds(new Vector3(0f, 0.3f, 0f), new Vector3(1.4f, 1.2f, 1.4f));
+                }
+                // also log the world-space renderer bounds + Y floor to catch below-deck placement
+                var rends = corgiRoot.GetComponentsInChildren<Renderer>(true);
+                if (rends.Length > 0)
+                {
+                    var wb = rends[0].bounds;
+                    foreach (var r in rends) wb.Encapsulate(r.bounds);
+                    Debug.Log($"[CorgiDiag] WORLD bounds center={wb.center} size={wb.size} minY={wb.min.y} (deck≈0)");
+                }
+                corgiGO = corgiRoot;
+            }
+            AddPoint("Pt_CorgiKey", new Vector3(0.3f, 1.3f, -8.4f), new Color(1f,0.78f,0.5f), 1.6f, 3.0f); // hero rim/key on the dog
+
+            // CAMERA — Cinemachine FreeLook behind the corgi, the SAME rig Tim approved in the
+            // meadow ("сделай как на полянке"). The old KafkaFollowCamera sat on the nose side
+            // → "вижу морду куда ни повернусь". FreeLook starts behind (X=180) and RECENTERS to
+            // the dog's heading, so turning keeps the camera at the dog's back automatically.
+            if (corgiGO != null)
+            {
+                var playerGO = GameObject.Find("Player");
+                if (playerGO != null)
+                {
+                    var fps = playerGO.GetComponent<Afterhumans.Player.SimpleFirstPersonController>();
+                    if (fps != null) fps.enabled = false;
+                    var pcc = playerGO.GetComponent<CharacterController>();
+                    if (pcc != null) pcc.enabled = false;
+                }
+                var pcam = FindPlayerCamera();
+                if (pcam != null)
+                {
+                    pcam.transform.SetParent(null, worldPositionStays: true); // brain owns the transform
+                    var oldFollow = pcam.GetComponent<Afterhumans.CameraRigs.KafkaFollowCamera>();
+                    if (oldFollow != null) Object.DestroyImmediate(oldFollow);
+                    if (pcam.GetComponent<CinemachineBrain>() == null) pcam.gameObject.AddComponent<CinemachineBrain>();
+                    pcam.fieldOfView = 50f;
+
+                    var flGO = new GameObject("CM_FreeLook_Corgi");
+                    var fl = flGO.AddComponent<CinemachineFreeLook>();
+                    fl.Follow = corgiGO.transform;
+                    fl.LookAt = corgiGO.transform;
+                    // NORMAL 3rd-person distance for a CONFINED interior (greenhouse): ~3 m.
+                    // This restores the original good framing (session start). Two failures to
+                    // avoid: (a) CinemachineCollider PullCameraForward → "в упор" to the back;
+                    // (b) too-far orbits (6-7 m) → camera clips THROUGH the back wall, dog hidden.
+                    // ~3 m + NO collider = dog visible, scene visible, stays inside the room.
+                    // Best-practice (gameAIPro ch.47, CG Cookie): close cam in tight spaces.
+                    fl.m_Orbits[0] = new CinemachineFreeLook.Orbit(2.0f, 2.8f);  // top
+                    fl.m_Orbits[1] = new CinemachineFreeLook.Orbit(1.3f, 3.0f);  // middle (main)
+                    fl.m_Orbits[2] = new CinemachineFreeLook.Orbit(0.5f, 2.7f);  // bottom
+                    fl.m_XAxis.m_MaxSpeed = 220f;
+                    fl.m_XAxis.m_InputAxisName = "Mouse X";
+                    fl.m_XAxis.Value = 180f; // start behind the dog
+                    fl.m_YAxis.m_MaxSpeed = 2f;
+                    fl.m_YAxis.m_InputAxisName = "Mouse Y";
+                    fl.m_YAxis.Value = 0.5f;  // slightly above eye line
+                    // auto-recenter behind the dog's heading → camera snaps to the back FAST,
+                    // even at idle (QA: idle showed the face because recenter was too slow).
+                    fl.m_RecenterToTargetHeading.m_enabled = true;
+                    fl.m_RecenterToTargetHeading.m_RecenteringTime = 0.4f;
+                    fl.m_RecenterToTargetHeading.m_WaitTime = 0.1f;
+                    Debug.Log("[RealAssets] 3rd-person corgi: KafkaDirectController + Cinemachine FreeLook (meadow rig), FPS disabled");
+                }
+            }
+
+            // Hide the procedural greybox props now replaced by real hero models:
+            // sofa, coffee table, server rack, CRT screens, plant blobs, laptop.
+            // KEEP: desks, rug, books-on-rug, hanging vines (ColIvy/Vine), forest.
+            Hide("Bush_", "Frond_", "Pot_", "Leaf_", "Books_Coffee",
+                 "Sofa_", "Table_", "Server_", "CRT_", "Laptop");
+            // A2: hide the Hunyuan3D humans — they came out headless/half-headed (one clips
+            // into the sofa). Renderers live on FBX child meshes, so hide whole subtrees.
+            // Regenerated with proper heads in phase E, then re-shown.
+            HideTree("Hero_Person", "Hero_NpcRead");
+            Debug.Log("[RealAssets] HERO assets placed (real sofa/table/server/shelves/CRT/ferns + LED/CRT glow)");
+        }
+
+        /// <summary>URP/Lit emissive material (dark base + glowing emission). Works
+        /// in the headless SubmitRenderRequest path because emission is a shader
+        /// term, not a scene light — gives us the ref's green CRT / server glow.</summary>
+        private static Material MakeEmissive(string name, Color emission, float intensity, Color baseCol)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var mat = new Material(shader) { name = name };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", baseCol);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.2f);
+            mat.EnableKeyword("_EMISSION");
+            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+            if (mat.HasProperty("_EmissionColor"))
+                mat.SetColor("_EmissionColor", emission * intensity);
+            return mat;
+        }
+
+        /// <summary>Solid-color URP/Lit material (no texture) — quick decor surfaces.</summary>
+        private static Material DecorMat(string name, Color col, float smoothness)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var mat = new Material(shader) { name = name };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", col);
+            if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", smoothness);
+            return mat;
+        }
+
+        /// <summary>
+        /// The lived-in greenhouse cluster from ref_botanika: persian rug, leather
+        /// sofa + coffee table, two work desks with glowing green CRTs, bookcases,
+        /// a server rack with green LEDs, and potted plants. Pure procedural massing
+        /// (boxes/cylinders/spheres) + emissive accents — reads in headless render.
+        /// </summary>
+        private static void BuildDecor(GameObject greybox)
+        {
+            var decor = new GameObject("Decor");
+            decor.transform.SetParent(greybox.transform, worldPositionStays: false);
+
+            // Palette — furniture now carries REAL 2K textures (acceptance ×5:
+            // "untextured greybox furniture / sofa is a flat blob"). fabric weave for
+            // upholstery, painterly wood for desks/table.
+            const string PHm = "Assets/_Project/Vendor/PolyHaven/Materials/";
+            Material TexDecor(string name, string albRel, string norRel, Color tint, float smooth, float tile)
+            {
+                var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                var m = new Material(sh) { name = name };
+                var a = RealTex(PHm + albRel);
+                var nrm = norRel != null ? RealTex(PHm + norRel) : null;
+                if (a != null) { m.SetTexture("_BaseMap", a); m.SetTextureScale("_BaseMap", new Vector2(tile, tile)); }
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
+                if (nrm != null && m.HasProperty("_BumpMap"))
+                { m.SetTexture("_BumpMap", nrm); m.SetTextureScale("_BumpMap", new Vector2(tile, tile)); m.EnableKeyword("_NORMALMAP"); }
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smooth);
+                return m;
+            }
+            var leather   = TexDecor("Leather",  "fabric_sofa/fabric_sofa_albedo_2k.png", "fabric_sofa/fabric_sofa_normal_2k.png", new Color(0.40f, 0.24f, 0.16f), 0.34f, 1.6f);
+            var woodDark  = TexDecor("WoodDark", "wood_painterly/wood_painterly_albedo_2k.png", "wood_painterly/wood_painterly_normal_2k.png", new Color(0.45f, 0.33f, 0.21f), 0.18f, 2.0f);
+            var woodWarm  = TexDecor("WoodWarm", "wood_painterly/wood_painterly_albedo_2k.png", "wood_painterly/wood_painterly_normal_2k.png", new Color(0.62f, 0.46f, 0.30f), 0.16f, 1.5f);
+            var metalDark = DecorMat("MetalDark",  new Color(0.14f, 0.15f, 0.17f), 0.5f);
+            // REAL Persian-carpet albedo (Gemini) — judges every round: "rug is a flat red
+            // box with no pattern". tile=1 so the single ornate medallion fills the rug.
+            Material rugRed;
+            {
+                var rs = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                rugRed = new Material(rs) { name = "RugPersian" };
+                var rtex = RealTex("Assets/_Project/Vendor/Backdrops/persian_rug.png");
+                if (rtex != null) { rugRed.SetTexture("_BaseMap", rtex); rugRed.SetTextureScale("_BaseMap", Vector2.one); rugRed.SetColor("_BaseColor", Color.white); }
+                else if (rugRed.HasProperty("_BaseColor")) rugRed.SetColor("_BaseColor", new Color(0.46f, 0.17f, 0.13f));
+                if (rugRed.HasProperty("_Smoothness")) rugRed.SetFloat("_Smoothness", 0.08f);
+            }
+            var plantPot  = DecorMat("Terracotta", new Color(0.48f, 0.26f, 0.16f), 0.1f);
+            var foliage   = DecorMat("Foliage",    new Color(0.20f, 0.36f, 0.16f), 0.1f);
+            var paper     = DecorMat("Paper",      new Color(0.86f, 0.82f, 0.72f), 0.05f);
+            var crtGreen  = MakeEmissive("CRT_Green", new Color(0.45f, 0.85f, 0.42f), 2.4f, new Color(0.05f, 0.08f, 0.05f)); // phosphor — boosted past new bloom threshold (1.05) so screens GLOW (acceptance: CRT not reading)
+            var crtSpill  = MakeEmissive("CRT_Spill", new Color(0.42f, 0.82f, 0.40f), 0.9f, new Color(0.04f, 0.07f, 0.04f));
+            var ledGreen  = MakeEmissive("LED_Green", new Color(0.40f, 1.0f, 0.45f), 3.2f, new Color(0.04f, 0.06f, 0.04f));
+            var ledRed    = MakeEmissive("LED_Red",   new Color(1.0f, 0.20f, 0.16f), 4.0f, new Color(0.08f, 0.03f, 0.03f));
+            var ledAmber  = MakeEmissive("LED_Amber", new Color(1.0f, 0.66f, 0.25f), 2.6f, new Color(0.08f, 0.05f, 0.02f));
+            var book = new[] {
+                DecorMat("Book1", new Color(0.45f, 0.18f, 0.15f), 0.05f),
+                DecorMat("Book2", new Color(0.20f, 0.30f, 0.40f), 0.05f),
+                DecorMat("Book3", new Color(0.35f, 0.32f, 0.18f), 0.05f),
+                DecorMat("Book4", new Color(0.22f, 0.34f, 0.22f), 0.05f),
+            };
+
+            GameObject Box(string n, Vector3 p, Vector3 s, Material m, bool collide = true)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = n;
+                go.transform.SetParent(decor.transform, worldPositionStays: false);
+                go.transform.position = p; go.transform.localScale = s;
+                go.GetComponent<Renderer>().sharedMaterial = m;
+                if (!collide) Object.DestroyImmediate(go.GetComponent<Collider>());
+                else ColliderHelper.MarkStaticProp(go);
+                return go;
+            }
+            void Cyl(string n, Vector3 p, float r, float h, Material m)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                go.name = n; go.transform.SetParent(decor.transform, worldPositionStays: false);
+                go.transform.position = p + Vector3.up * h * 0.5f;
+                go.transform.localScale = new Vector3(r * 2f, h * 0.5f, r * 2f);
+                go.GetComponent<Renderer>().sharedMaterial = m;
+                Object.DestroyImmediate(go.GetComponent<Collider>());
+            }
+            // One flattened leaf-blob (deterministic jitter from seed → varied mass).
+            void Leaf(string n, Vector3 p, float d, Material m, int seed)
+            {
+                float jx = ((seed * 37) % 13 - 6) * 0.03f;
+                float jz = ((seed * 53) % 11 - 5) * 0.03f;
+                var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                go.name = n; go.transform.SetParent(decor.transform, worldPositionStays: false);
+                go.transform.position = p + new Vector3(jx, 0f, jz);
+                go.transform.localScale = new Vector3(d, d * 0.62f, d); // flattened = leafy
+                go.GetComponent<Renderer>().sharedMaterial = m;
+                Object.DestroyImmediate(go.GetComponent<Collider>());
+            }
+            // Dense leafy mass = many overlapping flattened blobs around a point.
+            void Clump(string n, Vector3 c, float size, Material[] pal, int n_blobs, int seed)
+            {
+                for (int b = 0; b < n_blobs; b++)
+                {
+                    float a = (b * 2.39996f + seed); // golden-angle spread
+                    float rad = size * (0.18f + 0.40f * ((b * 7 + seed) % 5) / 4f);
+                    float yy = size * (((b * 11 + seed) % 7) / 6f - 0.2f);
+                    var p = c + new Vector3(Mathf.Cos(a) * rad, yy, Mathf.Sin(a) * rad);
+                    Leaf($"{n}_{b}", p, size * (0.55f + 0.35f * ((b * 3 + seed) % 4) / 3f), pal[(b + seed) % pal.Length], b + seed);
+                }
+            }
+            // CRT workstation: dark body + glowing green screen on the front (-Z face).
+            void Workstation(string id, Vector3 deskC)
+            {
+                Box($"Desk_{id}", deskC + new Vector3(0, 0.37f, 0), new Vector3(1.6f, 0.06f, 0.75f), woodWarm);
+                Box($"DeskLegA_{id}", deskC + new Vector3(-0.72f, 0.18f, -0.3f), new Vector3(0.06f, 0.37f, 0.06f), woodDark);
+                Box($"DeskLegB_{id}", deskC + new Vector3(0.72f, 0.18f, -0.3f), new Vector3(0.06f, 0.37f, 0.06f), woodDark);
+                Box($"DeskLegC_{id}", deskC + new Vector3(-0.72f, 0.18f, 0.3f), new Vector3(0.06f, 0.37f, 0.06f), woodDark);
+                Box($"DeskLegD_{id}", deskC + new Vector3(0.72f, 0.18f, 0.3f), new Vector3(0.06f, 0.37f, 0.06f), woodDark);
+                var monC = deskC + new Vector3(0.1f, 0.68f, 0.12f);
+                Box($"CRT_Body_{id}", monC, new Vector3(0.52f, 0.44f, 0.46f), metalDark);
+                Box($"CRT_Screen_{id}", monC + new Vector3(0, 0.02f, -0.24f), new Vector3(0.40f, 0.32f, 0.04f), crtGreen, false);
+                // Green GLOW SPILL — a soft oversized emissive card just in front of the
+                // screen reads as the screen lighting the desk (QA: emissive had no spill).
+                Box($"CRT_Spill_{id}", monC + new Vector3(0, 0.02f, -0.30f), new Vector3(0.74f, 0.62f, 0.02f), crtSpill, false);
+                Box($"CRT_DeskGlow_{id}", deskC + new Vector3(0.1f, 0.41f, -0.10f), new Vector3(0.62f, 0.02f, 0.5f), crtSpill, false);
+                Box($"Keyboard_{id}", deskC + new Vector3(0, 0.42f, -0.18f), new Vector3(0.45f, 0.04f, 0.18f), metalDark, false);
+            }
+
+            // ---- PERSIAN RUG (center, under the lounge) ----
+            Box("Rug_Persian", new Vector3(0f, 0.02f, -2.6f), new Vector3(4.4f, 0.04f, 5.6f), rugRed, false);
+            // A2: rug fringe REMOVED — the dashed row of tan boxes read as a yellow/black
+            // hazard-tape placeholder strip across the floor (judges + Tim flagged it).
+            // The rug texture itself carries the woven edge; no procedural tassels needed.
+
+            // ---- LEATHER CHESTERFIELD (center, backrest north, opens south) — built
+            // for a READABLE soft-furniture silhouette: tall back, rolled arms,
+            // plump seat + back cushions (QA: sofa read as a tumba/block). ----
+            Box("Sofa_Base",  new Vector3(0f, 0.26f, -2.2f), new Vector3(2.7f, 0.40f, 1.15f), leather);
+            Box("Sofa_Back",  new Vector3(0f, 0.82f, -1.74f), new Vector3(2.7f, 0.95f, 0.26f), leather);
+            // rolled arms (box + capped cylinder roll on top)
+            Box("Sofa_ArmL",  new Vector3(-1.32f, 0.50f, -2.2f), new Vector3(0.30f, 0.66f, 1.15f), leather);
+            Box("Sofa_ArmR",  new Vector3(1.32f, 0.50f, -2.2f), new Vector3(0.30f, 0.66f, 1.15f), leather);
+            void ArmRoll(string n, float x)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                go.name = n; go.transform.SetParent(decor.transform, worldPositionStays: false);
+                go.transform.position = new Vector3(x, 0.86f, -2.2f);
+                go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // axis along Z
+                go.transform.localScale = new Vector3(0.30f, 0.58f, 0.30f);
+                go.GetComponent<Renderer>().sharedMaterial = leather;
+                Object.DestroyImmediate(go.GetComponent<Collider>());
+            }
+            ArmRoll("Sofa_RollL", -1.32f);
+            ArmRoll("Sofa_RollR", 1.32f);
+            // seat cushions (plump) + back cushions
+            Box("Sofa_SeatL", new Vector3(-0.55f, 0.52f, -2.25f), new Vector3(1.0f, 0.22f, 0.92f), leather, false);
+            Box("Sofa_SeatR", new Vector3(0.55f, 0.52f, -2.25f), new Vector3(1.0f, 0.22f, 0.92f), leather, false);
+            Box("Sofa_CushBL", new Vector3(-0.55f, 0.78f, -1.92f), new Vector3(0.92f, 0.5f, 0.18f), leather, false);
+            Box("Sofa_CushBR", new Vector3(0.55f, 0.78f, -1.92f), new Vector3(0.92f, 0.5f, 0.18f), leather, false);
+
+            // ---- COFFEE TABLE + book stack (south of sofa) ----
+            Box("Table_Top",  new Vector3(0f, 0.40f, -3.7f), new Vector3(1.4f, 0.06f, 0.8f), woodWarm);
+            Box("Table_LegA", new Vector3(-0.62f, 0.20f, -3.4f), new Vector3(0.06f, 0.40f, 0.06f), woodDark);
+            Box("Table_LegB", new Vector3(0.62f, 0.20f, -3.4f), new Vector3(0.06f, 0.40f, 0.06f), woodDark);
+            Box("Table_LegC", new Vector3(-0.62f, 0.20f, -4.0f), new Vector3(0.06f, 0.40f, 0.06f), woodDark);
+            Box("Table_LegD", new Vector3(0.62f, 0.20f, -4.0f), new Vector3(0.06f, 0.40f, 0.06f), woodDark);
+            Box("Books_Coffee", new Vector3(-0.3f, 0.47f, -3.7f), new Vector3(0.32f, 0.10f, 0.42f), book[1], false);
+            Box("Books_Coffee2", new Vector3(-0.28f, 0.55f, -3.62f), new Vector3(0.28f, 0.06f, 0.36f), book[2], false);
+            Box("Laptop", new Vector3(0.35f, 0.46f, -3.6f), new Vector3(0.38f, 0.03f, 0.28f), metalDark, false);
+            Box("Laptop_Screen", new Vector3(0.35f, 0.58f, -3.74f), new Vector3(0.38f, 0.24f, 0.02f), metalDark, false);
+            // lived-in clutter: mugs, scattered books on the rug, a coiled cable, cushion
+            Cyl("Mug1", new Vector3(0.05f, 0.43f, -3.85f), 0.05f, 0.09f, paper);
+            Cyl("Mug2", new Vector3(-0.55f, 0.0f, -5.0f), 0.05f, 0.09f, book[0]);
+            Box("RugBooks1", new Vector3(0.9f, 0.05f, -4.6f), new Vector3(0.34f, 0.08f, 0.46f), book[3], false);
+            Box("RugBooks2", new Vector3(1.0f, 0.12f, -4.55f), new Vector3(0.30f, 0.06f, 0.40f), book[1], false);
+            Box("Cable1", new Vector3(-1.2f, 0.03f, -3.4f), new Vector3(1.8f, 0.04f, 0.05f), metalDark, false);
+            Box("Cable2", new Vector3(-2.0f, 0.03f, -2.6f), new Vector3(0.05f, 0.04f, 1.6f), metalDark, false);
+            Box("FloorCushion", new Vector3(-1.6f, 0.12f, -4.4f), new Vector3(0.7f, 0.22f, 0.7f), leather, false);
+
+            // ---- TWO CRT WORKSTATIONS flanking (west & east) ----
+            Workstation("W", new Vector3(-4.6f, 0f, 1.5f));
+            Workstation("E", new Vector3(4.6f, 0f, -1.0f));
+
+            // ---- BOOKCASES (north, flanking the column zone) ----
+            void Bookcase(string id, Vector3 c)
+            {
+                Box($"Bookcase_{id}", c + new Vector3(0, 1.1f, 0), new Vector3(0.45f, 2.2f, 1.8f), woodDark);
+                for (int s = 0; s < 4; s++)
+                    for (int b = 0; b < 6; b++)
+                        Box($"Bk_{id}_{s}_{b}", c + new Vector3(0.06f, 0.45f + s * 0.5f, -0.7f + b * 0.28f),
+                            new Vector3(0.30f, 0.34f, 0.22f), book[(s + b) % book.Length], false);
+            }
+            Bookcase("W", new Vector3(-6.4f, 0f, 7.5f));
+            Bookcase("E", new Vector3(6.4f, 0f, 9.0f));
+
+            var foliageDk = DecorMat("FoliageDk", new Color(0.10f, 0.20f, 0.09f), 0.04f);
+            var foliageMd = DecorMat("FoliageMd", new Color(0.16f, 0.30f, 0.13f), 0.04f);
+            var greens = new[] { foliageDk, foliageMd, foliage }; // dark→mid (no balloons)
+            // COOL exterior foliage (acceptance: ref = warm interior vs COOL blue-green
+            // forest/sky outside through glass; current frame was mono-orange, no contrast).
+            var foliageExtDk = DecorMat("FoliageExtDk", new Color(0.16f, 0.27f, 0.24f), 0.04f); // lighter so trees read against bright sky
+            var foliageExtMd = DecorMat("FoliageExtMd", new Color(0.24f, 0.36f, 0.30f), 0.04f);
+
+            // ---- SERVER RACK — DARK tall body with a scatter of SMALL bright LED
+            // dots (QA/Tim: green-painted-fridge → dark rack with tiny coloured
+            // points). Two stacked units; LEDs in pairs across the face. ----
+            var rackBody = DecorMat("RackBody", new Color(0.08f, 0.09f, 0.11f), 0.4f);
+            Box("Server_Body", new Vector3(5.25f, 1.25f, 2f), new Vector3(0.7f, 2.5f, 0.62f), rackBody);
+            Box("Server_Seam", new Vector3(4.91f, 1.25f, 2f), new Vector3(0.02f, 2.4f, 0.5f), metalDark, false); // recessed front panel
+            for (int s = 0; s < 11; s++)
+            {
+                float y = 0.35f + s * 0.21f;
+                var mA = (s % 3 == 0) ? ledGreen : (s % 4 == 0) ? ledRed : ledGreen;
+                var mB = (s % 5 == 0) ? ledAmber : (s % 2 == 0) ? ledRed : ledGreen;
+                Box($"Server_LED_{s}a", new Vector3(4.90f, y, 1.86f), new Vector3(0.025f, 0.05f, 0.07f), mA, false);
+                Box($"Server_LED_{s}b", new Vector3(4.90f, y, 2.06f), new Vector3(0.025f, 0.05f, 0.07f), mB, false);
+            }
+
+            // ---- POTTED PLANTS — dense leafy MASSES (Clump), not lollipops. ----
+            void Plant(string id, Vector3 p, float scale)
+            {
+                Cyl($"Pot_{id}", p, 0.30f * scale, 0.40f * scale, plantPot);
+                var c = p + new Vector3(0f, 0.4f * scale + 0.5f * scale, 0f);
+                Clump($"Bush_{id}", c, 0.95f * scale, greens, 14, id.Length * 7 + 3);
+                // a few upward fronds
+                for (int f = 0; f < 4; f++)
+                    Leaf($"Frond_{id}_{f}", c + new Vector3((f - 1.5f) * 0.22f * scale, (0.4f + f * 0.12f) * scale, 0f),
+                        0.5f * scale, greens[f % 3], f + id.Length);
+            }
+            Plant("SW", new Vector3(-6.0f, 0f, -6.5f), 1.2f);
+            Plant("SE", new Vector3(6.0f, 0f, -7.5f), 1.1f);
+            Plant("NW", new Vector3(-6.2f, 0f, 11.5f), 1.0f);
+            Plant("NE", new Vector3(6.0f, 0f, 12.0f), 1.0f);
+            Plant("MidW", new Vector3(-5.6f, 0f, 3.5f), 0.9f);
+            Plant("MidE", new Vector3(5.8f, 0f, 5.0f), 0.9f);
+            // FOREGROUND ferns framing the lower corners of the forward/hero shots
+            // (cams at Z≈-8.2/-9.5 → these sit AHEAD at the edges; smaller so they
+            // frame, not engulf; well clear of the lounge cam which sits further N).
+            Plant("FrontL", new Vector3(-3.0f, 0f, -5.2f), 1.1f);
+            Plant("FrontR", new Vector3(3.0f, 0f, -5.6f), 1.1f);
+            // side dressing along the walls (out of the camera throats).
+            Plant("SideW", new Vector3(-6.2f, 0f, -2.0f), 0.9f);
+            Plant("SideE", new Vector3(6.2f, 0f, -2.0f), 0.9f);
+
+            // A RAGGED hanging strand: thin core + MANY tiny leaves with heavy jitter,
+            // denser at top, trailing thin at the bottom — a real ivy drip, not a
+            // chain of equal balls (QA: vines were beads-on-string).
+            void VineStrand(string id, Vector3 top, float len, int seed, float thick)
+            {
+                Box($"{id}_core", top + new Vector3(0, -len * 0.5f, 0), new Vector3(thick, len, thick), greens[seed % 3], false);
+                int leaves = 10 + (seed % 6);
+                for (int s = 0; s < leaves; s++)
+                {
+                    float f = s / (float)(leaves - 1);              // 0 top → 1 bottom
+                    float jx = ((seed * 17 + s * 31) % 19 - 9) * 0.022f;
+                    float jz = ((seed * 23 + s * 13) % 17 - 8) * 0.022f;
+                    float y = top.y - 0.1f - (len - 0.1f) * f;
+                    float d = Mathf.Lerp(0.30f, 0.12f, f) * (0.7f + ((s * 7 + seed) % 5) / 5f); // shrink downward
+                    Leaf($"{id}_l{s}", new Vector3(top.x + jx, y, top.z + jz), d, greens[(s + seed) % 3], s + seed);
+                }
+            }
+            // Hanging vines off the vault — FEW, framing the edges (not a curtain).
+            int vi = 0;
+            foreach (var vz in new[] { -3f, 4f, 9f, 12.5f, -8f })
+            {
+                float x1 = ((vi % 2 == 0) ? 1f : -1f) * (2.6f + (vi % 3) * 1.4f);
+                float topY = Mathf.Lerp(VaultApex, EaveHeight, Mathf.Abs(x1) / NaveHalfW) - 0.15f;
+                VineStrand($"Vine_{vi}", new Vector3(x1, topY, vz), 1.6f + (vi % 3) * 0.9f, vi * 7 + 2, 0.05f);
+                vi++;
+            }
+            // Column ivy — only 3 LIGHT strands, partial height, so the concrete still
+            // reads THROUGH it (QA/Tim: 8 strands choked it into a Christmas tree).
+            for (int k = 0; k < 3; k++)
+            {
+                float ang = (k * 130f + 20f) * Mathf.Deg2Rad;
+                float cx = Mathf.Cos(ang) * 0.57f, cz = Mathf.Sin(ang) * 0.57f;
+                VineStrand($"ColIvy_{k}", new Vector3(cx, 4.2f + k * 0.6f, cz), 3.0f + k * 0.5f, k * 11 + 5, 0.045f);
+            }
+
+            // ---- EXTERIOR: golden-hour misty FOREST PHOTO-BACKDROP ----
+            // Acceptance ×9 CRITICAL (Cycle K): the procedural Crown() clumps read as
+            // "серо-зелёные ШАРЫ из низкополигональных сфер / ватные комки", and the
+            // neutral grade washed the warmth out. FIX: replace ALL blob foliage with a
+            // single real golden-hour forest photo (Gemini) mapped as an EMISSIVE
+            // textured backdrop on tall walls behind the glass → reads as a genuine
+            // foggy forest glowing in late sun (emission also survives headless soft-GL,
+            // which ignores ambient/fog). No more spheres.
+            float backH = VaultApex + 1.5f;                       // up to the ridge, fills behind glass + roof
+            float backY = backH * 0.5f;
+            var forestMat = (Material)null;
+            {
+                var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+                var fm = new Material(sh) { name = "ForestBackdrop" };
+                var ftex = RealTex("Assets/_Project/Vendor/Backdrops/forest_backdrop.png");
+                if (ftex != null)
+                {
+                    fm.SetTexture("_BaseMap", ftex);
+                    fm.EnableKeyword("_EMISSION");
+                    fm.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                    fm.SetTexture("_EmissionMap", ftex);
+                    fm.SetColor("_EmissionColor", new Color(1.0f, 0.86f, 0.62f) * 0.72f);  // B2: WARM tint (was pure white → cold-white clip through glass). Golden forest, not a white void.
+                    if (fm.HasProperty("_Smoothness")) fm.SetFloat("_Smoothness", 0.0f);
+                }
+                else
+                {
+                    // fallback: warm emissive glow if the photo is missing
+                    fm = MakeEmissive("ForestBackdrop", new Color(0.95f, 0.78f, 0.50f), 1.3f, new Color(0.55f, 0.48f, 0.36f));
+                }
+                forestMat = fm;
+            }
+            // side walls (E/W) run along Z → low tiling to avoid the repeat-seam look
+            // (judge flagged "impostor cards"); 1.3× reads as one continuous treeline.
+            forestMat.SetTextureScale("_BaseMap", new Vector2(1.3f, 1f));
+            forestMat.SetTextureScale("_EmissionMap", new Vector2(1.3f, 1f));
+            Box("Backdrop_E", new Vector3(NaveHalfW + 11.0f, backY, 0f), new Vector3(0.4f, backH, NaveLength + 26f), forestMat, false);
+            Box("Backdrop_W", new Vector3(-NaveHalfW - 11.0f, backY, 0f), new Vector3(0.4f, backH, NaveLength + 26f), forestMat, false);
+            // gable walls (N/S) span X → separate material instance with ~2× tiling
+            var forestMatNS = new Material(forestMat) { name = "ForestBackdrop_NS" };
+            forestMatNS.SetTextureScale("_BaseMap", new Vector2(1.4f, 1f));
+            forestMatNS.SetTextureScale("_EmissionMap", new Vector2(1.4f, 1f));
+            Box("Backdrop_N", new Vector3(0f, backY, NaveHalfL + 13.0f), new Vector3(NaveWidth + 30f, backH, 0.4f), forestMatNS, false);
+            Box("Backdrop_S", new Vector3(0f, backY, -NaveHalfL - 13.0f), new Vector3(NaveWidth + 30f, backH, 0.4f), forestMatNS, false);
+
+            Debug.Log("[BotanikaBuilder] DECOR: lived-in island + clutter + tall server(LEDs R/G/A) + Clump plants/vines + column vines + depth forest + foreground ferns");
         }
 
         // ============================================================
@@ -820,47 +2437,103 @@ namespace Afterhumans.EditorTools
             else if (GameObject.Find("Botanika_Greybox") == null)
                 Debug.LogWarning("[BotanikaBuilder] Sprint 3: Botanika_Greybox not found — run Sprint 1 first");
 
-            // === DIRECTIONAL LIGHT (Sun) — low sunset key, the HERO of the scene ===
-            var sunGo = new GameObject("Sun_Directional");
-            sunGo.transform.SetParent(root.transform);
-            var sun = sunGo.AddComponent<Light>();
-            sun.type = LightType.Directional;
-            sun.color = new Color(1.0f, 0.78f, 0.50f);  // warm 3200K sunset
-            sun.intensity = 1.5f;                        // dominant, no blown walls
-            // ~30° — pours from ABOVE-along the nave (through the vault), still
-            // angled enough for long shadows. (Tim-proxy: light read as a side
-            // lamp; the greenhouse needs it coming from overhead through glass.)
-            sun.transform.rotation = Quaternion.Euler(30f, -22f, 0f);
-            sun.shadows = LightShadows.Soft;
-            sun.shadowStrength = 0.85f;
+            // ====================================================================
+            // HEADLESS LIGHTING NOTE: the server render path (SubmitRenderRequest)
+            // IGNORES ambient (Trilight), RenderSettings.fog, and ALL point lights.
+            // ONLY directional lights + material emission + post-FX render. So the
+            // entire fill that keeps the shadow side off pure-black MUST come from
+            // directional FILL lights (shadowless), not ambient/points. Atmosphere
+            // comes from emissive haze cards + bloom, not fog. (QA gate consensus.)
+            // ====================================================================
+
+            // helper to add a shadowless directional fill
+            Light AddDir(string name, Color col, float intensity, Vector3 euler, bool shadow)
+            {
+                var go = new GameObject(name);
+                go.transform.SetParent(root.transform);
+                var l = go.AddComponent<Light>();
+                l.type = LightType.Directional;
+                l.color = col; l.intensity = intensity;
+                l.transform.rotation = Quaternion.Euler(euler);
+                l.shadows = shadow ? LightShadows.Soft : LightShadows.None;
+                if (shadow) l.shadowStrength = 0.8f;
+                return l;
+            }
+
+            // === SUN — DOMINANT warm golden-hour KEY, raking down the nave from the
+            // far (NORTH) glazed gable toward the camera: long shadows from lattice +
+            // column + furniture, strong warm/cool modelling. The ONLY shadow-caster.
+            // GPU-RELIGHT (acceptance #1 ×5: "flat olive murk, no key, no shadows"):
+            // fills are now a HEADLESS crutch — on GPU ambient already lifts the dark
+            // side, so the shadowless fills only flatten. Key:fill ~4:1 per judges. ===
+            // Cycle O — TEAL-ORANGE golden hour (textbook): a STRONG warm low-angle key
+            // that DOMINATES a COOL low ambient. Cycle N flattened (warm 2x ambient washed
+            // the contrast → judges: "neutral flat midday, no key, no shadows"). Now the
+            // key is the clear hero (2.4 ≫ ambient), warm amber ~3300K, raking 14°, casting
+            // long soft shadows; shadows fall COOL (see ambient below) = the orange/teal pair.
+            // Cycle S: azimuth 158→205 so the low sun rakes from the back-right gable and
+            // throws LONG shadows across the visible floor TOWARD the camera (judges every
+            // round: "column/furniture cast no directional shadow, flat"). Intensity up,
+            // shadows hard-readable.
+            // Cycle W: dense dressing (4 dark-clothed people, crates, vines, books) lowered
+            // overall luminance → judges read "dark/flat, golden hour gone". Boost the key so
+            // the warm sunset reads THROUGH the denser scene; still dominant over ambient.
+            var sun = AddDir("Sun_Directional", new Color(1.0f, 0.66f, 0.37f), 2.6f,
+                new Vector3(16f, 205f, 0f), shadow: true);
+            sun.shadowStrength = 0.92f; // strong long shadows = light/shadow modelling
+            // B2: 3.2→2.6 — NPCs now hidden (scene less dark/dense), so the boosted key just
+            // clipped highlights. Still dominant over the ~0.38 ambient (golden-hour key).
             RenderSettings.sun = sun;
 
-            // RIM / back light — cool, low, from behind to catch column edges
-            // (Tim-proxy: columns read as flat cardboard tubes, no edge light).
-            var rimGo = new GameObject("Light_Rim");
-            rimGo.transform.SetParent(root.transform);
-            var rim = rimGo.AddComponent<Light>();
-            rim.type = LightType.Directional;
-            rim.color = new Color(0.6f, 0.72f, 0.95f); // cool counter
-            rim.intensity = 0.5f;
-            rim.transform.rotation = Quaternion.Euler(12f, 150f, 0f); // from far end, low
-            rim.shadows = LightShadows.None;
+            // === WARM FRONT FILL — lifts camera-facing faces so the backlit key doesn't
+            // crush them. Cycle M: 0.90→0.5 (judges: over-lit / flat). Warm so it adds to
+            // the golden bath rather than neutral-greying the interior. ===
+            AddDir("Fill_Front", new Color(1.0f, 0.82f, 0.6f), 0.22f, new Vector3(14f, 0f, 0f), false); // Cycle S: 0.5→0.22 so it lifts faces WITHOUT washing the key's shadows (judges: flat, no shadow contrast)
+            // === COOL RIM — one cold note from the side for warm/cool temperature
+            // separation the judges asked for (warm key vs cooler shaded green). ===
+            AddDir("Light_Rim", new Color(0.50f, 0.64f, 0.95f), 0.18f, new Vector3(10f, 60f, 0f), false);
+            // (removed Fill_Top / Fill_Side / Fill_Bounce — they flattened the GPU frame
+            //  into ambient-only murk with zero shadow read.)
 
             // === RENDER SETTINGS — gradient ambient = warm sky / COOL shadows ===
             // (Flat ambient flattened everything; gradient gives the warm/cool
             //  contrast the AAA QA flagged as missing.)
+            // GPU-REALITY TUNE: on real GPU (WebGL) ambient is APPLIED (unlike headless
+            // soft-GL where it's ignored). Full-strength gradient floods the scene flat
+            // and washes out the golden-hour directional. Scaled ~0.62 so the warm sun +
+            // point lights regain contrast/drama. NOTE: for Trilight/Gradient ambient the
+            // ambientIntensity multiplier is IGNORED — must scale the colors themselves.
+            // GPU-RELIGHT: ambient lowered further + warmed so the golden SUN dominates
+            // and the olive-green murk (acceptance: monochrome green) clears. Warm honey
+            // sky bounce, neutral-warm mid, faintly cool low ground for temp contrast.
+            // Cycle P: WARM-NEUTRAL enveloping fill. The cool ambient (Cycle O) made a "dark
+            // box with light pools" (judges); the 2x warm flood (Cycle N) went flat. This is
+            // the middle: a warm, bright-ish skylight envelope so the whole glass volume
+            // reads luminous, while the strong directional key (2.4) still gives golden-hour
+            // direction + long shadows. Teal-orange now comes from the GRADE (cool-teal
+            // shadows in lift/SMH/split), NOT from cold ambient light = no dark box.
+            // NB: a gentle ambient-warm + closer-fog "golden-hour wash" pass (Build Q) was judged
+            // SAME/slight-regression (deep-hall view went darker, no visible amber wash). Reverted
+            // to these B/C-accepted values. A real whole-hall golden hour needs a stronger low-angle
+            // warm SUN + true volumetric fog + light-shafts — but that risks the accepted nave look
+            // (B2 white-clipping) and must be verified on the HERO/nave view, so it's a with-Tim call.
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-            RenderSettings.ambientSkyColor = new Color(0.55f, 0.42f, 0.28f);     // warm bounce from above
-            RenderSettings.ambientEquatorColor = new Color(0.30f, 0.28f, 0.26f); // neutral mid
-            RenderSettings.ambientGroundColor = new Color(0.16f, 0.18f, 0.24f);  // COOL shadow fill
-            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.ambientSkyColor = new Color(0.34f, 0.30f, 0.24f);     // warm skylight envelope
+            RenderSettings.ambientEquatorColor = new Color(0.23f, 0.20f, 0.17f); // warm mid fill
+            RenderSettings.ambientGroundColor = new Color(0.12f, 0.13f, 0.15f);  // faint cool low (grade adds the teal)
+            RenderSettings.ambientIntensity = 0.38f; // low so the raking key's long shadows READ on the floor
 
-            // Fog — denser warm haze for depth/atmosphere down the long nave
-            // (AAA QA: interior air too dry, depth only geometric).
+            // Fog — B1: LINEAR depth haze (expert panel: Exp² density 0.011 is invisible at
+            // 15-25 m, that's why the frame read flat / "no atmosphere"). Linear Start 6 /
+            // End 42 only hazes the FAR plane: foreground stays crisp (no flattening — the
+            // Exp² crank that backfired in Cycle Q hazed EVERYTHING), distance melts into a
+            // warm golden gradient. fogColor MATCHES the sky behind glass so the far wall/
+            // forest dissolves into "golden air" instead of a grey cutoff.
             RenderSettings.fog = true;
-            RenderSettings.fogMode = FogMode.ExponentialSquared;
-            RenderSettings.fogDensity = 0.032f; // denser dusty air in ALL shots (Tim-proxy)
-            RenderSettings.fogColor = new Color(0.80f, 0.63f, 0.42f); // warm sunset haze
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogStartDistance = 6f;
+            RenderSettings.fogEndDistance = 42f;
+            RenderSettings.fogColor = new Color(0.91f, 0.77f, 0.54f); // #E8C48A warm gold = sky tone
 
             // === SKYBOX ===
             // Sprint 4: warm sunset interior HDRI from 3d-artist sourcing.
@@ -878,7 +2551,7 @@ namespace Afterhumans.EditorTools
                 {
                     var skyMat = new Material(skyShader);
                     skyMat.SetTexture("_MainTex", hdri);
-                    skyMat.SetFloat("_Exposure", 0.32f); // dim sky so edges don't clip to white
+                    skyMat.SetFloat("_Exposure", 0.5f); // B2: 0.62 blew the gable sky to clipped white through glass; 0.5 keeps warm sky readable without white-out.
                     RenderSettings.skybox = skyMat;
                 }
                 // Camera uses skybox
@@ -910,12 +2583,13 @@ namespace Afterhumans.EditorTools
             // so the front columns read (keep it moodier than the rest).
             CreatePointLight(root, "Light_Spawn", new Vector3(0f, 2.5f, -10.5f), warm, 3f, 13f);
 
-            // === GOD RAYS — deferred to art pass (AP-01) ===
-            // Additive-quad fake shafts read as flat blown-white slabs in URP;
-            // believable god-rays need a volumetric raymarch shader, which ships
-            // with the glass-vault material work. Atmosphere here comes from the
-            // dense warm fog + sun-from-above instead.
-            // CreateLightShafts(root);
+            // === ATMOSPHERE — emissive haze cards (RenderSettings.fog is ignored
+            // in the headless SubmitRenderRequest path). Stacked low-alpha warm
+            // planes down the nave fake the golden volumetric haze of the ref. ===
+            CreateHazeCards(root);
+            // SUN-ALIGNED god-ray shafts — was defined but NEVER CALLED (why judges saw
+            // "no god-rays" every round). Now active on GPU (additive quads + bloom).
+            CreateLightShafts(root);
 
             // === POST-PROCESSING VOLUME ===
             SetupPostProcessing(root);
@@ -923,6 +2597,45 @@ namespace Afterhumans.EditorTools
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
             Debug.Log("[BotanikaBuilder] Sprint 3 LIGHTING done — sun, shadows, skybox, accents, post-FX");
+        }
+
+        /// <summary>G2: build an AnimatorController (Idle↔Walk on IsWalking) around the
+        /// Blender foot-IK WalkIK clip baked into kafka_corgi_ikwalk.fbx. Forces Generic rig
+        /// + looping clip on import, then wires a 2-state machine the KafkaDirectController
+        /// drives. Idle is intentionally empty so CorgiStateAnimator owns the resting dog.</summary>
+        private static UnityEditor.Animations.AnimatorController BuildCorgiIKController(string fbxPath)
+        {
+            var imp = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
+            if (imp != null)
+            {
+                imp.animationType = ModelImporterAnimationType.Generic;
+                imp.importAnimation = true;
+                var clips = (imp.clipAnimations != null && imp.clipAnimations.Length > 0)
+                    ? imp.clipAnimations : imp.defaultClipAnimations;
+                if (clips != null) { for (int i = 0; i < clips.Length; i++) clips[i].loopTime = true; imp.clipAnimations = clips; }
+                imp.SaveAndReimport();
+            }
+            AnimationClip walk = null;
+            foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
+                if (a is AnimationClip c && !c.name.StartsWith("__preview"))
+                { walk = c; if (c.name.Contains("Walk") || c.name.Contains("walk")) break; }
+            if (walk == null) { Debug.LogWarning("[IKctrl] no AnimationClip in " + fbxPath); return null; }
+
+            const string ctrlPath = "Assets/_Project/Models/KafkaIKAnimator.controller";
+            var ctrl = UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+            ctrl.AddParameter("IsWalking", AnimatorControllerParameterType.Bool);
+            var sm = ctrl.layers[0].stateMachine;
+            var idle = sm.AddState("Idle");           // empty → standing; CorgiStateAnimator adds dog behaviour
+            var walkState = sm.AddState("Walk");
+            walkState.motion = walk;
+            sm.defaultState = idle;
+            var toWalk = idle.AddTransition(walkState);
+            toWalk.AddCondition(AnimatorConditionMode.If, 0f, "IsWalking"); toWalk.hasExitTime = false; toWalk.duration = 0.12f;
+            var toIdle = walkState.AddTransition(idle);
+            toIdle.AddCondition(AnimatorConditionMode.IfNot, 0f, "IsWalking"); toIdle.hasExitTime = false; toIdle.duration = 0.18f;
+            AssetDatabase.SaveAssets();
+            Debug.Log("[IKctrl] KafkaIKAnimator built with clip " + walk.name);
+            return ctrl;
         }
 
         private static Camera FindPlayerCamera()
@@ -960,9 +2673,31 @@ namespace Afterhumans.EditorTools
                          ?? Shader.Find("Sprites/Default");
             var mat = new Material(shader);
             mat.name = "GodRay_Additive";
+            // Cycle R: SOFT GRADIENT shaft texture — flat additive quads read as either
+            // invisible (0.09) or hard "searchlights" (0.34). A gradient (bright soft core,
+            // edges fading to zero alpha, top→bottom falloff) makes each beam MELT into the
+            // air = the volumetric look the judges ask for every round, without cranking the
+            // uniform fog (which flattens the whole frame).
+            int GW = 48, GH = 256;
+            var shaftTex = new Texture2D(GW, GH, TextureFormat.RGBA32, false) { name = "GodRayGradient" };
+            shaftTex.wrapMode = TextureWrapMode.Clamp;
+            for (int yy = 0; yy < GH; yy++)
+            {
+                float v = yy / (float)(GH - 1);                 // 0 bottom → 1 top (source)
+                float vert = Mathf.Pow(v, 0.5f) * (0.35f + 0.65f * v); // brighter near the top, tapering down
+                for (int xx = 0; xx < GW; xx++)
+                {
+                    float u = xx / (float)(GW - 1);
+                    float horiz = Mathf.Sin(u * Mathf.PI);       // soft bell: 0 at edges, 1 centre
+                    horiz *= horiz;                               // tighter soft core
+                    float a = Mathf.Clamp01(horiz * vert);
+                    shaftTex.SetPixel(xx, yy, new Color(1f, 0.84f, 0.56f, a));
+                }
+            }
+            shaftTex.Apply();
             if (mat.HasProperty("_BaseColor"))
-                mat.SetColor("_BaseColor", new Color(1f, 0.82f, 0.5f, 1f));
-            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", null);
+                mat.SetColor("_BaseColor", new Color(1f, 0.82f, 0.52f, 0.85f)); // QA: shafts "not visible" — brighter so the golden beams read in the moving 3rd-person view
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", shaftTex);
             // Transparent + ADDITIVE blend (glow, never darkens).
             mat.SetFloat("_Surface", 1f);     // Transparent
             mat.SetFloat("_Blend", 2f);       // Additive
@@ -976,29 +2711,31 @@ namespace Afterhumans.EditorTools
             var shaftRoot = new GameObject("GodRays");
             shaftRoot.transform.SetParent(parent.transform);
 
-            // Beams angled to match the sun (down-and-along the nave), placed
-            // between column pairs where light would break through the vault.
-            var beamSpots = new[]
-            {
-                new Vector3(-2.0f, 4.0f, -4f),
-                new Vector3( 2.2f, 4.0f,  1f),
-                new Vector3(-1.4f, 4.0f,  6f),
-                new Vector3( 1.0f, 4.0f, -8f),
-            };
-            var beamRot = Quaternion.Euler(62f, -18f, 0f); // steep shaft, sun-aligned
+            // SUN-ALIGNED god-ray fan (acceptance ×5 EVERY round: "no god-rays/volumetric
+            // shafts" — root cause: this method was never called + old beams weren't sun-
+            // aligned). Beams descend from the bright far gable toward the camera/floor,
+            // axis = the sun's travel direction (Euler 26,165 in Sprint3_Lighting).
+            // Blend sun direction toward vertical so shafts read as clean overhead beams
+            // through the roof (acceptance: raked shafts read as a bottom-corner artifact
+            // at eye-level). Place them in the VISIBLE mid-nave, not the far end.
+            var sunDir = Quaternion.Euler(14f, 158f, 0f) * Vector3.forward; // lower, raking sun
+            var beamAxis = Vector3.Slerp(-sunDir, Vector3.up, 0.3f).normalized; // raked, not vertical (judges: "vertical spotlights from the ridge")
+            var baseRot = Quaternion.FromToRotation(Vector3.up, beamAxis);
             int i = 0;
-            foreach (var spot in beamSpots)
+            for (int c = -2; c <= 2; c++)               // 5 beams — cover the nave for the moving 3rd-person cam (QA: shafts not visible)
             {
-                // Crossed quads = pseudo-volume beam.
-                for (int k = 0; k < 2; k++)
+                float x = c * 2.6f;
+                float z = 0.5f + c * 2.6f;              // spread the length of the visible nave so beams read as the dog walks through
+                var spot = new Vector3(x, 5.0f, z);
+                for (int k = 0; k < 2; k++)             // crossed quads = pseudo-volume
                 {
                     var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
                     q.name = $"Shaft_{i}_{k}";
                     Object.DestroyImmediate(q.GetComponent<Collider>());
                     q.transform.SetParent(shaftRoot.transform);
                     q.transform.position = spot;
-                    q.transform.rotation = beamRot * Quaternion.Euler(0f, k * 90f, 0f);
-                    q.transform.localScale = new Vector3(1.6f, 9f, 1f); // narrow, tall shaft
+                    q.transform.rotation = baseRot * Quaternion.Euler(0f, k * 90f, 0f);
+                    q.transform.localScale = new Vector3(3.4f, 13f, 1f); // WIDE soft shaft → diffuse glow, not a searchlight
                     var r = q.GetComponent<Renderer>();
                     r.sharedMaterial = mat;
                     r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -1006,7 +2743,78 @@ namespace Afterhumans.EditorTools
                 }
                 i++;
             }
-            Debug.Log($"[BotanikaBuilder] God rays: {beamSpots.Length} dusty sunbeams placed");
+            Debug.Log($"[BotanikaBuilder] God rays: {i} sun-aligned shafts placed");
+        }
+
+        /// <summary>
+        /// Golden volumetric haze, faked for the headless path (RenderSettings.fog
+        /// doesn't render via SubmitRenderRequest). Big warm additive planes across
+        /// the nave at increasing depth — they stack toward the bright north gable
+        /// so the far end glows hazy while the near floor stays clear, the way the
+        /// reference's golden-hour air reads. Plus a couple of soft sun-shafts.
+        /// </summary>
+        private static void CreateHazeCards(GameObject parent)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
+            Material Haze(float a)
+            {
+                var m = new Material(shader) { name = "Haze_Additive" };
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", new Color(1.0f, 0.74f, 0.44f, a));
+                m.SetFloat("_Surface", 1f); m.SetFloat("_Blend", 2f);
+                m.SetOverrideTag("RenderType", "Transparent");
+                m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                m.SetInt("_ZWrite", 0); m.renderQueue = 3200;
+                m.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                return m;
+            }
+            var hazeRoot = new GameObject("Haze");
+            hazeRoot.transform.SetParent(parent.transform);
+
+            // Cross-nave curtains. Foreground (south) stays CLEAR so the lounge reads
+            // sharp & warm; haze only builds in the FAR third, capped low so the apex
+            // glows but the roof lattice stays readable (QA: apex blew out + forward
+            // went murky — MEASURED, not killed).
+            int i = 0;
+            for (float z = 2f; z <= 13.5f + 0.01f; z += 1.6f)
+            {
+                float t = Mathf.InverseLerp(2f, 13.5f, z);       // 0 mid → 1 far
+                float a = Mathf.Lerp(0.012f, 0.034f, t);         // capped, linear — no blowout
+                var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                q.name = $"Haze_{i++}";
+                Object.DestroyImmediate(q.GetComponent<Collider>());
+                q.transform.SetParent(hazeRoot.transform);
+                q.transform.position = new Vector3(0f, 3.6f, z);
+                q.transform.rotation = Quaternion.identity; // normal = -Z, faces entrance
+                q.transform.localScale = new Vector3(NaveWidth + 8f, VaultApex + 4f, 1f);
+                var r = q.GetComponent<Renderer>();
+                r.sharedMaterial = Haze(a);
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                r.receiveShadows = false;
+            }
+
+            // Sun-shafts — SOFT and few (QA: read as hard stripes). Low alpha, only 2,
+            // far end, so they're a diffuse glow hint, not painted bands.
+            var shaftMat = Haze(0.05f);
+            var shaftRot = Quaternion.Euler(52f, -20f, 0f);
+            foreach (var spot in new[] { new Vector3(-1.6f, 5.0f, 10f), new Vector3(1.8f, 5.0f, 8f) })
+            {
+                for (int k = 0; k < 2; k++)
+                {
+                    var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    q.name = $"Shaft_{spot.z:0}_{k}";
+                    Object.DestroyImmediate(q.GetComponent<Collider>());
+                    q.transform.SetParent(hazeRoot.transform);
+                    q.transform.position = spot;
+                    q.transform.rotation = shaftRot * Quaternion.Euler(0f, k * 90f, 0f);
+                    q.transform.localScale = new Vector3(1.8f, 11f, 1f); // narrower
+                    var r = q.GetComponent<Renderer>();
+                    r.sharedMaterial = shaftMat;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    r.receiveShadows = false;
+                }
+            }
+            Debug.Log("[BotanikaBuilder] Haze: clear foreground + capped far haze + 2 soft shafts");
         }
 
         private static void SetupPostProcessing(GameObject parent)
@@ -1025,14 +2833,34 @@ namespace Afterhumans.EditorTools
                 AssetDatabase.CreateAsset(profile, profilePath);
             }
 
-            // Clear old overrides
+            // ROOT-CAUSE FIX: VolumeProfile.Add<T>() only adds the component IN MEMORY.
+            // The previous code called SaveAssets() without AddObjectToAsset(), so the
+            // .asset on disk persisted with ZERO effects → every render (headless AND
+            // WebGL) was ungraded/flat (no ACES/bloom/grade/vignette). We must (a) remove
+            // the old component sub-assets, then (b) add each new one as a sub-asset.
+
+            // (a) tear down any existing component sub-assets
+            foreach (var old in profile.components.ToArray())
+            {
+                if (old == null) continue;
+                if (AssetDatabase.Contains(old)) AssetDatabase.RemoveObjectFromAsset(old);
+                Object.DestroyImmediate(old, true);
+            }
             profile.components.Clear();
 
-            // Add URP post-FX
+            // Add URP post-FX (populates profile.components in memory)
             AddPostFxToProfile(profile);
+
+            // (b) PERSIST each component as a sub-asset of the profile
+            foreach (var comp in profile.components)
+            {
+                if (comp != null && !AssetDatabase.Contains(comp))
+                    AssetDatabase.AddObjectToAsset(comp, profile);
+            }
 
             EditorUtility.SetDirty(profile);
             AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
 
             // Attach Volume to camera
             var volume = cam.GetComponent<UnityEngine.Rendering.Volume>();
@@ -1041,50 +2869,67 @@ namespace Afterhumans.EditorTools
             volume.profile = profile;
             volume.priority = 1;
 
-            Debug.Log("[BotanikaBuilder] Post-processing Volume applied to camera");
+            Debug.Log($"[BotanikaBuilder] Post-processing Volume applied — profile now has {profile.components.Count} fx persisted");
         }
 
         private static void AddPostFxToProfile(UnityEngine.Rendering.VolumeProfile profile)
         {
-            // Bloom — stronger for stylized glow on lights/emissive
+            // Bloom — SELECTIVE: only the sun-through-glass + CRT/LED emission should
+            // bloom, not the whole bright midtone (acceptance: "bloom = milky overlay").
             var bloom = profile.Add<UnityEngine.Rendering.Universal.Bloom>(true);
-            bloom.intensity.Override(1.15f);  // glow on far-end light + warm highlights
-            bloom.threshold.Override(0.7f);   // lower → highlights bloom (AAA QA: bloom not reading)
-            bloom.scatter.Override(0.62f); // tighter core (was 0.8 — far-end glow too cottony)
-            bloom.tint.Override(new Color(1f, 0.9f, 0.72f)); // warm bloom
+            bloom.intensity.Override(0.8f);
+            bloom.threshold.Override(1.4f);   // B2: higher → only true sources bloom, panels/laptop stop blowing to white
+            bloom.scatter.Override(0.72f);    // wider, softer halo (motivated glow, not hard clamp)
+            bloom.clamp.Override(7f);         // B2: cap HDR input so a single hot pixel can't blow the whole panel white
+            bloom.tint.Override(new Color(1f, 0.87f, 0.64f)); // warm bloom
 
-            // Tonemapping ACES
+            // Tonemapping — Cycle N: ACES read as a HARD S-curve (crushed shadows + blown
+            // white windows, judges ×5). Neutral gives a soft highlight roll-off that KEEPS
+            // warm color in the brights instead of clipping to white — the ref look.
             var tone = profile.Add<UnityEngine.Rendering.Universal.Tonemapping>(true);
-            tone.mode.Override(UnityEngine.Rendering.Universal.TonemappingMode.ACES);
+            tone.mode.Override(UnityEngine.Rendering.Universal.TonemappingMode.Neutral);
 
-            // Color Adjustments
+            // Color Adjustments — de-GREEN hard (acceptance: olive-green monochrome).
+            // Warm amber filter with a magenta lean to cancel the green cast; a touch
+            // more contrast for tonal punch from the new shadowed key.
+            // Acceptance R3: grade over-warmed into a single ochre monochrome (shadows
+            // also orange → no depth/color-separation). Pull the GLOBAL warm filter back
+            // toward neutral and let the SUN carry warmth; keep saturation so green
+            // plants + red rug separate from the wood. Warm/cool split done in SMH+Split.
             var color = profile.Add<UnityEngine.Rendering.Universal.ColorAdjustments>(true);
-            // LOW-2 fix: exact Art Bible §5 values
-            color.saturation.Override(20f);  // richer sunset amber
-            color.contrast.Override(12f);    // tonal punch
-            color.postExposure.Override(-0.32f); // kill remaining edge clipping
-            color.colorFilter.Override(new Color(1f, 0.96f, 0.9f)); // warm filter, de-green the cream
+            color.saturation.Override(12f);   // Cycle O: a touch more — warm key vs cool shadow vs emerald emission needs color to read
+            color.contrast.Override(16f);     // Cycle O: restore tonal range (Cycle N flat/no-range); strong key + cool ambient can take it
+            color.postExposure.Override(0.2f); // Cycle W: lift — dense dark dressing dropped luminance (judges: "dark/flat")
+            color.colorFilter.Override(new Color(1.0f, 0.90f, 0.76f)); // warmer sepia-amber to hold the golden hour through the denser scene
 
-            // White Balance
+            // White Balance — warmer key; cool-teal shadows in SMH/Split give the interplay
             var wb = profile.Add<UnityEngine.Rendering.Universal.WhiteBalance>(true);
-            wb.temperature.Override(15f);
-            wb.tint.Override(-5f);
+            wb.temperature.Override(18f);
+            wb.tint.Override(3f);
 
-            // Shadows/Midtones/Highlights — Art Bible exact
+            // Shadows/Midtones/Highlights — split-tone cohesion (acceptance: "single
+            // honey-gold tone with slightly TEAL shadows"). Shadows lean cool-teal,
+            // midtones honey, highlights amber → warm/cool separation, not olive mono.
             var smh = profile.Add<UnityEngine.Rendering.Universal.ShadowsMidtonesHighlights>(true);
-            smh.shadows.Override(new Vector4(0.40f, 0.46f, 0.55f, 0f));   // cooler blue shadows
-            smh.midtones.Override(new Vector4(1.0f, 0.93f, 0.86f, 0f));   // warm midtones (de-green cream → honey)
-            smh.highlights.Override(new Vector4(1.0f, 0.82f, 0.54f, 0f)); // amber-orange highlight peak
+            smh.shadows.Override(new Vector4(0.42f, 0.47f, 0.50f, 0f));   // faint teal-cool shadows for temp contrast
+            smh.midtones.Override(new Vector4(1.0f, 0.93f, 0.84f, 0f));   // honey midtones (de-green)
+            smh.highlights.Override(new Vector4(1.0f, 0.84f, 0.56f, 0f)); // amber highlight peak
+
+            // Split Toning — explicit teal-shadow / amber-highlight cohesion.
+            var split = profile.Add<UnityEngine.Rendering.Universal.SplitToning>(true);
+            split.shadows.Override(new Color(0.36f, 0.52f, 0.55f));   // teal
+            split.highlights.Override(new Color(1.0f, 0.72f, 0.38f)); // amber
+            split.balance.Override(12f); // lean slightly to highlights (warm-dominant)
 
             // Lift the deep shadows slightly (warm) so the forward POV floor isn't
             // crushed to pure black, without touching midtones/highlights.
             var lgg = profile.Add<UnityEngine.Rendering.Universal.LiftGammaGain>(true);
-            lgg.lift.Override(new Vector4(1.04f, 1.0f, 0.95f, 0.05f)); // warm +lift, forward floor readable
+            lgg.lift.Override(new Vector4(0.96f, 1.0f, 1.06f, 0.02f)); // Cycle O: teal lift (low R, high B) → cool shadows for teal-orange; small black-raise keeps them readable but with depth
 
             // Vignette — stronger for cinematic feel
             var vig = profile.Add<UnityEngine.Rendering.Universal.Vignette>(true);
-            vig.intensity.Override(0.45f); // stronger — collects the frame, tames the bright side wall
-            vig.smoothness.Override(0.45f);
+            vig.intensity.Override(0.52f); // Cycle S: stronger warm vignette → collects the frame to the centre/column (judges: "edges as bright as centre, frame falls apart")
+            vig.smoothness.Override(0.5f);
 
             // Film Grain — cinematic
             var grain = profile.Add<UnityEngine.Rendering.Universal.FilmGrain>(true);
@@ -1489,24 +3334,24 @@ namespace Afterhumans.EditorTools
         {
             var go = new GameObject("DustParticles");
             go.transform.SetParent(parent.transform);
-            go.transform.position = new Vector3(2, 5, 1); // near east window, high up
+            go.transform.position = new Vector3(0, 3.2f, 1); // nave centre — dust fills the whole volume
 
             var ps = go.AddComponent<ParticleSystem>();
             var main = ps.main;
-            main.startLifetime = 10f;
+            main.startLifetime = 12f;
             main.startSpeed = 0.02f;
-            main.startSize = new ParticleSystem.MinMaxCurve(0.02f, 0.06f);
-            main.maxParticles = 80;
-            main.startColor = new Color(1f, 0.92f, 0.72f, 0.3f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.025f, 0.075f);
+            main.maxParticles = 320;            // QA: "air clear, no motes" — fill the golden air
+            main.startColor = new Color(1f, 0.92f, 0.72f, 0.5f);
             main.simulationSpace = ParticleSystemSimulationSpace.World;
-            main.gravityModifier = -0.005f; // slight upward drift
+            main.gravityModifier = -0.004f; // slight upward drift
 
             var emission = ps.emission;
-            emission.rateOverTime = 8f;
+            emission.rateOverTime = 32f;
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Box;
-            shape.scale = new Vector3(4, 6, 4);
+            shape.scale = new Vector3(13, 6, 18); // span the nave so motes read wherever the dog walks
 
             var colorLife = ps.colorOverLifetime;
             colorLife.enabled = true;
@@ -1827,6 +3672,1041 @@ namespace Afterhumans.EditorTools
             var fps = player.AddComponent<Afterhumans.Player.SimpleFirstPersonController>();
 
             Debug.Log($"[BotanikaBuilder] Player setup at {PosPlayer} facing +Z (north), camera at eye height");
+        }
+
+        // ================================================================
+        // SCENE ENHANCEMENTS (surgical, idempotent)
+        // ================================================================
+        // Applied to the ALREADY-SAVED scene (WebGLBuilder.BuildHero builds the
+        // saved scene and does NOT run BuildArt/Sprint3_Lighting), so a full regen
+        // is forbidden (regression risk on the accepted look). Each sub-block clears
+        // its own prior objects by prefix before re-adding → re-runs never duplicate.
+        // All textures are generated in-code (Texture2D+SetPixel) so they survive the
+        // headless build. No Shader Graph, no imported assets.
+        // Headless: -executeMethod Afterhumans.EditorTools.BotanikaBuilder.ApplySceneEnhancements
+        public static void ApplySceneEnhancements()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox == null) { Debug.LogError("[ApplySceneEnhancements] no Botanika_Greybox"); return; }
+
+            Enh_GlowCeilingAndDirtyGlass(greybox);
+            Enh_GodRaysAndDust(greybox);
+            Enh_GrimeAndWear(greybox);
+            Enh_LightAndBackground();
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[ApplySceneEnhancements] DONE — glow ceiling + dirty glass + god-rays/dust + grime + light/bg");
+        }
+
+        // ============================================================
+        // ITERATION: replace capsule NPCs with REAL human GLB/FBX models
+        // (SURGICAL, idempotent). BuildHero builds the SAVED scene, so the
+        // swap must be baked into Scene_Botanika.unity here (open → edit →
+        // mark dirty → save), exactly like AddNPCs / IterationCameraAndScene.
+        //
+        // What it does:
+        //   1. Removes prior replacements (objects named "RealNPC_*").
+        //   2. Hides the ugly capsules:
+        //        - Sprint2 gameplay NPCs (NPC_Sasha/Mila/Kirill/Nikolai/Stas):
+        //          renderers DISABLED only (keep Interactable/dialogue/prompt
+        //          so talking still works — the model is decorative).
+        //        - Decorative AddNPCs figures (NPC_Hero*): DESTROYED outright.
+        //   3. Drops 4 photoreal Hunyuan3D people, each auto-scaled to ~1.7 m
+        //      and seated/standing on the real furniture (sofa + work desks).
+        //
+        // Models (glTFast ScriptedImporter for .glb, ModelImporter for .fbx):
+        //   person.glb      — man in hoodie, reclined  → on the leather sofa
+        //   person2.glb     — man in apron with a mug  → standing west desk
+        //   npc_reading.glb — seated woman with a book → east work desk
+        //   kirill.fbx      — bald bearded man, apron  → second monitor desk
+        //
+        // Run AFTER the scene exists (Sprint 1/2 + ComposeRealAssets), and
+        // BEFORE BuildHero. Order vs IterationCameraAndScene is independent —
+        // both are surgical scene edits; run this one whenever, then BuildHero.
+        // Headless: -executeMethod
+        // Afterhumans.EditorTools.BotanikaBuilder.IterationReplaceNPCs
+        // ============================================================
+        [MenuItem("Afterhumans/v2/Iteration — Replace NPCs")]
+        public static void IterationReplaceNPCs()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+            // --- 0. Idempotent: nuke any prior RealNPC_* placements ---
+            var prior = new System.Collections.Generic.List<GameObject>();
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (t != null && t.name.StartsWith("RealNPC_")) prior.Add(t.gameObject);
+            int killed = 0;
+            foreach (var g in prior)
+                if (g != null) { Object.DestroyImmediate(g); killed++; }
+            Debug.Log($"[ReplaceNPCs] removed {killed} prior RealNPC_* objects");
+
+            // --- 1. Hide capsule NPCs ---
+            // 1a. Sprint2 gameplay capsules — disable RENDERER only (keep the
+            //     GameObject so Interactable / collider / dialogue still work).
+            string[] capsuleNames = { "NPC_Sasha", "NPC_Mila", "NPC_Kirill", "NPC_Nikolai", "NPC_Stas" };
+            int hidVisual = 0;
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (t == null) continue;
+                foreach (var cn in capsuleNames)
+                    if (t.name == cn)
+                    {
+                        foreach (var r in t.GetComponentsInChildren<Renderer>(true))
+                            if (!r.gameObject.name.StartsWith("Prompt") && r.GetComponent<MeshFilter>() != null)
+                                r.enabled = false; // hide the capsule mesh, keep worldspace prompt canvas
+                        hidVisual++;
+                        break;
+                    }
+            }
+            Debug.Log($"[ReplaceNPCs] hid {hidVisual} Sprint2 capsule meshes (gameplay kept)");
+
+            // 1b. Decorative AddNPCs capsule figures — destroy whole tree.
+            // Roots are named "NPC_HeroLounger/West/East/Reader"; their child
+            // limbs are "NPC_HeroLounger_torso" etc. (also start with "NPC_Hero").
+            // Collect ONLY roots (parent is NOT itself a NPC_Hero* object) so we
+            // DestroyImmediate each figure exactly once, taking children with it.
+            var heroKill = new System.Collections.Generic.List<GameObject>();
+            foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (t == null || !t.name.StartsWith("NPC_Hero")) continue;
+                if (t.parent != null && t.parent.name.StartsWith("NPC_Hero")) continue; // a child limb
+                heroKill.Add(t.gameObject);
+            }
+            int heroKilled = 0;
+            foreach (var g in heroKill)
+                if (g != null) { Object.DestroyImmediate(g); heroKilled++; }
+            Debug.Log($"[ReplaceNPCs] destroyed {heroKilled} decorative NPC_Hero* capsule figures");
+
+            // --- 2. Parent for the real figures (under RealAssets if present) ---
+            Transform parent = null;
+            var greybox = GameObject.Find("Botanika_Greybox");
+            if (greybox != null)
+            {
+                var ra = greybox.transform.Find("RealAssets");
+                parent = ra != null ? ra : greybox.transform;
+            }
+            if (parent == null)
+            {
+                var holder = GameObject.Find("RealNPC_Root") ?? new GameObject("RealNPC_Root");
+                parent = holder.transform;
+                Debug.LogWarning("[ReplaceNPCs] no Botanika_Greybox/RealAssets — using loose RealNPC_Root");
+            }
+
+            // --- 3. Load helper (glTFast .glb / ModelImporter .fbx → GameObject) ---
+            GameObject LoadModel(string path)
+            {
+                if (!File.Exists(path)) { Debug.LogWarning($"[ReplaceNPCs] file missing: {path}"); return null; }
+                var a = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (a != null) return a;
+                foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(path))
+                    if (sub is GameObject go) return go;
+                Debug.LogWarning($"[ReplaceNPCs] could not load GameObject from {path} (import pending?)");
+                return null;
+            }
+
+            // Instantiate + auto-scale to targetH, seat base at pos.y, face yawDeg.
+            // Mirrors ComposeRealAssets.Place() (proven bounds-normalise path).
+            GameObject Place(string label, GameObject src, Vector3 pos, float yawDeg, float targetH)
+            {
+                if (src == null) { Debug.LogWarning($"[ReplaceNPCs] MISSING src for {label} — skipped"); return null; }
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(src, parent)
+                         ?? Object.Instantiate(src, parent);
+                go.name = label;
+                go.transform.rotation = Quaternion.Euler(0f, yawDeg, 0f);
+                go.transform.position = pos;
+                go.transform.localScale = Vector3.one;
+
+                var rends = go.GetComponentsInChildren<Renderer>(true);
+                if (rends.Length == 0) { Debug.LogWarning($"[ReplaceNPCs] {label} has NO renderers"); return go; }
+
+                // measure → normalise height to targetH
+                var b = rends[0].bounds;
+                foreach (var r in rends) b.Encapsulate(r.bounds);
+                float h = Mathf.Max(0.001f, b.size.y);
+                float s = targetH / h;
+                go.transform.localScale = Vector3.one * s;
+
+                // re-measure → seat the base at pos.y
+                rends = go.GetComponentsInChildren<Renderer>(true);
+                b = rends[0].bounds;
+                foreach (var r in rends) b.Encapsulate(r.bounds);
+                go.transform.position += new Vector3(0f, pos.y - b.min.y, 0f);
+
+                // decorative: strip colliders so figures never block the corgi/player
+                foreach (var c in go.GetComponentsInChildren<Collider>(true))
+                    Object.DestroyImmediate(c);
+
+                Debug.Log($"[ReplaceNPCs] {label} placed (scale {s:0.000}, src={src.name}, targetH={targetH})");
+                return go;
+            }
+
+            const string NPC = "Assets/_Project/Models/NPC/";
+            const string KIRILL = "Assets/_Project/Models/Generated/kirill.fbx";
+
+            var mPerson  = LoadModel(NPC + "person.glb");        // reclined man (hoodie) → sofa
+            var mPerson2 = LoadModel(NPC + "person2.glb");       // standing man (apron+mug)
+            var mReading = LoadModel(NPC + "npc_reading.glb");   // seated woman (book)
+            var mKirill  = LoadModel(KIRILL);                    // standing bald man (apron)
+
+            // --- 4. Placement anchors (from real furniture in the saved scene) ---
+            // VERIFIED geometry (BuildArt procedural furniture, this file):
+            //   Sofa: center X=0, seat cushions Sofa_SeatL/R top ≈ y0.63 at z=-2.25,
+            //         backrest NORTH (z≈-1.74), opens SOUTH (-Z) → sitter faces -Z (yaw 180).
+            //   Workstation W deskC (-4.6,0,1.5): keyboard/screen on the -Z face;
+            //         user is on the -Z (south) side at z≈0.9 FACING the desk +Z (yaw 0).
+            //   Workstation E deskC ( 4.6,0,-1.0): user on -Z side at z≈-1.6 FACING +Z (yaw 0).
+            // REF: people are AT the furniture (sofa seat / desk + monitor), not in
+            // the path or the greenery. Each figure is glued to a real anchor below.
+
+            // Sit on the sofa: find Hero_Sofa for its real bounds, else procedural seat.
+            // We want the SEAT TOP (not the floor) so the lounger sits ON the cushion.
+            Vector3 sofaPos = new Vector3(0f, 0f, -2.25f);
+            float sofaSeatY = 0.60f; // procedural Sofa_Seat* top ≈ 0.63; sit a touch lower
+            var sofaGo = GameObject.Find("Hero_Sofa");
+            if (sofaGo != null)
+            {
+                var sr = sofaGo.GetComponentsInChildren<Renderer>(true);
+                if (sr.Length > 0)
+                {
+                    var sb = sr[0].bounds;
+                    foreach (var r in sr) sb.Encapsulate(r.bounds);
+                    // seat top ≈ 90% of sofa height (above arms = backrest; seat sits below)
+                    sofaPos = new Vector3(sb.center.x, 0f, sb.center.z + 0.05f);
+                    sofaSeatY = sb.max.y * 0.55f; // cushion height, not the backrest top
+                }
+                else Debug.LogWarning("[ReplaceNPCs] Hero_Sofa has no renderer — using procedural sofa anchor");
+            }
+            else Debug.LogWarning("[ReplaceNPCs] Hero_Sofa not found — using procedural sofa anchor (0,0,-2.25)");
+
+            // (a) LOUNGER (person.glb, half-lying) — ON the sofa SEAT, along the
+            //     cushion, FACING the room (sofa opens -Z → yaw 180). Base seated at
+            //     the cushion top so the pose rests on the seat, not the floor.
+            Place("RealNPC_Lounger", mPerson,
+                  new Vector3(sofaPos.x + 0.10f, sofaSeatY, sofaPos.z), 180f, 1.05f);
+
+            // (b) READER (npc_reading.glb, seated) — at the EAST desk WITH the monitor.
+            //     Sit on the -Z side of Workstation E (deskC 4.6,0,-1.0) FACING the
+            //     CRT (+Z, yaw 0). Seat surface ≈ 0.45 m. Glued to the desk edge.
+            Place("RealNPC_Reader", mReading,
+                  new Vector3(4.6f, 0.45f, -1.65f), 0f, 1.05f);
+
+            // (c) WORKER (kirill.fbx, standing) — STANDING TIGHT to the WEST desk
+            //     (Workstation W deskC -4.6,0,1.5), on the -Z (south) side FACING the
+            //     desk + monitor (+Z, yaw 0). Vplotnuyu: right at the desk edge, NOT
+            //     in the greenery.
+            Place("RealNPC_Worker", mKirill != null ? mKirill : mPerson2,
+                  new Vector3(-4.6f, 0f, 0.75f), 0f, 1.78f);
+
+            // (d) WEST (person2.glb, standing) — at the WEST desk's far end / second
+            //     station, just beside the Worker on the room side, angled toward the
+            //     desk so the pair reads as a workstation cluster (not the path).
+            Place("RealNPC_West", mPerson2 != null ? mPerson2 : mKirill,
+                  new Vector3(-3.7f, 0f, 0.55f), 20f, 1.75f);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[ReplaceNPCs] DONE — capsules hidden/removed, real human models placed + saved");
+        }
+
+        // ============================================================
+        // ITERATION: camera + scene polish (SURGICAL, idempotent)
+        // BuildHero builds the SAVED Scene_Botanika.unity, so post-build
+        // tweaks to the FreeLook rig + the central column must be applied
+        // surgically here (open → edit → mark dirty → save), exactly like
+        // ApplySceneEnhancements / AddGroundFoliage / AddNPCs.
+        // Headless: -executeMethod
+        // Afterhumans.EditorTools.BotanikaBuilder.IterationCameraAndScene
+        // ============================================================
+        [MenuItem("Afterhumans/v2/Iteration — Camera & Scene")]
+        public static void IterationCameraAndScene()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+            // ---------- 1) CAMERA: Cinemachine FreeLook 3rd-person behind ----------
+            var flGO = GameObject.Find("CM_FreeLook_Corgi");
+            if (flGO == null)
+            {
+                Debug.LogWarning("[IterationCameraAndScene] CM_FreeLook_Corgi not found — skipping camera tweaks");
+            }
+            else
+            {
+                var fl = flGO.GetComponent<CinemachineFreeLook>();
+                if (fl == null)
+                {
+                    Debug.LogWarning("[IterationCameraAndScene] CinemachineFreeLook component missing on CM_FreeLook_Corgi — skipping camera tweaks");
+                }
+                else
+                {
+                    // Rebuild orbits: 3rd-person behind the back (NOT a top-down bowl).
+                    // Bigger radii + lower heights pull the eye behind the dog at shoulder level.
+                    if (fl.m_Orbits != null && fl.m_Orbits.Length >= 3)
+                    {
+                        // Classic 3rd-person BEHIND the dog, looking roughly HORIZONTAL into the
+                        // scene (not top-down). Prev attempt (4.6m + top orbit) stared straight
+                        // DOWN at the dog's back ("в упор/сверху"). Moderate height + long radius
+                        // + mid orbit = over-the-shoulder with the scene visible ahead.
+                        fl.m_Orbits[0] = new CinemachineFreeLook.Orbit(2.0f, 2.8f);  // top
+                        fl.m_Orbits[1] = new CinemachineFreeLook.Orbit(1.3f, 3.0f);  // middle (main — NORMAL distance ~3m, dog tail to camera)
+                        fl.m_Orbits[2] = new CinemachineFreeLook.Orbit(0.5f, 2.7f);  // bottom
+                    }
+                    else
+                    {
+                        Debug.LogWarning("[IterationCameraAndScene] FreeLook m_Orbits unexpected length — orbits left unchanged");
+                    }
+
+                    // TAIL-TO-CAMERA FIX (measured, not guessed): runtime telemetry [CAMPROBE]
+                    // showed camSide=-0.91 (camera parked on the -root.forward side) and the live
+                    // frame at that side showed the dog's FACE. So the NOSE is at -root.forward and
+                    // the TAIL is at +root.forward. The FreeLook recenter was parking the camera on
+                    // the nose side. Fix: heading = TargetForward (root.forward = +Z, the TAIL dir)
+                    // + Bias 180° flips the resting azimuth to the TAIL side. Works at idle too
+                    // (TargetForward is always defined, unlike PositionDelta which needs movement).
+                    fl.m_Heading.m_Definition = CinemachineOrbitalTransposer.Heading.HeadingDefinition.TargetForward;
+                    fl.m_Heading.m_Bias = 180f; // park camera on the TAIL side, not the nose side
+                    fl.m_RecenterToTargetHeading.m_enabled = true;
+                    fl.m_RecenterToTargetHeading.m_RecenteringTime = 0.5f;
+                    fl.m_RecenterToTargetHeading.m_WaitTime = 0.3f;
+                    fl.m_YAxis.Value = 0.45f; // mid orbit → horizontal over-the-shoulder, NOT top-down
+
+                    // LookAt target lifted off the floor: a child "CamTarget" on the corgi
+                    // root at +0.5 m so the camera frames the dog, not y=0 ground.
+                    var followRoot = fl.Follow;
+                    if (followRoot == null)
+                    {
+                        Debug.LogWarning("[IterationCameraAndScene] FreeLook.Follow is null — cannot create CamTarget, LookAt left as-is");
+                    }
+                    else
+                    {
+                        var camTargetT = followRoot.Find("CamTarget");
+                        if (camTargetT == null)
+                        {
+                            var camTargetGO = new GameObject("CamTarget");
+                            camTargetGO.transform.SetParent(followRoot, worldPositionStays: false);
+                            camTargetGO.transform.localPosition = new Vector3(0f, 0.5f, 0f);
+                            camTargetGO.transform.localRotation = Quaternion.identity;
+                            camTargetT = camTargetGO.transform;
+                        }
+                        else
+                        {
+                            // idempotent: re-assert the offset in case a prior run drifted it
+                            camTargetT.localPosition = new Vector3(0f, 0.5f, 0f);
+                        }
+                        fl.LookAt = camTargetT;
+                    }
+
+                    // FOV — prefer the FreeLook lens, fall back to the brain Camera.
+                    fl.m_Lens.FieldOfView = 58f;
+                    var pcam = flGO.GetComponent<Camera>();
+                    if (pcam != null) pcam.fieldOfView = 58f;
+
+                    // ROOT-CAUSE FIX (camera "в упор"): a CinemachineCollider with
+                    // PullCameraForward was yanking the camera right onto the dog's back —
+                    // the greenhouse is packed with plants/column/walls, so the collider
+                    // saw constant "occlusion" between cam and dog and pulled the eye in to
+                    // ~1.5 m every frame. No orbit radius could beat it. REMOVE it entirely;
+                    // a rare wall-clip is far better than a permanently broken view.
+                    var collider = flGO.GetComponent<CinemachineCollider>();
+                    if (collider != null) Object.DestroyImmediate(collider);
+
+                    Debug.Log("[IterationCameraAndScene] FreeLook: orbits ~3m normal 3rd-person, heading TargetForward+bias180, CamTarget +0.5, FOV 58, CinemachineCollider REMOVED. NOTE: runtime camera is driven by KafkaDirectController scripted follow (brain disabled) — FreeLook left as fallback.");
+                }
+            }
+
+            // ---------- 2) CENTRAL COLUMN: warm steel-grey → white concrete ----------
+            var column = GameObject.Find("Column_Central");
+            if (column == null)
+            {
+                Debug.LogWarning("[IterationCameraAndScene] Column_Central not found — skipping column recolor");
+            }
+            else
+            {
+                var rend = column.GetComponent<Renderer>();
+                if (rend == null || rend.sharedMaterial == null)
+                {
+                    Debug.LogWarning("[IterationCameraAndScene] Column_Central has no renderer/material — skipping column recolor");
+                }
+                else
+                {
+                    var whiteConcrete = new Color(0.88f, 0.87f, 0.84f);
+                    var m = rend.sharedMaterial;
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", whiteConcrete);
+                    if (m.HasProperty("_Color")) m.SetColor("_Color", whiteConcrete);
+                    // Built-in fallback: plain .color (maps to whichever color prop exists).
+                    if (!m.HasProperty("_BaseColor") && !m.HasProperty("_Color")) m.color = whiteConcrete;
+                    Debug.Log("[IterationCameraAndScene] Column_Central material → white concrete (0.88,0.87,0.84)");
+                }
+            }
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[IterationCameraAndScene] DONE — saved Scene_Botanika.unity");
+        }
+
+        // ============================================================
+        // ITERATION: EVEN WARM SUNSET LIGHTING (SURGICAL, idempotent)
+        // BuildHero builds the SAVED Scene_Botanika.unity, so the lighting
+        // re-grade must be baked in here (open → edit → mark dirty → save),
+        // exactly like IterationReplaceNPCs / IterationCameraAndScene.
+        //
+        // GOAL (ref docs/concepts/refs_channel/ref_botanika.jpg):
+        //   EVEN warm golden-hour wash — the WHOLE nave reads, NO black
+        //   wells at the path/entrance, soft haze, god-rays soft (not blown).
+        //   Current problem: path/entry dark + god-rays over-bright.
+        //
+        // WHY raise ambient + add a FILL directional (not point fills):
+        //   Additional-light shadows are OFF in URP for FPS, and on GPU/WebGL
+        //   ambient IS applied (headless soft-GL ignores it — so headless
+        //   render LIES here; values are tuned for the GPU WebGL pass which
+        //   Tim verifies). A bright Trilight ambient + one shadowless FILL
+        //   directional lift the floor/entry off black WITHOUT killing the
+        //   key's long shadows. Point lights cannot fill the path (no shadows
+        //   to fill, and they pool rather than wash).
+        //
+        // Headless: -executeMethod
+        // Afterhumans.EditorTools.BotanikaBuilder.IterationLighting
+        // ============================================================
+        [MenuItem("Afterhumans/v2/Iteration — Lighting")]
+        public static void IterationLighting()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+            // ---------- 1) AMBIENT — bright warm Trilight (kills dark wells) ----------
+            // Trilight/Gradient IGNORES ambientIntensity for the COLORS (it multiplies
+            // SH only), so set bright colors directly AND keep intensity at 1.0. These
+            // are notably brighter than Sprint3 (~0.34/0.23/0.12) so the path/entrance
+            // floor and the shaded green read everywhere — no near-black corners.
+            RenderSettings.ambientMode      = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor     = new Color(0.62f, 0.58f, 0.50f); // warm light sky bounce
+            RenderSettings.ambientEquatorColor = new Color(0.50f, 0.45f, 0.38f); // warm mid fill
+            RenderSettings.ambientGroundColor  = new Color(0.30f, 0.26f, 0.22f); // lifted ground (was 0.12 → black floor)
+            RenderSettings.ambientIntensity    = 1.0f;
+            Debug.Log("[IterationLighting] ambient → bright warm Trilight (sky 0.62/eq 0.50/gnd 0.30, I=1.0)");
+
+            // ---------- 2) SUN — warm sunset key (keep angle, calm intensity) ----------
+            // Find the dominant Directional: prefer one named Sun/Key, else the
+            // brightest Directional in the scene. Lower its intensity from the
+            // Sprint3 2.6 (which over-drove highlights / made the contrast harsh
+            // vs the now-bright ambient) to a calmer ~1.2 even wash.
+            Light sun = null;
+            float bestI = -1f;
+            foreach (var l in Object.FindObjectsByType<Light>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (l == null || l.type != LightType.Directional) continue;
+                bool named = l.name.IndexOf("Sun", System.StringComparison.OrdinalIgnoreCase) >= 0
+                          || l.name.IndexOf("Key", System.StringComparison.OrdinalIgnoreCase) >= 0;
+                if (named) { sun = l; break; }
+                if (l.intensity > bestI) { bestI = l.intensity; sun = l; }
+            }
+            if (sun != null)
+            {
+                sun.intensity = 1.2f;                                   // calm even key (was 2.6)
+                sun.color = new Color(1.0f, 0.85f, 0.62f);             // warm sunset
+                // angle + shadows left AS-IS (sun shadows are fine — don't touch)
+                RenderSettings.sun = sun;
+                Debug.Log($"[IterationLighting] sun '{sun.name}' → I=1.2, warm (1.0,0.85,0.62), angle+shadows untouched");
+            }
+            else
+            {
+                Debug.LogWarning("[IterationLighting] no Directional sun found — skipping key tweak");
+            }
+
+            // ---------- 3) FILL — shadowless sky/top Directional (lifts the dark side) ----------
+            // Idempotent: Find before Create. A cool-neutral fill from the opposite/
+            // upper side fills the key's shadow side and the entrance so nothing
+            // crushes to black. Shadows OFF (it must NOT add its own shadows).
+            var fillGO = GameObject.Find("Fill_Sky");
+            Light fill;
+            if (fillGO == null)
+            {
+                fillGO = new GameObject("Fill_Sky");
+                // parent under the lighting root if present (keeps hierarchy clean)
+                var lightRoot = GameObject.Find("Botanika_Lighting");
+                if (lightRoot != null) fillGO.transform.SetParent(lightRoot.transform);
+                fill = fillGO.AddComponent<Light>();
+                Debug.Log("[IterationLighting] created Fill_Sky directional");
+            }
+            else
+            {
+                fill = fillGO.GetComponent<Light>() ?? fillGO.AddComponent<Light>();
+                Debug.Log("[IterationLighting] reused existing Fill_Sky");
+            }
+            fill.type = LightType.Directional;
+            fill.intensity = 0.35f;
+            fill.color = new Color(0.7f, 0.75f, 0.85f);                 // cool-neutral sky fill
+            fill.shadows = LightShadows.None;                           // never casts shadows
+            // aim from the upper/opposite side: steep downward, opposite azimuth to key
+            fill.transform.rotation = Quaternion.Euler(60f, 25f, 0f);
+
+            // ---------- 4) FOG — light warm haze (NOT milk) ----------
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogStartDistance = 6f;
+            RenderSettings.fogEndDistance = 42f;
+            RenderSettings.fogColor = new Color(0.85f, 0.74f, 0.55f);   // warm gold haze
+            Debug.Log("[IterationLighting] fog → linear warm 6..42 (light haze)");
+
+            // ---------- 5) GOD-RAYS / HAZE — dim ~25% if over-bright ----------
+            // The god-ray + shaft + haze cards use additive transparent materials with
+            // brightness carried in the material color's ALPHA (and _BaseColor RGB).
+            // Knock alpha + RGB down 25% so the shafts stay soft, not blown white.
+            // Only touches matched objects; no-op if none exist. Materials are shared,
+            // so dedupe by instance to avoid multiplying the same material twice.
+            string[] rayNameHints = { "Shaft", "GodRay", "LightShaft", "Haze", "HazeCard" };
+            var seenMats = new System.Collections.Generic.HashSet<Material>();
+            int dimmed = 0;
+            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (r == null) continue;
+                bool isRay = false;
+                foreach (var hint in rayNameHints)
+                    if (r.gameObject.name.IndexOf(hint, System.StringComparison.OrdinalIgnoreCase) >= 0) { isRay = true; break; }
+                if (!isRay) continue;
+                var mat = r.sharedMaterial;
+                if (mat == null || seenMats.Contains(mat)) continue;
+                seenMats.Add(mat);
+                // additive glow brightness lives in _BaseColor (RGB*A drives the add)
+                if (mat.HasProperty("_BaseColor"))
+                {
+                    var c = mat.GetColor("_BaseColor");
+                    c = new Color(c.r * 0.75f, c.g * 0.75f, c.b * 0.75f, c.a * 0.75f);
+                    mat.SetColor("_BaseColor", c);
+                    dimmed++;
+                }
+                else if (mat.HasProperty("_Color"))
+                {
+                    var c = mat.GetColor("_Color");
+                    c = new Color(c.r * 0.75f, c.g * 0.75f, c.b * 0.75f, c.a * 0.75f);
+                    mat.SetColor("_Color", c);
+                    dimmed++;
+                }
+            }
+            Debug.Log($"[IterationLighting] dimmed {dimmed} god-ray/haze material(s) by 25%");
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[IterationLighting] DONE — even warm sunset wash, Fill_Sky added, rays softened, saved");
+        }
+
+        // ============================================================
+        // ITERATION — DEGLARE
+        // Kills the catastrophic white-out when the camera looks UP at the
+        // glass roof / toward the sun. Root cause = three additive glare
+        // sources stacking past 1.0 and clipping to pure white:
+        //   (1) BLOOM — threshold ~1.0 + intensity ~1.1 → the bright HDRI sky
+        //       seen through glass blooms over the whole lower frame.
+        //   (2) SKYBOX _Exposure 1.0 — full-strength sunset HDRI behind glass.
+        //   (3) GOD-RAY / HAZE additive cards (if present in the scene).
+        // Fix philosophy: ACES tonemapping (shoulder-rolls highlights into
+        // warm colour instead of clipping to white), bloom cut hard + clamped,
+        // skybox exposure pulled down, post-exposure neutral, additive rays
+        // capped. ALL targets are ABSOLUTE (not multipliers) so re-running this
+        // never compounds. Headless soft-GL UNDER-reports bloom/glare, so these
+        // are deliberately conservative — verify final look on the GPU WebGL build.
+        //
+        // IMPORTANT: the SAVED scene's Global_Volume binds VP_Botanika.asset
+        // (guid a97dd9f6…), NOT VP_Botanika_v2. We edit the LIVE profile asset
+        // the saved scene actually renders with.
+        // ============================================================
+        [MenuItem("Afterhumans/v2/Iteration — Deglare")]
+        public static void IterationDeglare()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+            // ---------- 1) POST-PROCESS PROFILE — the live one the scene binds ----------
+            // Resolve the profile the saved Global_Volume actually uses, instead of
+            // assuming a path: find the global Volume in the scene and read its profile.
+            UnityEngine.Rendering.VolumeProfile profile = null;
+            foreach (var v in Object.FindObjectsByType<UnityEngine.Rendering.Volume>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (v == null) continue;
+                var p = v.sharedProfile != null ? v.sharedProfile : v.profile;
+                if (p != null) { profile = p; break; }
+            }
+            // Fallback to the known live asset if no Volume was found in-scene.
+            if (profile == null)
+            {
+                profile = AssetDatabase.LoadAssetAtPath<UnityEngine.Rendering.VolumeProfile>(
+                    "Assets/_Project/Settings/URP/VolumeProfiles/VP_Botanika.asset");
+            }
+
+            if (profile != null)
+            {
+                // BLOOM — the #1 white-out driver. Cut HARD + clamp HDR input so a
+                // single hot sky pixel through the glass can't flood the panel white.
+                if (profile.TryGet<UnityEngine.Rendering.Universal.Bloom>(out var bloom))
+                {
+                    bloom.active = true;
+                    bloom.intensity.Override(0.30f);          // ABS: was ~1.1 — soft motivated glow only
+                    bloom.threshold.Override(1.9f);           // ABS: was ~1.0 — only true emitters bloom, not the lit sky
+                    bloom.scatter.Override(0.70f);            // wide soft halo (no hard ring)
+                    bloom.clamp.Override(6f);                 // ABS: cap HDR input → no single-pixel white flood
+                    bloom.highQualityFiltering.Override(false); // WebGL perf; soft is fine here
+                    Debug.Log("[IterationDeglare] Bloom → intensity 0.30, threshold 1.9, clamp 6 (was the main white-out)");
+                }
+
+                // TONEMAPPING — force ACES. ACES rolls highlights into a filmic
+                // SHOULDER (keeps warm colour in the brights); Neutral clips hot
+                // values straight to white. This is the core anti-white-out lever.
+                if (profile.TryGet<UnityEngine.Rendering.Universal.Tonemapping>(out var tone))
+                {
+                    tone.active = true;
+                    tone.mode.Override(UnityEngine.Rendering.Universal.TonemappingMode.ACES);
+                    Debug.Log("[IterationDeglare] Tonemapping → ACES (shoulder roll-off, no clip-to-white)");
+                }
+
+                // COLOR ADJUSTMENTS — neutral post-exposure (remove any +EV lift that
+                // pushes the frame over the clip point).
+                if (profile.TryGet<UnityEngine.Rendering.Universal.ColorAdjustments>(out var color))
+                {
+                    color.active = true;
+                    color.postExposure.Override(-0.1f);       // ABS: slight negative headroom for the bright-up view
+                    Debug.Log("[IterationDeglare] ColorAdjustments postExposure → -0.1 (headroom against clip)");
+                }
+
+                // AUTO/FIXED EXPOSURE (if a Universal Exposure-style override is present;
+                // URP exposes this on some setups). Pin it moderate so it never auto-bright.
+                // No-op when the override type isn't in the profile.
+                // (URP's built-in stack has no separate Exposure VolumeComponent in this
+                //  package; postExposure above is the exposure control. Left as a note.)
+
+                EditorUtility.SetDirty(profile);
+                Debug.Log($"[IterationDeglare] profile '{profile.name}' de-glared");
+            }
+            else
+            {
+                Debug.LogWarning("[IterationDeglare] no VolumeProfile found — skipped post-FX deglare");
+            }
+
+            // ---------- 2) SKYBOX EXPOSURE — pull the HDRI down ----------
+            // Looking up through the glass roof = looking straight at the full-strength
+            // sunset HDRI. _Exposure 1.0 blows it to white. 0.32 keeps a readable warm
+            // sky without searing the lower frame via bloom/reflection.
+            // Fix BOTH the live RenderSettings.skybox AND the saved material asset, so
+            // it sticks in the saved scene regardless of which one the build samples.
+            const float SKY_EXPO = 0.32f; // ABS
+
+            var skyMatAsset = AssetDatabase.LoadAssetAtPath<Material>(
+                "Assets/_Project/Settings/SkyboxBotanikaWarm.mat");
+            if (skyMatAsset != null && skyMatAsset.HasProperty("_Exposure"))
+            {
+                skyMatAsset.SetFloat("_Exposure", SKY_EXPO);
+                EditorUtility.SetDirty(skyMatAsset);
+                Debug.Log($"[IterationDeglare] SkyboxBotanikaWarm.mat _Exposure → {SKY_EXPO} (was 1.0)");
+            }
+            var liveSky = RenderSettings.skybox;
+            if (liveSky != null && liveSky != skyMatAsset && liveSky.HasProperty("_Exposure"))
+            {
+                liveSky.SetFloat("_Exposure", SKY_EXPO);
+                EditorUtility.SetDirty(liveSky);
+                Debug.Log($"[IterationDeglare] live RenderSettings.skybox _Exposure → {SKY_EXPO}");
+            }
+
+            // ---------- 3) GOD-RAYS / HAZE — cap additive glow (ABSOLUTE) ----------
+            // Additive Shaft/GodRay/Haze cards (created by Sprint3) carry brightness in
+            // their material colour RGB*A. When you look up they overlap the bright sky
+            // and add past 1.0 → white. Set ABSOLUTE caps (not multipliers) so re-runs
+            // never compound: clamp alpha to ≤0.30, and pull RGB so no channel exceeds
+            // 0.55 (keeps the warm tint, kills the searing). No-op if none exist
+            // (the current saved scene has none, but a future rebuild may re-add them).
+            const float RAY_ALPHA_CAP = 0.30f; // ABS
+            const float RAY_RGB_CAP   = 0.55f; // ABS
+            string[] rayNameHints = { "Shaft", "GodRay", "LightShaft", "Haze", "HazeCard" };
+            var seenMats = new System.Collections.Generic.HashSet<Material>();
+            int dimmed = 0;
+            foreach (var r in Object.FindObjectsByType<Renderer>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (r == null) continue;
+                bool isRay = false;
+                foreach (var hint in rayNameHints)
+                    if (r.gameObject.name.IndexOf(hint, System.StringComparison.OrdinalIgnoreCase) >= 0) { isRay = true; break; }
+                if (!isRay) continue;
+                var mat = r.sharedMaterial;
+                if (mat == null || seenMats.Contains(mat)) continue;
+                seenMats.Add(mat);
+
+                string prop = mat.HasProperty("_BaseColor") ? "_BaseColor"
+                            : (mat.HasProperty("_Color") ? "_Color" : null);
+                if (prop == null) continue;
+
+                var c = mat.GetColor(prop);
+                float scale = 1f;
+                float maxRgb = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+                if (maxRgb > RAY_RGB_CAP && maxRgb > 0f) scale = RAY_RGB_CAP / maxRgb; // preserve warm hue
+                var capped = new Color(c.r * scale, c.g * scale, c.b * scale,
+                                       Mathf.Min(c.a, RAY_ALPHA_CAP));
+                mat.SetColor(prop, capped);
+                EditorUtility.SetDirty(mat);
+                dimmed++;
+            }
+            Debug.Log($"[IterationDeglare] capped {dimmed} god-ray/haze additive material(s) " +
+                      $"(alpha≤{RAY_ALPHA_CAP}, rgb≤{RAY_RGB_CAP}); 0 = none in scene (expected)");
+
+            // ---------- persist everything ----------
+            // NOTE: no AssetDatabase.Refresh() here — in batchmode it can trigger a long/hung
+            // re-import pass (glTFast NPC GLBs) and stalled the build ~44 min. SaveAssets +
+            // SaveScene are sufficient to persist the profile/skybox/scene edits.
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[IterationDeglare] DONE — bloom cut, ACES forced, skybox dimmed, rays capped, saved. " +
+                      "Verify on GPU WebGL: NO white-out looking up at roof/sun, but frame still warm (not flat).");
+        }
+
+        // ---- shared procedural-texture helpers (headless-safe) ----
+
+        /// <summary>Procedural grunge in the ALPHA channel (RGB stays neutral), used as a
+        /// dirt mask on glass. Returns a Texture2D; dirt strength capped by <paramref name="cap"/>.</summary>
+        private static Texture2D Enh_GlassGrungeTex(int size, float rgbNeutral, float cap)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "EnhGlassGrunge" };
+            tex.wrapMode = TextureWrapMode.Repeat;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    // layered value-noise-ish smudge: cheap sin/hash blend (deterministic)
+                    float u = x / (float)size, v = y / (float)size;
+                    float n = 0f;
+                    n += Mathf.Sin((u * 7.3f + v * 3.1f) * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    n += Mathf.Sin((u * 13.7f - v * 9.4f) * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    n += Mathf.Sin((u * 23.1f + v * 17.5f) * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    float h = Mathf.Abs(Mathf.Sin((x * 127.1f + y * 311.7f)));    // hash-ish speckle
+                    n = (n / 3f) * 0.7f + h * 0.3f;
+                    float dirt = Mathf.Clamp01(Mathf.Pow(n, 1.8f)) * cap;          // streaky, capped
+                    tex.SetPixel(x, y, new Color(rgbNeutral, rgbNeutral, rgbNeutral, dirt));
+                }
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>Procedural mottled grunge in RGB (mid-grey base), used as a URP detail
+        /// albedo (×2 detail) for grime on floor/concrete.</summary>
+        private static Texture2D Enh_DetailGrungeTex(int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "EnhDetailGrunge" };
+            tex.wrapMode = TextureWrapMode.Repeat;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                {
+                    float u = x / (float)size, v = y / (float)size;
+                    float n = 0f;
+                    n += Mathf.Sin((u * 5.1f + v * 4.7f) * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    n += Mathf.Sin((u * 11.3f - v * 8.2f) * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    n += Mathf.Abs(Mathf.Sin((x * 89.7f + y * 233.3f))) ;
+                    n /= 3f;
+                    // _DETAIL_MULX2: 0.5 grey = neutral, darker = darken, lighter = brighten.
+                    float g = Mathf.Lerp(0.32f, 0.62f, n);   // mostly darkening blotches
+                    tex.SetPixel(x, y, new Color(g, g, g, 1f));
+                }
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>Soft additive gradient for god-ray quads (bright soft core, edges fade,
+        /// brighter near the top/source). Mirrors GodRayGradient in CreateLightShafts.</summary>
+        private static Texture2D Enh_ShaftGradientTex()
+        {
+            int GW = 48, GH = 256;
+            var tex = new Texture2D(GW, GH, TextureFormat.RGBA32, false) { name = "EnhShaftGradient" };
+            tex.wrapMode = TextureWrapMode.Clamp;
+            for (int yy = 0; yy < GH; yy++)
+            {
+                float v = yy / (float)(GH - 1);
+                float vert = Mathf.Pow(v, 0.5f) * (0.35f + 0.65f * v);
+                for (int xx = 0; xx < GW; xx++)
+                {
+                    float u = xx / (float)(GW - 1);
+                    float horiz = Mathf.Sin(u * Mathf.PI);
+                    horiz *= horiz;
+                    float a = Mathf.Clamp01(horiz * vert);
+                    tex.SetPixel(xx, yy, new Color(1f, 0.84f, 0.55f, a));
+                }
+            }
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>Build an additive (glow) URP/Unlit material with the shaft gradient.</summary>
+        private static Material Enh_AdditiveShaftMaterial(Texture2D grad)
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
+            var mat = new Material(shader) { name = "EnhGodRay_Additive" };
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(1f, 0.84f, 0.55f, 0.85f));
+            if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", grad);
+            mat.SetFloat("_Surface", 1f);   // Transparent
+            mat.SetFloat("_Blend", 2f);     // Additive
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.One);
+            mat.SetInt("_ZWrite", 0);
+            mat.renderQueue = 3100;
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            return mat;
+        }
+
+        // ---- B1: glowing warm ceiling + dirty glass ----
+        private static void Enh_GlowCeilingAndDirtyGlass(GameObject greybox)
+        {
+            var grunge = Enh_GlassGrungeTex(256, 0.62f, 0.55f); // RGB ~0.62 neutral, dirt in alpha capped ×0.55
+            var dirtyDone = new System.Collections.Generic.HashSet<Material>();
+            var emitDone  = new System.Collections.Generic.HashSet<Material>();
+            int roofN = 0, wallN = 0, glassN = 0;
+
+            foreach (var r in greybox.GetComponentsInChildren<Renderer>(true))
+            {
+                string n = r.name;
+                bool isRoof  = n.Contains("Vault") || n.Contains("Gable");
+                bool isWall  = n.Contains("Wall_North");
+                bool isGlass = n.Contains("Wall_Glass") || n.Contains("Glass");
+
+                // warm emission on roof + opaque walls (read as a glowing golden ceiling)
+                if (isRoof || isWall)
+                {
+                    var m = r.sharedMaterial;
+                    if (m != null && emitDone.Add(m))
+                    {
+                        float mul = isRoof ? 0.9f : 0.45f;
+                        m.EnableKeyword("_EMISSION");
+                        m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                        if (m.HasProperty("_EmissionColor"))
+                            m.SetColor("_EmissionColor", new Color(1f, 0.82f, 0.55f) * mul);
+                        if (isRoof) roofN++; else wallN++;
+                    }
+                }
+
+                // dirty glass — keep it TRANSPARENT (don't go opaque, prior bug). Put the
+                // grunge in _BaseMap, lift base alpha a touch by the dirt, drop smoothness.
+                if (isGlass)
+                {
+                    var m = r.sharedMaterial;
+                    if (m != null && dirtyDone.Add(m))
+                    {
+                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", grunge);
+                        if (m.HasProperty("_BaseColor"))
+                        {
+                            var bc = m.GetColor("_BaseColor");
+                            // slightly more opaque where there is dirt (avg dirt ~0.18 of cap → +~0.18*cap*0.18)
+                            float addA = 0.55f * 0.18f * 0.18f; // ≈ 0.018, very subtle — never opaque
+                            bc.a = Mathf.Clamp(bc.a + addA, 0f, 0.35f);
+                            m.SetColor("_BaseColor", bc);
+                        }
+                        if (m.HasProperty("_Smoothness"))
+                        {
+                            float s = m.GetFloat("_Smoothness");
+                            m.SetFloat("_Smoothness", Mathf.Min(s, 0.20f)); // 0.30→~0.20 (dirty = less glossy)
+                        }
+                        glassN++;
+                    }
+                }
+            }
+            Debug.Log($"[Enh_GlowCeilingAndDirtyGlass] roof emissive={roofN} wall emissive={wallN} dirty glass mats={glassN}");
+        }
+
+        // ---- B2: god-rays + dust (surgical, under Botanika_Greybox) ----
+        private static void Enh_GodRaysAndDust(GameObject greybox)
+        {
+            // idempotent: drop the prior enhancement container
+            var prior = greybox.transform.Find("EnhanceShafts");
+            if (prior != null) Object.DestroyImmediate(prior.gameObject);
+
+            var root = new GameObject("EnhanceShafts");
+            root.transform.SetParent(greybox.transform, worldPositionStays: false);
+
+            var grad = Enh_ShaftGradientTex();
+            var mat = Enh_AdditiveShaftMaterial(grad);
+
+            // SYNC with Sprint3_Lighting Sun_Directional = Euler(16, 205, 0).
+            var sunDir = Quaternion.Euler(16f, 205f, 0f) * Vector3.forward;
+
+            void Beam(string label, Vector3 pos, Quaternion baseRot, Vector3 scale)
+            {
+                for (int k = 0; k < 2; k++)   // crossed quad pair = pseudo-volume
+                {
+                    var q = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    q.name = $"{label}_{k}";
+                    Object.DestroyImmediate(q.GetComponent<Collider>());
+                    q.transform.SetParent(root.transform, worldPositionStays: false);
+                    q.transform.position = pos;
+                    q.transform.rotation = baseRot * Quaternion.Euler(0f, k * 90f, 0f);
+                    q.transform.localScale = scale;
+                    var r = q.GetComponent<Renderer>();
+                    r.sharedMaterial = mat;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                    r.receiveShadows = false;
+                }
+            }
+
+            // Set 1: 5 raking shafts down the nave (axis = blend sun toward up 0.45).
+            var axis1 = Vector3.Slerp(-sunDir, Vector3.up, 0.45f).normalized;
+            var rot1 = Quaternion.FromToRotation(Vector3.up, axis1);
+            int s1 = 0;
+            for (int c = -2; c <= 2; c++)
+            {
+                float x = c * 2.6f;
+                float z = 0.5f + c * 2.6f;
+                Beam($"EnhShaftRake_{s1}", new Vector3(x, 5.2f, z), rot1, new Vector3(3.8f, 14f, 1f));
+                s1++;
+            }
+
+            // Set 2: 4 near-vertical shafts through the ridge (axis = blend down toward -sun 0.25).
+            var axis2 = Vector3.Slerp(Vector3.down, -sunDir, 0.25f).normalized;
+            var rot2 = Quaternion.FromToRotation(Vector3.up, axis2);
+            int s2 = 0;
+            foreach (float z in new[] { -3f, 1f, 5f, 9f })
+            {
+                Beam($"EnhShaftVert_{s2}", new Vector3(0f, 6.8f, z), rot2, new Vector3(4.4f, 9f, 1f));
+                s2++;
+            }
+
+            // Dust motes — small slow golden particles filling the nave volume.
+            var dustGo = new GameObject("EnhDust");
+            dustGo.transform.SetParent(root.transform, worldPositionStays: false);
+            dustGo.transform.position = new Vector3(0f, 3.4f, 1f);
+            var ps = dustGo.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 14f;
+            main.startSpeed = 0.015f;
+            main.startSize = new ParticleSystem.MinMaxCurve(0.02f, 0.06f);
+            main.maxParticles = 260;
+            main.startColor = new Color(1f, 0.9f, 0.68f, 0.45f);
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.gravityModifier = -0.003f;     // slight upward drift
+            var em = ps.emission; em.rateOverTime = 26f;
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Box;
+            shape.scale = new Vector3(12f, 6f, 18f);
+            var col = ps.colorOverLifetime; col.enabled = true;
+            var grad2 = new Gradient();
+            grad2.SetKeys(
+                new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(Color.white, 1f) },
+                new[] { new GradientAlphaKey(0f, 0f), new GradientAlphaKey(0.4f, 0.3f),
+                        new GradientAlphaKey(0.4f, 0.7f), new GradientAlphaKey(0f, 1f) });
+            col.color = grad2;
+            var psr = dustGo.GetComponent<ParticleSystemRenderer>();
+            psr.renderMode = ParticleSystemRenderMode.Billboard;
+            var pmat = new Material(Shader.Find("Universal Render Pipeline/Particles/Unlit") ??
+                                    Shader.Find("Particles/Standard Unlit"));
+            if (pmat.HasProperty("_BaseColor")) pmat.SetColor("_BaseColor", new Color(1f, 0.9f, 0.68f, 0.3f));
+            psr.sharedMaterial = pmat;
+
+            Debug.Log($"[Enh_GodRaysAndDust] EnhanceShafts: {s1} rake + {s2} vertical shafts + dust (sunDir synced 16,205)");
+        }
+
+        // ---- B3: grime / wear ----
+        private static void Enh_GrimeAndWear(GameObject greybox)
+        {
+            var detailTex = Enh_DetailGrungeTex(256);
+            var done = new System.Collections.Generic.HashSet<Material>();
+            int detailN = 0;
+
+            foreach (var r in greybox.GetComponentsInChildren<Renderer>(true))
+            {
+                string n = r.name;
+                if (!(n.Contains("Floor") || n.Contains("Column_") || n.Contains("Wall_South_"))) continue;
+                var m = r.sharedMaterial;
+                if (m == null || !done.Add(m)) continue;
+                if (m.HasProperty("_DetailAlbedoMap"))
+                {
+                    m.SetTexture("_DetailAlbedoMap", detailTex);
+                    m.SetTextureScale("_DetailAlbedoMap", new Vector2(1.3f, 1.3f));
+                    m.EnableKeyword("_DETAIL_MULX2");
+                    if (m.HasProperty("_DetailAlbedoMapScale")) m.SetFloat("_DetailAlbedoMapScale", 0.9f);
+                    detailN++;
+                }
+            }
+
+            // GrimeSkirts — dark mossy-earth transparent skirts at wall bases / column feet.
+            var prior = greybox.transform.Find("GrimeSkirts");
+            if (prior != null) Object.DestroyImmediate(prior.gameObject);
+            var skirtRoot = new GameObject("GrimeSkirts");
+            skirtRoot.transform.SetParent(greybox.transform, worldPositionStays: false);
+
+            // transparent dark green-brown grime material
+            var gshader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var gmat = new Material(gshader) { name = "EnhGrime" };
+            gmat.SetFloat("_Surface", 1f); // Transparent
+            gmat.SetFloat("_Blend", 0f);   // Alpha
+            gmat.SetOverrideTag("RenderType", "Transparent");
+            gmat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            gmat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            gmat.SetInt("_ZWrite", 0);
+            gmat.renderQueue = 3000;
+            if (gmat.HasProperty("_BaseColor")) gmat.SetColor("_BaseColor", new Color(0.10f, 0.13f, 0.07f, 0.50f));
+            if (gmat.HasProperty("_Smoothness")) gmat.SetFloat("_Smoothness", 0.05f);
+            if (gmat.HasProperty("_Metallic")) gmat.SetFloat("_Metallic", 0f);
+
+            void Skirt(string label, Vector3 pos, Vector3 scale)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = label;
+                Object.DestroyImmediate(go.GetComponent<Collider>());
+                go.transform.SetParent(skirtRoot.transform, worldPositionStays: false);
+                go.transform.position = pos;
+                go.transform.localScale = scale;
+                var rend = go.GetComponent<Renderer>();
+                rend.sharedMaterial = gmat;
+                rend.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                rend.receiveShadows = false;
+            }
+
+            // wall-base skirts (height ~0.6 m) along both side walls (x = ±7) and the south wall
+            int sc = 0;
+            for (float z = -12f; z <= 12f + 0.01f; z += 4f)
+            {
+                Skirt($"GrimeSkirt_W_{sc}", new Vector3(-6.85f, 0.3f, z), new Vector3(0.12f, 0.6f, 3.6f));
+                Skirt($"GrimeSkirt_E_{sc}", new Vector3( 6.85f, 0.3f, z), new Vector3(0.12f, 0.6f, 3.6f));
+                sc++;
+            }
+            int scs = 0;
+            for (float x = -5f; x <= 5f + 0.01f; x += 5f)
+            {
+                Skirt($"GrimeSkirt_S_{scs}", new Vector3(x, 0.3f, -13.85f), new Vector3(3.6f, 0.6f, 0.12f));
+                scs++;
+            }
+            // column-foot skirts (4 columns at x = ±3.5, z = ±5)
+            int cc = 0;
+            foreach (var cx in new[] { -3.5f, 3.5f })
+                foreach (var cz in new[] { -5f, 5f })
+                {
+                    Skirt($"GrimeSkirt_Col_{cc}", new Vector3(cx, 0.3f, cz), new Vector3(1.0f, 0.6f, 1.0f));
+                    cc++;
+                }
+
+            Debug.Log($"[Enh_GrimeAndWear] detail-grime mats={detailN}, grime skirts={sc * 2 + scs + cc}");
+        }
+
+        // ---- B4: light / background (RenderSettings + a soft sky-dome fill) ----
+        private static void Enh_LightAndBackground()
+        {
+            // lift ambient sky so the background doesn't sink to black; keep ground dark for shadows
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.44f, 0.38f, 0.29f);
+            RenderSettings.ambientIntensity = 0.42f;
+            // (ambientGroundColor intentionally left untouched — keep shadows dark)
+
+            // pull fog in slightly + warm it a touch (don't overpower)
+            RenderSettings.fog = true;
+            if (RenderSettings.fogMode != FogMode.Linear) RenderSettings.fogMode = FogMode.Linear;
+            RenderSettings.fogEndDistance = 38f;
+            RenderSettings.fogColor = new Color(0.93f, 0.80f, 0.58f);
+
+            // one shadowless downward sky-dome fill (don't blow out — modest 0.28)
+            var existing = GameObject.Find("Fill_SkyDome");
+            if (existing != null) Object.DestroyImmediate(existing);
+            var lightRoot = GameObject.Find("Botanika_Lighting");
+            var go = new GameObject("Fill_SkyDome");
+            if (lightRoot != null) go.transform.SetParent(lightRoot.transform, worldPositionStays: false);
+            var l = go.AddComponent<Light>();
+            l.type = LightType.Directional;
+            l.color = new Color(1f, 0.88f, 0.68f);
+            l.intensity = 0.28f;
+            l.transform.rotation = Quaternion.Euler(80f, 0f, 0f); // pointing down
+            l.shadows = LightShadows.None;
+
+            Debug.Log("[Enh_LightAndBackground] ambient sky lifted, fog→38, Fill_SkyDome added (no clipping)");
         }
     }
 }
