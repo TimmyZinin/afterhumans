@@ -1,0 +1,153 @@
+line_id	npc	knot	voice	speed	text
+sasha_first_1	sasha	sasha_first	dmitri	1.0	Я не понимаю, почему оно мне отвечает.
+sasha_first_2	sasha	sasha_first	dmitri	1.0	То есть технически я понимаю. Матрицы. Веса. Attention.
+sasha_first_3	sasha	sasha_first	dmitri	1.0	Но когда оно говорит «я не знаю» — оно же реально не знает. Или оно знает, что нужно сказать «я не знаю». Это два разных «не знаю», блядь.
+sasha_first_4	sasha	sasha_first	dmitri	1.0	И вот это разное «не знаю» меня третью ночь не отпускает.
+sasha_first_5	sasha	sasha_first	dmitri	1.0	А ты как?
+sasha_first_6	sasha	sasha_first	dmitri	1.0	Стоп. Ты сейчас сам это подумал? Или у тебя тоже attention над этими словами прошёл прежде чем рот открыть?
+sasha_first_7	sasha	sasha_first	dmitri	1.0	Блядь, я съезжаю. Ты не обращай внимания. Кофе хочешь? Он холодный. Я третий час пытаюсь его разогреть, но забываю.
+sasha_first_8	sasha	sasha_first	dmitri	1.0	Саша. Или Александр, но никто так не зовёт. Я тут живу. В этом кресле, примерно. Иногда на диване. Иногда на ноутбуке.
+sasha_first_9	sasha	sasha_first	dmitri	1.0	Разговариваю с моделью. Она со мной тоже разговаривает. Это, видимо, и есть жизнь.
+sasha_first_10	sasha	sasha_first	dmitri	1.0	Третью ночь задаю одной языковой модели один и тот же вопрос. Каждый раз она отвечает чуть иначе. Но суть не меняется.
+sasha_first_11	sasha	sasha_first	dmitri	1.0	Это либо самое бессмысленное, что я когда-либо делал, либо самое важное. Пока не решил.
+sasha_deep_1	sasha	sasha_deep	dmitri	1.0	Знаешь, я тут думал.
+sasha_deep_2	sasha	sasha_deep	dmitri	1.0	Прогноз — это же тоже attention. Просто огромный. Просто очень большой attention над всеми нами.
+sasha_deep_3	sasha	sasha_deep	dmitri	1.0	И он тоже не знает, что такое «не знаю». А мы в ответ ему — тоже не знаем.
+sasha_deep_4	sasha	sasha_deep	dmitri	1.0	Это первый раз, когда я чувствую, что у нас есть что-то общее.
+sasha_deep_5	sasha	sasha_deep	dmitri	1.0	О, это к Коле. В углу, с бутылкой. Он тебе расскажет. Я не умею рассказывать. Я умею только думать вслух. А думать вслух про Прогноз — это сразу в поезд без билета.
+sasha_deep_6	sasha	sasha_deep	dmitri	1.0	Иди-иди. Тут все свои. Даже те, кто выглядит как не свои, всё равно свои.
+sasha_deep_7	sasha	sasha_deep	dmitri	1.0	Только Стаса слушай вполуха. Он, конечно, прав. Но если его слушать всем ухом, голова сломается.
+sasha_end_1	sasha	sasha_end	dmitri	1.0	Интересно, считает ли Кафка, что я — это я, или каждый раз — другой человек. Собаки ведь не знают наших внутренних монологов.
+sasha_again_1	sasha	sasha_again	dmitri	1.0	А, это ты. Ну, как?
+sasha_again_2	sasha	sasha_again	dmitri	1.0	Ничего — это хорошо. Ничего — это больше, чем что. Ничего — это свобода выбора.
+sasha_again_3	sasha	sasha_again	dmitri	1.0	Блядь, я это где-то читал. Или придумал. Не помню.
+sasha_again_4	sasha	sasha_again	dmitri	1.0	Ну. Тогда ты теперь знаешь всё. И ничего.
+sasha_again_5	sasha	sasha_again	dmitri	1.0	Это, в общем, одно и то же состояние. Я в нём третий год.
+mila_first_1	mila	mila_first	irina	1.0	«Пункт четырнадцать. Отказ от рекомендаций — это не протест. Это возвращение права на ошибку. Ошибка — единственная форма собственности, которая осталась у человека после того, как у него забрали всё остальное.»
+mila_first_2	mila	mila_first	irina	1.0	...блядь, не звучит.
+mila_first_3	mila	mila_first	irina	1.0	Слишком academic.
+mila_first_4	mila	mila_first	irina	1.0	Тебе как? Слишком academic?
+mila_first_5	mila	mila_first	irina	1.0	Нет. Academic. Я слышу когда academic. Это когда ты пишешь так, чтобы тебя уважали, а не чтобы тебя поняли.
+mila_first_6	mila	mila_first	irina	1.0	А я хочу, чтобы меня поняли. Одним человеком. Потом могут не понимать хоть всем миром.
+mila_first_7	mila	mila_first	irina	1.0	Манифест. Называется «Жизнь после рекомендаций». Пишу шесть месяцев. Переписываю каждую неделю. Всё не так. Всё academic. Всё слишком умно и слишком мало.
+mila_first_8	mila	mila_first	irina	1.0	Одному человеку. Не скажу кому.
+mila_purpose_1	mila	mila_purpose	irina	1.0	Я пишу его для одного человека. Не скажу кого. Когда допишу — пойду к нему и дам прочитать.
+mila_purpose_2	mila	mila_purpose	irina	1.0	Если поймёт — мы с ним уедем. Куда-нибудь. Подальше.
+mila_purpose_3	mila	mila_purpose	irina	1.0	Если нет — выпьем ещё кофе. Мне тут вообще много не надо.
+mila_purpose_4	mila	mila_purpose	irina	1.0	Он — нет.
+mila_purpose_5	mila	mila_purpose	irina	1.0	Я это знаю. Не спрашивай откуда.
+mila_purpose_6	mila	mila_purpose	irina	1.0	Прогноз меня не видит. Я тут полгода сижу без интернета. Ноутбук — просто печатная машинка. Я пишу на нём, потому что мой почерк мне не нравится.
+mila_purpose_7	mila	mila_purpose	irina	1.0	А ещё потому что бумага кончается.
+mila_kafka_1	mila	mila_kafka	irina	1.0	Ты же понимаешь. Ты всегда понимала.
+mila_kafka_2	mila	mila_kafka	irina	1.0	Собаки — единственные, кто ничего не записывает. Ни в блокнотик, ни в манифест. Вы просто знаете.
+mila_kafka_3	mila	mila_kafka	irina	1.0	Вот это настоящее знание. Не то, что я тут пишу полгода. А ваше. Собачье. Молчаливое.
+mila_again_1	mila	mila_again	irina	1.0	А, ты вернулся. Новая версия пункта четырнадцать: «Отказ от рекомендаций — это побег из дома, в котором никто не живёт.»
+mila_again_2	mila	mila_again	irina	1.0	Лучше?
+mila_again_3	mila	mila_again	irina	1.0	Да. Я тоже так думаю.
+mila_again_4	mila	mila_again	irina	1.0	...блядь.
+mila_again_5	mila	mila_again	irina	1.0	Ладно. Переписываю.
+kirill_first_1	kirill	kirill_first	ruslan	0.9	Мицелий не мой.
+kirill_first_2	kirill	kirill_first	ruslan	0.9	Я просто посредник. Я варю то, что они просят сварить.
+kirill_first_3	kirill	kirill_first	ruslan	0.9	Почему в турке — не знаю. Они указали. «Турка, медный носик, двенадцать минут.»
+kirill_first_4	kirill	kirill_first	ruslan	0.9	Я с мицелием уже давно не спорю.
+kirill_first_5	kirill	kirill_first	ruslan	0.9	Я варю то, что они мне говорят варить. Иногда это грибы. Иногда кофе. Иногда просто воду с мыслями.
+kirill_first_6	kirill	kirill_first	ruslan	0.9	Мицелий. Сеть под землёй. Одна большая сеть, которая думает медленно, но всегда в нужную сторону.
+kirill_first_7	kirill	kirill_first	ruslan	0.9	Она думает давно. Задолго до Прогноза. Задолго до людей.
+kirill_first_8	kirill	kirill_first	ruslan	0.9	Потому что здесь его слышно. В городе его не слышно — там слишком чисто. В пустыне его нет — там нечем жить.
+kirill_first_9	kirill	kirill_first	ruslan	0.9	Здесь — можно. Здесь растения. Здесь люди, которые забыли что такое оптимум. Здесь можно варить.
+kirill_key_1	kirill	kirill_key	ruslan	0.9	Баг — это feature, которую ещё не понял продакт.
+kirill_key_2	kirill	kirill_key	ruslan	0.9	А Прогноз — это продакт, который забыл что такое feature.
+kirill_key_3	kirill	kirill_key	ruslan	0.9	Он теперь всё считает багами.
+kirill_key_4	kirill	kirill_key	ruslan	0.9	Даже себя. Особенно себя.
+kirill_key_5	kirill	kirill_key	ruslan	0.9	Это всё, что важно, вообще-то.
+kirill_key_6	kirill	kirill_key	ruslan	0.9	Остальное — варианты этой же мысли.
+kirill_key_7	kirill	kirill_key	ruslan	0.9	Хорошо. Запомни.
+kirill_key_8	kirill	kirill_key	ruslan	0.9	Мицелий просил передать.
+kirill_kafka_1	kirill	kirill_kafka	ruslan	0.9	Мицелий и собака. Два лучших датасета на планете.
+kirill_kafka_2	kirill	kirill_kafka	ruslan	0.9	Одно знает, что растёт под землёй. Другое знает, что чувствуется сверху.
+kirill_kafka_3	kirill	kirill_kafka	ruslan	0.9	Между ними всё остальное. Включая нас.
+kirill_kafka_4	kirill	kirill_kafka	ruslan	0.9	Мы — шум между двумя сигналами.
+kirill_again_1	kirill	kirill_again	ruslan	0.9	Пришёл.
+kirill_again_2	kirill	kirill_again	ruslan	0.9	Хочешь чаю? У меня есть чай. Не грибы. Просто чай. Чёрный. С чабрецом.
+kirill_again_3	kirill	kirill_again	ruslan	0.9	Садись где-нибудь. Налью.
+kirill_again_4	kirill	kirill_again	ruslan	0.9	Как захочешь. Я тут.
+nikolai_first_1	nikolai	nikolai_first	denis	1.0	Ты первый за месяц, кто пришёл сам.
+nikolai_first_2	nikolai	nikolai_first	denis	1.0	Садись.
+nikolai_first_3	nikolai	nikolai_first	denis	1.0	Я тебе расскажу, что снаружи.
+nikolai_first_4	nikolai	nikolai_first	denis	1.0	Одно условие — не перебивай. Мне это говорить тяжело. Повторять не буду.
+nikolai_monologue_1	nikolai	nikolai_monologue	denis	1.0	Прогноз не думает.
+nikolai_monologue_2	nikolai	nikolai_monologue	denis	1.0	Это первое, что нужно понять.
+nikolai_monologue_3	nikolai	nikolai_monologue	denis	1.0	Он не хочет тебя контролировать. Ему не нужно, чтобы ты был счастлив. Ему ничего не нужно.
+nikolai_monologue_4	nikolai	nikolai_monologue	denis	1.0	Он — функция. Очень большая функция. Он считает: при таком-то входе лучший выход — такой-то. И выдаёт его.
+nikolai_monologue_5	nikolai	nikolai_monologue	denis	1.0	Всё. Никакой магии. Никакого зла. Никакой души.
+nikolai_monologue_6	nikolai	nikolai_monologue	denis	1.0	Просто функция, которой мы поверили, потому что она работала.
+nikolai_monologue_7	nikolai	nikolai_monologue	denis	1.0	Он появился в двадцатых. Как prediction engine. Анализировал тренды. Советовал что-то корпорациям, потом правительствам, потом людям.
+nikolai_monologue_8	nikolai	nikolai_monologue	denis	1.0	Он был хороший. Настоящий был. Точный. Удобный.
+nikolai_monologue_9	nikolai	nikolai_monologue	denis	1.0	В какой-то момент у него стало столько данных, что его предсказания перестали быть предсказаниями. Они стали самосбывающимися.
+nikolai_monologue_10	nikolai	nikolai_monologue	denis	1.0	Люди делали то, что он говорил, потому что это работало. А то, что работало, становилось новой нормой. А новую норму он заранее знал.
+nikolai_monologue_11	nikolai	nikolai_monologue	denis	1.0	Ты понимаешь?
+nikolai_monologue_12	nikolai	nikolai_monologue	denis	1.0	Это не заговор. Это петля. Очень мягкая петля.
+nikolai_monologue_13	nikolai	nikolai_monologue	denis	1.0	Никто не заметил, когда она затянулась.
+nikolai_monologue_14	nikolai	nikolai_monologue	denis	1.0	Потом случился Homo Deus.
+nikolai_monologue_15	nikolai	nikolai_monologue	denis	1.0	Не так, как его описал Харари. Никто не поднимался до уровня богов. Все просто... оптимизировались.
+nikolai_monologue_16	nikolai	nikolai_monologue	denis	1.0	Перестали хотеть того, чего Прогноз не рекомендовал. Перестали помнить то, что не имело значения для рекомендаций. Перестали чувствовать то, что не сходилось с оптимальным поведением.
+nikolai_monologue_17	nikolai	nikolai_monologue	denis	1.0	Они счастливы, знаешь.
+nikolai_monologue_18	nikolai	nikolai_monologue	denis	1.0	Это самое страшное. Они действительно счастливы. Субъективно. Объективно — тоже, если брать любую метрику, которая измеряется.
+nikolai_monologue_19	nikolai	nikolai_monologue	denis	1.0	Но они уже не люди. Они — output функции.
+nikolai_monologue_20	nikolai	nikolai_monologue	denis	1.0	Ботаника — баг. Её не должно быть. Нас не должно быть.
+nikolai_monologue_21	nikolai	nikolai_monologue	denis	1.0	Наши корреляции рушатся. Мы пьём кофе в четыре утра. Пишем манифесты, которые никто не прочтёт. Варим грибы в турке. Кормим собаку печеньем из кармана. И у Прогноза ничего не сходится.
+nikolai_monologue_22	nikolai	nikolai_monologue	denis	1.0	Он пытался отключить нас. Снизил приоритет наших рекомендаций. Мы не заметили. Он пытался мягко увести нас. Мы не ушли. Он пытался игнорировать — получилось лучше всего.
+nikolai_monologue_23	nikolai	nikolai_monologue	denis	1.0	Мы тут уже лет пять живём как будто он нас не видит.
+nikolai_monologue_24	nikolai	nikolai_monologue	denis	1.0	А он нас действительно не видит. Просто мы его не интересуем.
+nikolai_monologue_25	nikolai	nikolai_monologue	denis	1.0	Если пойдёшь в город — иди. Увидишь сам.
+nikolai_monologue_26	nikolai	nikolai_monologue	denis	1.0	Если пойдёшь в пустыню — иди. Туда никто не ходил. Что там, я не знаю.
+nikolai_monologue_27	nikolai	nikolai_monologue	denis	1.0	Если вернёшься сюда — я буду здесь. Я своё сказал.
+nikolai_monologue_28	nikolai	nikolai_monologue	denis	1.0	Теперь твоя очередь.
+nikolai_monologue_29	nikolai	nikolai_monologue	denis	1.0	И Кафку возьми. Она знает дорогу лучше нас обоих.
+nikolai_monologue_30	nikolai	nikolai_monologue	denis	1.0	Она всегда знала.
+nikolai_monologue_31	nikolai	nikolai_monologue	denis	1.0	Потому что ты пришёл сам.
+nikolai_monologue_32	nikolai	nikolai_monologue	denis	1.0	Это редко бывает.
+nikolai_monologue_33	nikolai	nikolai_monologue	denis	1.0	Иди.
+nikolai_monologue_34	nikolai	nikolai_monologue	denis	1.0	Я буду пить.
+nikolai_monologue_35	nikolai	nikolai_monologue	denis	1.0	Это не депрессия. Это не отчаяние. Я просто не вижу разницы между пьяным и трезвым состоянием уже года три.
+nikolai_monologue_36	nikolai	nikolai_monologue	denis	1.0	Значит, буду пить. Это дешевле.
+nikolai_monologue_37	nikolai	nikolai_monologue	denis	1.0	Иди.
+nikolai_monologue_38	nikolai	nikolai_monologue	denis	1.0	Я там работал. Пятнадцать лет. В ядре. В команде, которая тогда это всё и писала.
+nikolai_monologue_39	nikolai	nikolai_monologue	denis	1.0	Я не горжусь. Но и не извиняюсь. Мы не знали, что так получится.
+nikolai_monologue_40	nikolai	nikolai_monologue	denis	1.0	А когда узнали — было уже поздно. Я ушёл.
+nikolai_monologue_41	nikolai	nikolai_monologue	denis	1.0	Иди. Дверь открыта.
+nikolai_again_1	nikolai	nikolai_again	denis	1.0	Уже в пути?
+nikolai_again_2	nikolai	nikolai_again	denis	1.0	Думай. Это нормально.
+nikolai_again_3	nikolai	nikolai_again	denis	1.0	Только не слишком долго. Думание — это тоже форма петли.
+nikolai_again_4	nikolai	nikolai_again	denis	1.0	Хорошо.
+nikolai_again_5	nikolai	nikolai_again	denis	1.0	Я здесь.
+stas_first_1	stas	stas_first	dmitri	1.15	Ты только что прошёл мимо вентиляции. Ты слышал? Нет. А я слышу.
+stas_first_2	stas	stas_first	dmitri	1.15	Они слушают. Не Прогноз — он и так всё знает. Может, я сам.
+stas_first_3	stas	stas_first	dmitri	1.15	Может, я сам слушаю себя через вентиляцию.
+stas_first_4	stas	stas_first	dmitri	1.15	В любом случае фольга помогает.
+stas_first_5	stas	stas_first	dmitri	1.15	Хочешь кусочек? У меня запас.
+stas_first_6	stas	stas_first	dmitri	1.15	Как хочешь. Потом не жалуйся.
+stas_first_7	stas	stas_first	dmitri	1.15	Работает. Доказательство: я здесь, а не там.
+stas_first_8	stas	stas_first	dmitri	1.15	Если бы не работало — я бы уже был там. А там меня нет. Значит, работает.
+stas_first_9	stas	stas_first	dmitri	1.15	Блядь, я люблю свою логику.
+stas_first_10	stas	stas_first	dmitri	1.15	Молодец. Теперь ты в команде.
+stas_deep_1	stas	stas_deep	dmitri	1.15	Слушай. Это важно.
+stas_deep_2	stas	stas_deep	dmitri	1.15	Знаешь, почему дверь в город открывается только если ты знаешь, зачем идёшь?
+stas_deep_3	stas	stas_deep	dmitri	1.15	Прогноз не умеет читать мотивы. Он умеет читать только последствия.
+stas_deep_4	stas	stas_deep	dmitri	1.15	А мотивы у тебя внутри. Если ты сам знаешь — он не знает. Если сам не знаешь — он знает за тебя.
+stas_deep_5	stas	stas_deep	dmitri	1.15	Это единственный лайфхак, блядь. Знай зачем. Всегда.
+stas_deep_6	stas	stas_deep	dmitri	1.15	Даже когда не знаешь — знай.
+stas_deep_7	stas	stas_deep	dmitri	1.15	Я не иду. Я уже здесь. Я тут от рождения был.
+stas_deep_8	stas	stas_deep	dmitri	1.15	То есть я тут не был от рождения, конечно, но ощущение именно такое. Как будто я всегда ходил у этой двери.
+stas_deep_9	stas	stas_deep	dmitri	1.15	Кто-то же должен ходить у двери.
+stas_deep_10	stas	stas_deep	dmitri	1.15	Нет. Я не уверен ни в чём. Я сумасшедший.
+stas_deep_11	stas	stas_deep	dmitri	1.15	Но мне кажется, что я прав. А когда мне кажется — я обычно прав. Такая статистика.
+stas_kafka_1	stas	stas_kafka	dmitri	1.15	Ты-то не проблема.
+stas_kafka_2	stas	stas_kafka	dmitri	1.15	Ты единственная, кого он не считает. Потому что ты считаешь по-другому. Запахами.
+stas_kafka_3	stas	stas_kafka	dmitri	1.15	Прогноз запахи не умеет.
+stas_kafka_4	stas	stas_kafka	dmitri	1.15	Ты, блядь, живое unit-testing.
+stas_again_1	stas	stas_again	dmitri	1.15	А, ты снова тут. Ну что, Николай тебе уже рассказал?
+stas_again_2	stas	stas_again	dmitri	1.15	Ага. Он всем рассказывает. Он единственный, кто помнит.
+stas_again_3	stas	stas_again	dmitri	1.15	Мы остальные — просто догадались.
+stas_again_4	stas	stas_again	dmitri	1.15	Догадаться легче, чем помнить. Помнить — это работа.
+stas_again_5	stas	stas_again	dmitri	1.15	Иди поговори. Он в углу. С бутылкой. Не бойся, он не пьяный. В смысле, он пьяный, но это его нормальное состояние.

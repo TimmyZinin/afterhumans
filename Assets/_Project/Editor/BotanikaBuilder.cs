@@ -3920,6 +3920,95 @@ namespace Afterhumans.EditorTools
         // Afterhumans.EditorTools.BotanikaBuilder.IterationCameraAndScene
         // ============================================================
         [MenuItem("Afterhumans/v2/Iteration — Camera & Scene")]
+        // ============================================================
+        // ENSURE PLAYABLE DOG (surgical, idempotent) — restores Hero_Corgi into the SAVED
+        // scene. ROOT CAUSE of "ты постоянно ломаешь собаку": the dog is created ONLY by
+        // ComposeRealAssets at build time and was NEVER committed to Scene_Botanika.unity, so
+        // any working-tree reset loses it (verified 16 июн: grep scene = 0 Hero_Corgi, HEAD
+        // commit = 0). This adds it durably; COMMIT the scene after running so it persists.
+        // Reuses the PROVEN kafka_corgi.fbx placement (yaw -90, targetH 0.78, base-on-floor)
+        // + KafkaDirectController (scripted follow-cam) + CorgiStateAnimator (procedural gait,
+        // updateWhenOffscreen vanish-fix). Idempotent: if Hero_Corgi exists, does nothing.
+        // Headless: -executeMethod Afterhumans.EditorTools.BotanikaBuilder.EnsurePlayableDog
+        public static void EnsurePlayableDog()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+            if (GameObject.Find("Hero_Corgi") != null)
+            {
+                Debug.Log("[EnsurePlayableDog] Hero_Corgi already in scene — nothing to do (idempotent).");
+                return;
+            }
+
+            const string corgiFbx = "Assets/_Project/Models/kafka_corgi.fbx";
+            GameObject corgi = AssetDatabase.LoadAssetAtPath<GameObject>(corgiFbx);
+            if (corgi == null)
+                foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(corgiFbx))
+                    if (sub is GameObject go) { corgi = go; break; }
+            if (corgi == null)
+            {
+                Debug.LogError("[EnsurePlayableDog] kafka_corgi.fbx NOT found — cannot add dog. ABORT (scene unchanged).");
+                return;
+            }
+
+            // textured material (headless import drops embedded textures → solid URP mat fallback)
+            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var corgiMat = new Material(sh) { name = "Corgi_Mat" };
+            var cAlb = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/_Project/Models/kafka_textures/cardiganwelshcorgi3dmodel_basecolor.png");
+            var cNor = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/_Project/Models/kafka_textures/cardiganwelshcorgi3dmodel_normal.png");
+            if (cAlb != null) { corgiMat.SetTexture("_BaseMap", cAlb); corgiMat.SetColor("_BaseColor", Color.white); }
+            else if (corgiMat.HasProperty("_BaseColor")) corgiMat.SetColor("_BaseColor", new Color(0.55f, 0.40f, 0.26f));
+            if (cNor != null && corgiMat.HasProperty("_BumpMap")) { corgiMat.SetTexture("_BumpMap", cNor); corgiMat.EnableKeyword("_NORMALMAP"); }
+            if (corgiMat.HasProperty("_Smoothness")) corgiMat.SetFloat("_Smoothness", 0.25f);
+
+            // place mesh: yaw -90 (nose +X -> +Z), targetH 0.78, base seated on floor (proven Place() logic)
+            var pos = new Vector3(0.3f, 0f, -7.4f);
+            var mesh = (GameObject)PrefabUtility.InstantiatePrefab(corgi) ?? Object.Instantiate(corgi);
+            mesh.name = "Hero_CorgiMesh";
+            mesh.transform.rotation = Quaternion.Euler(0f, -90f, 0f);
+            mesh.transform.position = pos;
+            mesh.transform.localScale = Vector3.one;
+            var rends = mesh.GetComponentsInChildren<Renderer>(true);
+            if (rends.Length == 0) { Debug.LogError("[EnsurePlayableDog] corgi mesh has no renderers — ABORT."); Object.DestroyImmediate(mesh); return; }
+            var bb = rends[0].bounds; foreach (var r in rends) bb.Encapsulate(r.bounds);
+            float scl = 0.78f / Mathf.Max(0.001f, bb.size.y);
+            mesh.transform.localScale = Vector3.one * scl;
+            rends = mesh.GetComponentsInChildren<Renderer>(true);
+            bb = rends[0].bounds; foreach (var r in rends) bb.Encapsulate(r.bounds);
+            mesh.transform.position += new Vector3(0f, pos.y - bb.min.y, 0f);
+            foreach (var r in rends) r.sharedMaterial = corgiMat;
+
+            // root: CharacterController + KafkaDirectController (scripted follow-cam, brain off)
+            var root = new GameObject("Hero_Corgi");
+            root.transform.position = mesh.transform.position;
+            root.transform.rotation = Quaternion.identity; // root.forward = +Z; controller drives yaw
+            mesh.transform.SetParent(root.transform, worldPositionStays: true);
+            var cc = root.AddComponent<CharacterController>();
+            cc.radius = 0.25f; cc.height = 0.6f; cc.center = new Vector3(0f, 0.3f, 0f);
+            cc.slopeLimit = 50f; cc.stepOffset = 0.2f;
+            root.AddComponent<KafkaDirectController>();
+
+            // procedural gait animator on the mesh (no clip; reads bones each frame)
+            var anim = mesh.GetComponent<Animator>() ?? mesh.AddComponent<Animator>();
+            anim.runtimeAnimatorController = null;
+            anim.applyRootMotion = false;
+            if (mesh.GetComponent<CorgiStateAnimator>() == null) mesh.AddComponent<CorgiStateAnimator>();
+
+            // VANISH FIX: degenerate skinned bounds get frustum-culled → force live bounds.
+            foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                smr.updateWhenOffscreen = true;
+                smr.enabled = true;
+                var lb = smr.localBounds;
+                if (lb.size.x < 0.05f || lb.size.y < 0.05f || lb.size.z < 0.05f)
+                    smr.localBounds = new Bounds(new Vector3(0f, 0.3f, 0f), new Vector3(1.4f, 1.2f, 1.4f));
+            }
+
+            Debug.Log($"[EnsurePlayableDog] Hero_Corgi ADDED (scale {scl:0.00}) at {root.transform.position} + KafkaDirectController + CorgiStateAnimator. Saving scene.");
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+        }
+
         public static void IterationCameraAndScene()
         {
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
