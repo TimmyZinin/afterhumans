@@ -7,6 +7,7 @@ using UnityEngine.UI;
 using TMPro;
 using System.Linq;
 using System.IO;
+using System.Collections.Generic;
 using Cinemachine;
 using Afterhumans.Kafka;
 
@@ -4796,6 +4797,274 @@ namespace Afterhumans.EditorTools
             l.shadows = LightShadows.None;
 
             Debug.Log("[Enh_LightAndBackground] ambient sky lifted, fog→38, Fill_SkyDome added (no clipping)");
+        }
+
+        // ============================================================
+        // BOT-N: NPC overhaul — ИТ-2 (visual: real meshes, heads, grounded,
+        // scaled, varied) + ИТ-3 (dialogue/voice: 3D proximity voice + subtitle).
+        // Idempotent surgical method (like EnsurePlayableDog). Run on the
+        // container against the canon art-scene, then BuildHero + render.
+        // ============================================================
+        private class NpcSpec
+        {
+            public string id, display, voice, knot;
+            public string[] meshPaths;
+            public Vector3 pos;
+            public float yaw;
+            public bool turnOnInteract;
+            public Color tint;
+            public NpcSpec(string id, string display, string voice, string knot, string[] meshPaths,
+                           Vector3 pos, float yaw, bool turn, Color tint)
+            { this.id = id; this.display = display; this.voice = voice; this.knot = knot;
+              this.meshPaths = meshPaths; this.pos = pos; this.yaw = yaw; this.turnOnInteract = turn; this.tint = tint; }
+        }
+
+        private class LineRow { public string lineId; public string text; }
+
+        public static void WireBotanikaNpcs()
+        {
+            AssetDatabase.Refresh();
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+            EnsureDialogueInfra();
+
+            // 5 GDD speakers. Prefer textured GLB (glTFast keeps embedded textures
+            // → faces/clothes render; FBX would come in white and need a flat tint).
+            var specs = new[]
+            {
+                new NpcSpec("nikolai", "Николай", "denis", "nikolai_first",
+                    new[] { "Assets/_Project/Models/NPC/person.glb" },
+                    new Vector3(0f, 0f, 4.0f), 180f, true,  new Color(0.22f, 0.34f, 0.30f)),
+                new NpcSpec("mila", "Мила", "irina", "mila_first",
+                    new[] { "Assets/_Project/Models/NPC/npc_reading.glb" },
+                    new Vector3(-2.2f, 0f, -4.6f), 150f, false, new Color(0.45f, 0.20f, 0.26f)),
+                new NpcSpec("kirill", "Кирилл", "ruslan", "kirill_first",
+                    new[] { "Assets/_Project/Vendor/Sketchfab/Botanika/poster_kirill_clean.glb",
+                            "Assets/_Project/Models/Generated/kirill.fbx" },
+                    new Vector3(3.0f, 0f, -5.2f), 205f, false, new Color(0.22f, 0.30f, 0.45f)),
+                new NpcSpec("stas", "Стас", "dmitri", "stas_first",
+                    new[] { "Assets/_Project/Models/NPC/person2.glb" },
+                    new Vector3(-4.3f, 0f, 1.6f), 70f, false, new Color(0.55f, 0.32f, 0.18f)),
+                new NpcSpec("sasha", "Саша", "dmitri", "sasha_first",
+                    new[] { "Assets/_Project/Models/NPC/person.glb" },
+                    new Vector3(4.4f, 0f, 0.6f), 250f, false, new Color(0.55f, 0.46f, 0.20f)),
+            };
+
+            var byNpc = LoadLinesByNpc("Assets/_Project/Audio/lines.tsv");
+            const string audioDir = "Assets/_Project/Audio/NPC";
+
+            var npcRoot = GameObject.Find("NPCs_Botanika") ?? new GameObject("NPCs_Botanika");
+
+            int wired = 0, totalClips = 0;
+            for (int i = 0; i < specs.Length; i++)
+            {
+                var sp = specs[i];
+                var old = GameObject.Find("NPC_" + sp.id);
+                if (old != null) Object.DestroyImmediate(old);
+
+                string usedPath;
+                var src = LoadFirstAsset(sp.meshPaths, out usedPath);
+                if (src == null) { Debug.LogWarning($"[WireNPC] mesh MISSING for {sp.id} (tried {string.Join(",", sp.meshPaths)})"); continue; }
+
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(src) ?? Object.Instantiate(src);
+                go.name = "NPC_" + sp.id;
+                go.transform.SetParent(npcRoot.transform, false);
+                go.transform.rotation = Quaternion.Euler(0f, sp.yaw, 0f);
+                go.transform.position = sp.pos;
+                go.transform.localScale = Vector3.one;
+                GroundAndScaleNpc(go, sp.pos, 1.65f);
+
+                // tint ONLY when the loaded mesh is an untextured FBX; GLB keeps faces.
+                if (usedPath != null && usedPath.ToLower().EndsWith(".fbx"))
+                    ApplyNpcTint(go, sp.tint);
+
+                var asrc = go.GetComponent<AudioSource>() ?? go.AddComponent<AudioSource>();
+                asrc.playOnAwake = false; asrc.spatialBlend = 1f;
+                asrc.minDistance = 1.5f; asrc.maxDistance = 14f; asrc.rolloffMode = AudioRolloffMode.Linear;
+
+                var voice = go.AddComponent<Afterhumans.Audio.NpcVoice>();
+                voice.speakerName = sp.display;
+                var clips = new List<AudioClip>();
+                var subs = new List<string>();
+                if (byNpc.TryGetValue(sp.id, out var lines))
+                    foreach (var ln in lines)
+                    {
+                        var clip = FindNpcClip(audioDir, ln.lineId);
+                        if (clip != null) { clips.Add(clip); subs.Add(ln.text); }
+                    }
+                voice.clips = clips.ToArray();
+                voice.subtitles = subs.ToArray();
+                totalClips += clips.Count;
+
+                var bob = go.AddComponent<Afterhumans.Art.NpcIdleBob>();
+                bob.SetPhase(i * 0.2f);
+
+                var it = go.AddComponent<Afterhumans.Dialogue.Interactable>();
+                it.knotName = sp.knot; it.promptText = "говорить"; it.interactRadius = 2.6f;
+
+                if (sp.turnOnInteract) go.AddComponent<Afterhumans.Art.NpcFacing>();
+
+                Debug.Log($"[WireNPC] {sp.id}: mesh={src.name} path={usedPath} clips={clips.Count} pos={go.transform.position}");
+                wired++;
+            }
+
+            // The dog is the player — give it proximity interaction + Player tag.
+            var dog = GameObject.Find("Hero_Corgi");
+            if (dog != null)
+            {
+                try { dog.tag = "Player"; } catch { /* Player is a builtin tag, but be safe */ }
+                if (dog.GetComponent<Afterhumans.Player.PlayerInteraction>() == null)
+                    dog.AddComponent<Afterhumans.Player.PlayerInteraction>();
+            }
+            else Debug.LogWarning("[WireBotanikaNpcs] Hero_Corgi NOT found — run EnsurePlayableDog first.");
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log($"[WireBotanikaNpcs] DONE wired={wired}/5 totalClips={totalClips} dog={(dog != null)}");
+        }
+
+        private static GameObject LoadFirstAsset(string[] paths, out string usedPath)
+        {
+            usedPath = null;
+            foreach (var p in paths)
+            {
+                if (!File.Exists(p)) continue;
+                var a = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                if (a == null)
+                    foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(p))
+                        if (sub is GameObject g) { a = g; break; }
+                if (a != null) { usedPath = p; return a; }
+            }
+            return null;
+        }
+
+        private static void GroundAndScaleNpc(GameObject go, Vector3 pos, float targetH)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends.Length == 0) { Debug.LogWarning($"[WireNPC] {go.name} has NO renderers"); return; }
+            var b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
+            float h = Mathf.Max(0.001f, b.size.y);
+            go.transform.localScale = Vector3.one * (targetH / h);
+            rends = go.GetComponentsInChildren<Renderer>(true);
+            b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
+            go.transform.position += new Vector3(0f, pos.y - b.min.y, 0f);
+        }
+
+        private static void ApplyNpcTint(GameObject go, Color c)
+        {
+            var sh = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            var m = new Material(sh) { name = "NpcTint" };
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.15f);
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true)) r.sharedMaterial = m;
+        }
+
+        private static Dictionary<string, List<LineRow>> LoadLinesByNpc(string tsv)
+        {
+            var d = new Dictionary<string, List<LineRow>>();
+            if (!File.Exists(tsv)) { Debug.LogWarning("[WireNPC] lines.tsv MISSING at " + tsv); return d; }
+            var ls = File.ReadAllLines(tsv);
+            for (int i = 1; i < ls.Length; i++)
+            {
+                var c = ls[i].Split('\t');
+                if (c.Length < 6) continue;
+                string id = c[0].Trim(), npc = c[1].Trim(), text = c[5];
+                if (!d.ContainsKey(npc)) d[npc] = new List<LineRow>();
+                d[npc].Add(new LineRow { lineId = id, text = text });
+            }
+            return d;
+        }
+
+        private static AudioClip FindNpcClip(string dir, string lineId)
+        {
+            if (!Directory.Exists(dir)) return null;
+            foreach (var f in Directory.GetFiles(dir, "*.ogg"))
+            {
+                var name = Path.GetFileNameWithoutExtension(f);
+                if (name == lineId || name.EndsWith("_" + lineId))
+                {
+                    var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(f.Replace('\\', '/'));
+                    if (clip != null) return clip;
+                }
+            }
+            return null;
+        }
+
+        private static void EnsureDialogueInfra()
+        {
+            var dm = Object.FindObjectOfType<Afterhumans.Dialogue.DialogueManager>();
+            if (dm == null)
+            {
+                var dmGo = new GameObject("DialogueManager");
+                dm = dmGo.AddComponent<Afterhumans.Dialogue.DialogueManager>();
+            }
+            var ink = AssetDatabase.LoadAssetAtPath<TextAsset>("Assets/Dialogues/dataland.json");
+            if (ink != null) dm.inkJsonAsset = ink;
+
+            if (Object.FindObjectOfType<Afterhumans.Dialogue.DialogueUI>() == null)
+            {
+                try { BuildDialogueUI(dm); }
+                catch (System.Exception e) { Debug.LogWarning("[WireNPC] DialogueUI build skipped (audio still works): " + e.Message); }
+            }
+        }
+
+        private static void BuildDialogueUI(Afterhumans.Dialogue.DialogueManager dm)
+        {
+            if (Object.FindObjectOfType<UnityEngine.EventSystems.EventSystem>() == null)
+            {
+                var es = new GameObject("EventSystem");
+                es.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                es.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+            }
+
+            var canvasGo = new GameObject("DialogueCanvas");
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            canvasGo.AddComponent<GraphicRaycaster>();
+
+            var panel = new GameObject("Panel");
+            panel.transform.SetParent(canvasGo.transform, false);
+            var pImg = panel.AddComponent<Image>();
+            pImg.color = new Color(0f, 0f, 0f, 0.72f);
+            var pRt = pImg.rectTransform;
+            pRt.anchorMin = new Vector2(0.12f, 0.04f); pRt.anchorMax = new Vector2(0.88f, 0.24f);
+            pRt.offsetMin = Vector2.zero; pRt.offsetMax = Vector2.zero;
+
+            var spk = new GameObject("Speaker");
+            spk.transform.SetParent(panel.transform, false);
+            var spkT = spk.AddComponent<TMPro.TextMeshProUGUI>();
+            spkT.fontSize = 30f; spkT.color = new Color(1f, 0.82f, 0.4f); spkT.fontStyle = TMPro.FontStyles.Bold;
+            spkT.alignment = TMPro.TextAlignmentOptions.TopLeft;
+            var spkRt = spkT.rectTransform;
+            spkRt.anchorMin = new Vector2(0.03f, 0.62f); spkRt.anchorMax = new Vector2(0.97f, 0.96f);
+            spkRt.offsetMin = Vector2.zero; spkRt.offsetMax = Vector2.zero;
+
+            var line = new GameObject("Line");
+            line.transform.SetParent(panel.transform, false);
+            var lineT = line.AddComponent<TMPro.TextMeshProUGUI>();
+            lineT.fontSize = 34f; lineT.color = Color.white;
+            lineT.alignment = TMPro.TextAlignmentOptions.TopLeft;
+            lineT.enableWordWrapping = true;
+            var lineRt = lineT.rectTransform;
+            lineRt.anchorMin = new Vector2(0.03f, 0.05f); lineRt.anchorMax = new Vector2(0.97f, 0.60f);
+            lineRt.offsetMin = Vector2.zero; lineRt.offsetMax = Vector2.zero;
+
+            var ui = canvasGo.AddComponent<Afterhumans.Dialogue.DialogueUI>();
+            var so = new SerializedObject(ui);
+            var pp = so.FindProperty("panel"); if (pp != null) pp.objectReferenceValue = panel;
+            var pl = so.FindProperty("lineText"); if (pl != null) pl.objectReferenceValue = lineT;
+            var ps = so.FindProperty("speakerText"); if (ps != null) ps.objectReferenceValue = spkT;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            var sdm = new SerializedObject(dm);
+            var du = sdm.FindProperty("dialogueUI");
+            if (du != null) { du.objectReferenceValue = ui; sdm.ApplyModifiedPropertiesWithoutUndo(); }
+
+            Debug.Log("[WireNPC] DialogueUI canvas built + wired (panel/line/speaker).");
         }
     }
 }
