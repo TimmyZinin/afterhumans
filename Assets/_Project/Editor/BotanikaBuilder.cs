@@ -4900,8 +4900,16 @@ namespace Afterhumans.EditorTools
                 var bob = go.AddComponent<Afterhumans.Art.NpcIdleBob>();
                 bob.SetPhase(i * 0.2f);
 
+                // Interactable has [RequireComponent(typeof(Collider))] — Collider is ABSTRACT,
+                // so Unity can't auto-add it and AddComponent<Interactable> returns null.
+                // Add a concrete CapsuleCollider first.
+                if (go.GetComponent<Collider>() == null)
+                {
+                    var cap = go.AddComponent<CapsuleCollider>();
+                    cap.center = new Vector3(0f, 0.85f, 0f); cap.radius = 0.3f; cap.height = 1.7f;
+                }
                 var it = go.AddComponent<Afterhumans.Dialogue.Interactable>();
-                it.knotName = sp.knot; it.promptText = "говорить"; it.interactRadius = 2.6f;
+                if (it != null) { it.knotName = sp.knot; it.promptText = "говорить"; it.interactRadius = 2.6f; }
 
                 if (sp.turnOnInteract) go.AddComponent<Afterhumans.Art.NpcFacing>();
 
