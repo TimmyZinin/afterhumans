@@ -320,30 +320,81 @@ namespace Afterhumans.EditorTools
             Directory.CreateDirectory(OutputDir);
             EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
 
-            var origin = ResolvePlayerOrigin();
-            origin.y = EyeLevel;
-
-            // 1. Eye-level, looking north down the nave (player POV).
-            CaptureLitShot(origin,
-                Quaternion.LookRotation(new Vector3(0f, 0.04f, 1f), Vector3.up),
+            // 1. LIT 3/4 — the proven hero formula (elevated, gentle down-north so the
+            // sunlit floor fills the frame), shifted west/back for a distinct angle on
+            // the lounge + column + lattice. Reads warm & lit (Tim: must SEE the room).
+            CaptureLitShot(new Vector3(-1.3f, 2.7f, -9.9f),
+                Quaternion.LookRotation(new Vector3(0.07f, -0.12f, 1f), Vector3.up),
                 "10_lit_forward.png");
 
-            // 2. Raised HERO shot — under the ridge (Y=6, ridge is 8) and forward
-            // of the south end (Z=-11) so the camera is NOT inside the gable cap;
-            // looks down the nave, floor as a clean plane, colonnade to the glow.
-            CaptureLitShot(new Vector3(0f, 6f, -11f),
-                Quaternion.LookRotation(new Vector3(0.03f, -0.33f, 1f), Vector3.up),
+            // 2. HERO 3/4 — raised but GENTLE downward (Tim-proxy hated the floor-
+            // down view). Off-axis for depth; shows the whole lived-in cluster.
+            CaptureLitShot(new Vector3(1.8f, 2.7f, -9.5f),
+                Quaternion.LookRotation(new Vector3(-0.07f, -0.12f, 1f), Vector3.up),
                 "11_lit_hero.png");
 
-            // 3. Mid-nave eye level (between the column pairs).
-            CaptureLitShot(new Vector3(2.5f, EyeLevel, -4f),
-                Quaternion.LookRotation(new Vector3(-0.25f, 0.02f, 1f), Vector3.up),
+            // 3. LOUNGE close — eye level from the SE, north of the foreground ferns
+            // so they don't block it; frames sofa + CRT desk + column + server glow.
+            CaptureLitShot(new Vector3(3.4f, 1.5f, -4.3f),
+                Quaternion.LookRotation(new Vector3(-0.32f, 0.03f, 1f), Vector3.up),
                 "12_lit_mid.png");
 
             Debug.Log("[CameraProbe] LIT capture done (3 shots) → " + OutputDir);
         }
 
-        private static void CaptureLitShot(Vector3 pos, Quaternion rot, string fileName)
+        // =====================================================================
+        // NPC CLOSEUPS — bright FLAT ambient + front fill + NO post-FX so NPC
+        // faces/materials are actually VISIBLE for review (the ACES + backlit
+        // HDRI otherwise crush NPCs to black silhouettes). Camera sits on the
+        // room-centre side of each NPC so the interior — not the blown-out
+        // glass walls — sits behind them. Non-destructive (render only).
+        // =====================================================================
+        public static void CaptureNpcCloseups()
+        {
+            Directory.CreateDirectory(OutputDir);
+            EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
+
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.80f, 0.78f, 0.72f);
+            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.fog = false;
+
+            var fill = new GameObject("AH_ReviewFill");
+            fill.hideFlags = HideFlags.HideAndDontSave;
+            var fl = fill.AddComponent<Light>();
+            fl.type = LightType.Directional; fl.intensity = 1.1f; fl.shadows = LightShadows.None;
+            fl.color = new Color(1f, 0.96f, 0.9f);
+            fill.transform.rotation = Quaternion.Euler(55f, 20f, 0f);
+
+            string[] ids = { "nikolai", "mila", "kirill", "stas", "sasha" };
+            var center = new Vector3(0f, 1.2f, 0f);
+            foreach (var id in ids)
+            {
+                var npc = GameObject.Find("NPC_" + id);
+                if (npc == null) { Debug.LogWarning("[NpcCloseup] NPC_" + id + " NOT FOUND"); continue; }
+                var rends = npc.GetComponentsInChildren<Renderer>(true);
+                var b = rends.Length > 0 ? rends[0].bounds : new Bounds(npc.transform.position, Vector3.one * 1.6f);
+                foreach (var r in rends) b.Encapsulate(r.bounds);
+                var aim = new Vector3(b.center.x, b.max.y - 0.18f, b.center.z); // near head
+                var dir = npc.transform.position - center; dir.y = 0f;
+                if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
+                dir.Normalize();
+                var camPos = new Vector3(npc.transform.position.x, aim.y + 0.05f, npc.transform.position.z) - dir * 2.4f;
+                var rot = Quaternion.LookRotation((aim - camPos).normalized, Vector3.up);
+                Debug.Log($"[NpcCloseup] {id} cam={camPos} aim={aim} headY={b.max.y:0.00} baseY={b.min.y:0.00}");
+                CaptureLitShot(camPos, rot, "np_" + id + ".png", false);
+            }
+
+            // bright wide review (no post-FX) for overall composition
+            CaptureLitShot(new Vector3(0f, 2.4f, -9.2f),
+                Quaternion.LookRotation(new Vector3(0f, -0.10f, 1f), Vector3.up),
+                "np_wide.png", false);
+
+            Object.DestroyImmediate(fill);
+            Debug.Log("[CameraProbe] NPC closeups done → " + OutputDir);
+        }
+
+        private static void CaptureLitShot(Vector3 pos, Quaternion rot, string fileName, bool postFx = true)
         {
             var go = new GameObject("AH_TempLitCam");
             try
@@ -364,7 +415,7 @@ namespace Afterhumans.EditorTools
                 // Apply the scene's global post-FX Volume to THIS camera so the
                 // hero shot gets ACES/Bloom/etc (URP additional-cam render).
                 var addData = cam.GetUniversalAdditionalCameraData();
-                if (addData != null) addData.renderPostProcessing = true;
+                if (addData != null) addData.renderPostProcessing = postFx;
 
                 var rt = new RenderTexture(Width, Height, 24,
                     RenderTextureFormat.ARGB32);
