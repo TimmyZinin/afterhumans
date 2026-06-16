@@ -4998,13 +4998,16 @@ namespace Afterhumans.EditorTools
             // living OUTSIDE NPCs_Botanika (the original scene-build figures at the desks).
             // Durable: matches by actual shared-Mesh asset, not by temp node names. Props
             // (different meshes) and furniture are untouched.
-            var myMeshes = new HashSet<Mesh>();
+            // Match by mesh NAME (not reference): the scene-baked originals share the same
+            // mesh names (tmp6281cdui/tmpjvztfkfp/tmpiexbm8x3) as our NPCs but are distinct
+            // baked instances, so a reference match misses them.
+            var myMeshNames = new HashSet<string>();
             foreach (var mf in npcRoot.GetComponentsInChildren<MeshFilter>(true))
-                if (mf.sharedMesh != null) myMeshes.Add(mf.sharedMesh);
+                if (mf.sharedMesh != null) myMeshNames.Add(mf.sharedMesh.name);
             var dupKill = new HashSet<GameObject>();
             foreach (var mf in Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
             {
-                if (mf.sharedMesh == null || !myMeshes.Contains(mf.sharedMesh)) continue;
+                if (mf.sharedMesh == null || !myMeshNames.Contains(mf.sharedMesh.name)) continue;
                 var top = mf.transform; while (top.parent != null) top = top.parent;
                 if (top.name == "NPCs_Botanika") continue;   // keep ours
                 dupKill.Add(FigRoot(mf.transform).gameObject);
