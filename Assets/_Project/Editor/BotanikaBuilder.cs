@@ -4890,12 +4890,7 @@ namespace Afterhumans.EditorTools
             // get DUPLICATES / clusters next to our NPC_{id}. Covers the raw GLB instances
             // (person/person2/npc_reading) and any legacy capsule NPCs. Furniture (Hero_Sofa…)
             // and the dog (Hero_Corgi) are NOT in this list — safe.
-            // Purge pre-existing humanoid dupes from the original scene build. They reuse
-            // OUR person meshes (raw GLB import nodes named "tmp*.ply") but live under
-            // Botanika_Greybox/RealAssets — NOT under NPCs_Botanika. Distinguish by root.
-            // Furniture/foliage mesh nodes are renamed (Hero_*/Foli_*/Real_*), so the
-            // "tmp" name filter only hits raw figure imports.
-            var killSet = new HashSet<GameObject>();
+            // FigRoot: walk up to a figure's container (direct child of RealAssets/Greybox).
             Transform FigRoot(Transform t)
             {
                 var fig = t;
@@ -4903,26 +4898,17 @@ namespace Afterhumans.EditorTools
                        && fig.parent.name != "Botanika_Greybox") fig = fig.parent;
                 return fig;
             }
-            foreach (var mf in Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
-            {
-                if (mf.sharedMesh == null || !mf.name.StartsWith("tmp")) continue;
-                var top = mf.transform; while (top.parent != null) top = top.parent;
-                if (top.name == "NPCs_Botanika") continue;            // keep ours
-                var fig = FigRoot(mf.transform);
-                if (fig.name.StartsWith("Hero_") || fig.name.StartsWith("Foli_") || fig.name.StartsWith("Real_")) continue;
-                killSet.Add(fig.gameObject);
-            }
-            // Remove duplicate corgi(s): keep ONLY the playable one (has KafkaDirectController).
+            // Remove duplicate corgi(s) up-front: keep ONLY the playable one (KafkaDirectController).
+            var corgiKill = new HashSet<GameObject>();
             foreach (var smr in Object.FindObjectsByType<SkinnedMeshRenderer>(FindObjectsSortMode.None))
             {
                 if (smr.GetComponentInParent<Afterhumans.Kafka.KafkaDirectController>() != null) continue;
                 var fig = FigRoot(smr.transform);
                 if (fig.name == "Hero_Corgi") continue;
-                killSet.Add(fig.gameObject);
+                corgiKill.Add(fig.gameObject);
             }
-            int purged = 0;
-            foreach (var g in killSet) if (g != null) { Object.DestroyImmediate(g); purged++; }
-            Debug.Log($"[WireBotanikaNpcs] purged {purged} pre-existing figure dupes (mesh-based)");
+            foreach (var g in corgiKill) if (g != null) Object.DestroyImmediate(g);
+            // (human dupes are purged AFTER placement, by shared-mesh identity — see below)
 
             int wired = 0, totalClips = 0;
             for (int i = 0; i < specs.Length; i++)
@@ -5007,6 +4993,25 @@ namespace Afterhumans.EditorTools
                     dog.AddComponent<Afterhumans.Player.PlayerInteraction>();
             }
             else Debug.LogWarning("[WireBotanikaNpcs] Hero_Corgi NOT found — run EnsurePlayableDog first.");
+
+            // Purge pre-existing HUMAN dupes: any object using a mesh OUR NPCs use, but
+            // living OUTSIDE NPCs_Botanika (the original scene-build figures at the desks).
+            // Durable: matches by actual shared-Mesh asset, not by temp node names. Props
+            // (different meshes) and furniture are untouched.
+            var myMeshes = new HashSet<Mesh>();
+            foreach (var mf in npcRoot.GetComponentsInChildren<MeshFilter>(true))
+                if (mf.sharedMesh != null) myMeshes.Add(mf.sharedMesh);
+            var dupKill = new HashSet<GameObject>();
+            foreach (var mf in Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+            {
+                if (mf.sharedMesh == null || !myMeshes.Contains(mf.sharedMesh)) continue;
+                var top = mf.transform; while (top.parent != null) top = top.parent;
+                if (top.name == "NPCs_Botanika") continue;   // keep ours
+                dupKill.Add(FigRoot(mf.transform).gameObject);
+            }
+            int purgedHumans = 0;
+            foreach (var g in dupKill) if (g != null) { Object.DestroyImmediate(g); purgedHumans++; }
+            Debug.Log($"[WireBotanikaNpcs] purged {purgedHumans} pre-existing human dupes (by shared mesh)");
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
