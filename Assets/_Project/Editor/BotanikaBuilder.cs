@@ -4865,15 +4865,16 @@ namespace Afterhumans.EditorTools
             // get DUPLICATES / clusters next to our NPC_{id}. Covers the raw GLB instances
             // (person/person2/npc_reading) and any legacy capsule NPCs. Furniture (Hero_Sofa…)
             // and the dog (Hero_Corgi) are NOT in this list — safe.
-            int purged = 0;
-            foreach (var dead in new[] {
+            var deadNames = new HashSet<string> {
                 "person", "person2", "npc_reading",
                 "Hero_Person", "Hero_PersonA", "Hero_PersonB", "Hero_NpcRead", "Hero_NpcReader",
-                "NPC_HeroLounger", "NPC_HeroWest", "NPC_HeroEast", "NPC_HeroReader" })
-            {
-                var g = GameObject.Find(dead);
-                while (g != null) { Object.DestroyImmediate(g); purged++; g = GameObject.Find(dead); }
-            }
+                "NPC_HeroLounger", "NPC_HeroWest", "NPC_HeroEast", "NPC_HeroReader" };
+            var toKill = new List<GameObject>();
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))  // includes INACTIVE/nested
+                    if (deadNames.Contains(t.name)) toKill.Add(t.gameObject);
+            int purged = 0;
+            foreach (var g in toKill) if (g != null) { Object.DestroyImmediate(g); purged++; }
             Debug.Log($"[WireBotanikaNpcs] purged {purged} pre-existing NPC figures (dedup)");
 
             int wired = 0, totalClips = 0;

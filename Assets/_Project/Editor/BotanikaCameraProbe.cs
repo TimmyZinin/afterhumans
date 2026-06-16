@@ -355,16 +355,24 @@ namespace Afterhumans.EditorTools
             EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.80f, 0.78f, 0.72f);
+            RenderSettings.ambientLight = new Color(0.92f, 0.90f, 0.84f);
             RenderSettings.ambientIntensity = 1.0f;
             RenderSettings.fog = false;
 
             var fill = new GameObject("AH_ReviewFill");
             fill.hideFlags = HideFlags.HideAndDontSave;
             var fl = fill.AddComponent<Light>();
-            fl.type = LightType.Directional; fl.intensity = 1.1f; fl.shadows = LightShadows.None;
+            fl.type = LightType.Directional; fl.intensity = 1.2f; fl.shadows = LightShadows.None;
             fl.color = new Color(1f, 0.96f, 0.9f);
             fill.transform.rotation = Quaternion.Euler(55f, 20f, 0f);
+
+            // second fill from the opposite side so NPCs facing either way are lit
+            var fill2 = new GameObject("AH_ReviewFill2");
+            fill2.hideFlags = HideFlags.HideAndDontSave;
+            var fl2 = fill2.AddComponent<Light>();
+            fl2.type = LightType.Directional; fl2.intensity = 0.9f; fl2.shadows = LightShadows.None;
+            fl2.color = new Color(0.95f, 0.95f, 1f);
+            fill2.transform.rotation = Quaternion.Euler(50f, 210f, 0f);
 
             string[] ids = { "nikolai", "mila", "kirill", "stas", "sasha" };
             var center = new Vector3(0f, 1.2f, 0f);
@@ -393,6 +401,7 @@ namespace Afterhumans.EditorTools
                 "np_wide.png", false);
 
             Object.DestroyImmediate(fill);
+            Object.DestroyImmediate(fill2);
             Debug.Log("[CameraProbe] NPC closeups done → " + OutputDir);
         }
 
