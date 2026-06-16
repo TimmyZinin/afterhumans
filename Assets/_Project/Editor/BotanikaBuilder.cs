@@ -4862,23 +4862,23 @@ namespace Afterhumans.EditorTools
                 // Саша — философ, разваливается на диване (person.glb = lounging pose). y=0.45 = на сиденье.
                 new NpcSpec("sasha", "Саша", "dmitri", "sasha_first",
                     new[] { "Assets/_Project/Models/NPC/person.glb" },
-                    new Vector3(0.2f, 0.45f, -2.3f), 180f, false, new Color(0.80f, 0.82f, 0.90f), false),
+                    new Vector3(0.2f, 0.45f, -2.3f), 180f, false, new Color(1.05f, 1.08f, 1.22f), false),
                 // Мила — пишет манифест, сидит/читает у дивана (npc_reading.glb).
                 new NpcSpec("mila", "Мила", "irina", "mila_first",
                     new[] { "Assets/_Project/Models/NPC/npc_reading.glb" },
-                    new Vector3(-2.7f, 0f, -3.4f), 30f, false, new Color(0.80f, 0.88f, 0.80f), false),
+                    new Vector3(-2.7f, 0f, -3.4f), 30f, false, new Color(1.05f, 1.22f, 1.05f), false),
                 // Кирилл — варит грибы у левого «кухонного» стола, стоит (person2.glb).
                 new NpcSpec("kirill", "Кирилл", "ruslan", "kirill_first",
                     new[] { "Assets/_Project/Models/NPC/person2.glb" },
-                    new Vector3(-4.3f, 0f, 1.9f), 105f, false, new Color(0.96f, 0.82f, 0.60f), false),
+                    new Vector3(-4.3f, 0f, 1.9f), 105f, false, new Color(1.30f, 1.10f, 0.85f), false),
                 // Николай — седой «начальник» у правого стола, поворачивается к игроку (ключ к двери).
                 new NpcSpec("nikolai", "Николай", "denis", "nikolai_first",
                     new[] { "Assets/_Project/Models/NPC/person2.glb" },
-                    new Vector3(4.1f, 0f, -0.3f), 250f, true, new Color(0.74f, 0.80f, 0.95f), false),
+                    new Vector3(4.1f, 0f, -0.3f), 250f, true, new Color(1.00f, 1.12f, 1.38f), false),
                 // Стас — параноик, ХОДИТ туда-сюда у двери (NpcWalk), person2.glb.
                 new NpcSpec("stas", "Стас", "dmitri", "stas_first",
                     new[] { "Assets/_Project/Models/NPC/person2.glb" },
-                    new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(0.94f, 0.74f, 0.60f), true),
+                    new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(1.32f, 1.00f, 0.80f), true),
             };
 
             var byNpc = LoadLinesByNpc("Assets/_Project/Audio/lines.tsv");
