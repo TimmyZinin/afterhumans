@@ -79,7 +79,12 @@ namespace Afterhumans.Dialogue
         {
             if (story == null || !IsDialogueActive) return;
 
-            if (story.canContinue)
+            // ITERATIVE (was recursive): WebGL is single-threaded, and a run of empty Ink
+            // lines used to recurse with NO base case → stack overflow / hard tab freeze
+            // (this was the class of freeze Tim hit on E). A loop with a defensive cap can
+            // never hang the tab.
+            int guard = 0;
+            while (story.canContinue && guard++ < 1000)
             {
                 string line = story.Continue().Trim();
                 if (!string.IsNullOrEmpty(line))
@@ -87,10 +92,10 @@ namespace Afterhumans.Dialogue
                     OnDialogueLine?.Invoke(line);
                     return;
                 }
-                // Empty line, skip
-                ContinueStory();
-                return;
+                // empty line → keep looping (do NOT recurse)
             }
+            if (guard >= 1000)
+                Debug.LogWarning("[DialogueManager] ContinueStory hit 1000-line guard — aborting to avoid freeze");
 
             if (story.currentChoices.Count > 0)
             {

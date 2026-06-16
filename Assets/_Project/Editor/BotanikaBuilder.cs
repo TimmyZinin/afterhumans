@@ -2165,9 +2165,16 @@ namespace Afterhumans.EditorTools
                 var cue = door.AddComponent<Afterhumans.UI.DoorCueUI>();
             }
 
+            // FREEZE GUARD (Codex HIGH): this legacy menu still wires the old Ink E-path
+            // (PlayerInteraction / Interactable / DialogueManager) which hard-froze the WebGL
+            // tab on E. Strip it here so even running this menu can't reintroduce the freeze.
+            // The shipped pipeline uses WireBotanikaNpcs (proximity voice + NpcDialogueHud);
+            // run that after this menu if you want working NPC dialogue.
+            StripInkDialogueInfra();
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
-            Debug.Log("[BotanikaBuilder] Sprint 2 GAMEPLAY done — 5 NPCs, Kafka, dialogue, door gate");
+            Debug.Log("[BotanikaBuilder] Sprint 2 GAMEPLAY done — 5 NPCs, Kafka, door gate (Ink E-path stripped — run WireBotanikaNpcs for dialogue)");
         }
 
         private static void SpawnNpc(GameObject parent, string npcName, Vector3 pos, float yRot,
@@ -4814,11 +4821,14 @@ namespace Afterhumans.EditorTools
             public bool turnOnInteract;
             public Color tint;
             public bool walk;
+            public bool sit;       // sitting-pose mesh (person.glb / npc_reading.glb) → seat + smaller scale
+            public string seat;    // "sofa" | "chair" | "floor" — where a sitting NPC rests
             public NpcSpec(string id, string display, string voice, string knot, string[] meshPaths,
-                           Vector3 pos, float yaw, bool turn, Color tint, bool walk)
+                           Vector3 pos, float yaw, bool turn, Color tint, bool walk,
+                           bool sit = false, string seat = "floor")
             { this.id = id; this.display = display; this.voice = voice; this.knot = knot;
               this.meshPaths = meshPaths; this.pos = pos; this.yaw = yaw; this.turnOnInteract = turn;
-              this.tint = tint; this.walk = walk; }
+              this.tint = tint; this.walk = walk; this.sit = sit; this.seat = seat; }
         }
 
         private class LineRow { public string lineId; public string text; }
@@ -4853,32 +4863,47 @@ namespace Afterhumans.EditorTools
             AssetDatabase.Refresh();
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
-            EnsureDialogueInfra();
+            // FREEZE FIX (Tim: «нажал E — всё зависло, пришлось перезагружать»):
+            // the old Ink E-path was PlayerInteraction → Interactable.Interact() →
+            // DialogueManager.StartKnot("sasha_first"). "sasha_first" is a STITCH, not a
+            // knot (the real path is "sasha.sasha_first" with a dot), and DialogueUI never
+            // built choice buttons — so Ink entered a choices state with no way out and the
+            // single-threaded WebGL tab hard-hung. We no longer use Ink for NPC talk:
+            // NpcVoice + NpcDialogueHud drive «собака подходит → NPC говорит + субтитр».
+            // Strip the stale Ink infra so NO code path can freeze the tab again.
+            StripInkDialogueInfra();
+
+            // Restore the structural shell (Floor/walls/door/server/glazing) if a prior purge
+            // removed it — the dog was falling through a deleted floor. Additive, guarded by name.
+            EnsureGreyboxShell();
 
             // 5 GDD speakers. Prefer textured GLB (glTFast keeps embedded textures
             // → faces/clothes render; FBX would come in white and need a flat tint).
             var specs = new[]
             {
-                // Саша — философ, разваливается на диване (person.glb = lounging pose). y=0.45 = на сиденье.
+                // Саша — философ, разваливается на ДИВАНЕ (person.glb = sitting/lounging pose). seat=sofa.
                 new NpcSpec("sasha", "Саша", "dmitri", "sasha_first",
                     new[] { "Assets/_Project/Models/NPC/person.glb" },
-                    new Vector3(0.2f, 0.45f, -2.3f), 180f, false, new Color(1.05f, 1.08f, 1.22f), false),
-                // Мила — пишет манифест, сидит/читает у дивана (npc_reading.glb).
+                    new Vector3(0.2f, 0f, -2.3f), 180f, false, new Color(1.02f, 1.00f, 1.05f), false,
+                    sit: true, seat: "sofa"),
+                // Мила — читает на полу у дивана (npc_reading.glb = cross-legged). seat=floor.
                 new NpcSpec("mila", "Мила", "irina", "mila_first",
                     new[] { "Assets/_Project/Models/NPC/npc_reading.glb" },
-                    new Vector3(-2.7f, 0f, -3.4f), 30f, false, new Color(1.05f, 1.22f, 1.05f), false),
-                // Кирилл — варит грибы у левого «кухонного» стола, стоит (person2.glb).
+                    new Vector3(-2.7f, 0f, -3.4f), 30f, false, new Color(1.04f, 1.16f, 1.04f), false,
+                    sit: true, seat: "floor"),
+                // Кирилл — варит грибы у кухни, СТОИТ (kirill_raw.glb = standing apron man, good head).
                 new NpcSpec("kirill", "Кирилл", "ruslan", "kirill_first",
-                    new[] { "Assets/_Project/Models/NPC/person2.glb" },
-                    new Vector3(-4.3f, 0f, 1.9f), 105f, false, new Color(1.30f, 1.10f, 0.85f), false),
-                // Николай — седой «начальник» у правого стола, поворачивается к игроку (ключ к двери).
+                    new[] { "Assets/_Project/Models/Generated/kirill_raw.glb" },
+                    new Vector3(-4.3f, 0f, 1.9f), 105f, false, new Color(1.18f, 1.02f, 0.82f), false),
+                // Николай — седой «начальник» за столом, СИДИТ (person.glb reuse, серый окрас). seat=chair.
                 new NpcSpec("nikolai", "Николай", "denis", "nikolai_first",
-                    new[] { "Assets/_Project/Models/NPC/person2.glb" },
-                    new Vector3(4.1f, 0f, -0.3f), 250f, true, new Color(1.00f, 1.12f, 1.38f), false),
-                // Стас — параноик, ХОДИТ туда-сюда у двери (NpcWalk), person2.glb.
+                    new[] { "Assets/_Project/Models/NPC/person.glb" },
+                    new Vector3(4.1f, 0f, -0.3f), 250f, true, new Color(0.82f, 0.86f, 0.95f), false,
+                    sit: true, seat: "chair"),
+                // Стас — параноик, ХОДИТ у двери (kirill_raw.glb reuse, холодный окрас, NpcWalk).
                 new NpcSpec("stas", "Стас", "dmitri", "stas_first",
-                    new[] { "Assets/_Project/Models/NPC/person2.glb" },
-                    new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(1.32f, 1.00f, 0.80f), true),
+                    new[] { "Assets/_Project/Models/Generated/kirill_raw.glb" },
+                    new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(0.92f, 1.04f, 1.14f), true),
             };
 
             var byNpc = LoadLinesByNpc("Assets/_Project/Audio/lines.tsv");
@@ -4927,14 +4952,17 @@ namespace Afterhumans.EditorTools
                 go.transform.rotation = Quaternion.Euler(0f, sp.yaw, 0f);
                 go.transform.position = sp.pos;
                 go.transform.localScale = Vector3.one;
-                GroundAndScaleNpc(go, sp.pos, 1.65f);
+                // Standing models scale to ~human height; sitting/lounging models are physically
+                // shorter, so scale them to a smaller bounds-height (else they become giants) and
+                // rest them ON a seat (sofa/chair) or the floor — fixes Tim's «оторван от дивана».
+                PlaceNpc(go, sp);
 
-                // Recolor for variety while KEEPING the embedded texture (BaseColor multiply
-                // on a per-NPC material instance). Untextured FBX falls back to a flat tint.
-                if (usedPath != null && usedPath.ToLower().EndsWith(".fbx"))
-                    ApplyNpcTint(go, sp.tint);
-                else
-                    TintKeepTexture(go, sp.tint);
+                // LIGHTING FIX (Tim: «NPC тёмные / растрированные на фоне сцены»): the GLB's
+                // imported materials (glTFast metallic-roughness) render dark and flat under
+                // the scene's URP lighting. Rebuild each material as URP/Lit, KEEP the albedo
+                // texture (so faces/clothes stay), force metallic=0 + low smoothness + a bright
+                // tint so NPCs sit in the SAME light as the furniture/plants.
+                RelightNpc(go, sp.tint);
 
                 var asrc = go.GetComponent<AudioSource>();
                 if (asrc == null) asrc = go.AddComponent<AudioSource>();
@@ -4967,32 +4995,38 @@ namespace Afterhumans.EditorTools
                     bob.SetPhase(i * 0.2f);
                 }
 
-                // Interactable has [RequireComponent(typeof(Collider))] — Collider is ABSTRACT,
-                // so Unity can't auto-add it and AddComponent<Interactable> returns null.
-                // Add a concrete CapsuleCollider first.
-                if (go.GetComponent<Collider>() == null)
-                {
-                    var cap = go.AddComponent<CapsuleCollider>();
-                    cap.center = new Vector3(0f, 0.85f, 0f); cap.radius = 0.3f; cap.height = 1.7f;
-                }
-                var it = go.AddComponent<Afterhumans.Dialogue.Interactable>();
-                if (it != null) { it.knotName = sp.knot; it.promptText = "говорить"; it.interactRadius = 2.6f; }
-
-                if (sp.turnOnInteract) go.AddComponent<Afterhumans.Art.NpcFacing>();
-
+                // NO Interactable / NpcFacing / Ink wiring here — that E-path was the freeze
+                // source (see StripInkDialogueInfra above). The dog «talking to» each NPC is
+                // fully handled by NpcVoice (proximity voice + NpcDialogueHud subtitle), and
+                // NpcVoice itself yaw-faces the dog while speaking, so Николай etc. still turn
+                // toward the dog without any Ink/Interactable dependency.
                 Debug.Log($"[WireNPC] {sp.id}: mesh={src.name} path={usedPath} clips={clips.Count} pos={go.transform.position}");
                 wired++;
             }
 
-            // The dog is the player — give it proximity interaction + Player tag.
+            // The dog is the player. It only needs the "Player" tag so NpcVoice can find it
+            // by proximity. REMOVE any PlayerInteraction baked on the dog by earlier builds —
+            // that component is the E-key Ink trigger that froze the game (root cause).
             var dog = GameObject.Find("Hero_Corgi");
             if (dog != null)
             {
                 try { dog.tag = "Player"; } catch { /* Player is a builtin tag, but be safe */ }
-                if (dog.GetComponent<Afterhumans.Player.PlayerInteraction>() == null)
-                    dog.AddComponent<Afterhumans.Player.PlayerInteraction>();
+                var oldPi = dog.GetComponent<Afterhumans.Player.PlayerInteraction>();
+                if (oldPi != null) { Object.DestroyImmediate(oldPi); Debug.Log("[WireBotanikaNpcs] removed stale PlayerInteraction from dog (freeze fix)"); }
+                // E-key interactor: Tim presses E to talk → nearest NPC speaks (audio + subtitle),
+                // no Ink/freeze. Also covers the case where auto-proximity didn't trigger.
+                if (dog.GetComponent<Afterhumans.Audio.NpcInteractor>() == null)
+                    dog.AddComponent<Afterhumans.Audio.NpcInteractor>();
             }
             else Debug.LogWarning("[WireBotanikaNpcs] Hero_Corgi NOT found — run EnsurePlayableDog first.");
+
+            // Remove the leftover dev scale-reference capsule — a featureless 1.8m capsule reads as
+            // a "headless person" in-game (Tim counted it among the broken NPCs).
+            foreach (var devName in new[] { "ScaleRef_Human_1m8", "ScaleRef", "ScaleReference" })
+            {
+                var refGo = GameObject.Find(devName);
+                if (refGo != null) { Object.DestroyImmediate(refGo); Debug.Log($"[WireBotanikaNpcs] removed dev placeholder '{devName}'"); }
+            }
 
             // Purge pre-existing HUMAN dupes: any object using a mesh OUR NPCs use, but
             // living OUTSIDE NPCs_Botanika (the original scene-build figures at the desks).
@@ -5001,13 +5035,28 @@ namespace Afterhumans.EditorTools
             // Match by mesh NAME (not reference): the scene-baked originals share the same
             // mesh names (tmp6281cdui/tmpjvztfkfp/tmpiexbm8x3) as our NPCs but are distinct
             // baked instances, so a reference match misses them.
+            // NEVER purge by Unity primitive mesh names — the structural greybox (Floor, walls,
+            // door, server, glazing rafters) are Cube primitives. A spawned chair (also a Cube)
+            // once polluted this set and the purge deleted the whole floor → the dog fell through.
+            var primitiveMeshes = new HashSet<string> { "Cube", "Sphere", "Capsule", "Cylinder", "Plane", "Quad" };
             var myMeshNames = new HashSet<string>();
             foreach (var mf in npcRoot.GetComponentsInChildren<MeshFilter>(true))
-                if (mf.sharedMesh != null) myMeshNames.Add(mf.sharedMesh.name);
+            {
+                if (mf.sharedMesh == null) continue;
+                if (primitiveMeshes.Contains(mf.sharedMesh.name)) continue;        // skip primitives (chair, etc.)
+                // only the actual NPC figure meshes drive the purge — not the chairs we spawn
+                bool underChair = false;
+                for (var t = mf.transform; t != null && t != npcRoot.transform; t = t.parent)
+                    if (t.name.StartsWith("Chair_")) { underChair = true; break; }
+                if (underChair) continue;
+                myMeshNames.Add(mf.sharedMesh.name);
+            }
             var dupKill = new HashSet<GameObject>();
             foreach (var mf in Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
             {
-                if (mf.sharedMesh == null || !myMeshNames.Contains(mf.sharedMesh.name)) continue;
+                if (mf.sharedMesh == null) continue;
+                if (primitiveMeshes.Contains(mf.sharedMesh.name)) continue;        // never delete primitives
+                if (!myMeshNames.Contains(mf.sharedMesh.name)) continue;
                 var top = mf.transform; while (top.parent != null) top = top.parent;
                 if (top.name == "NPCs_Botanika") continue;   // keep ours
                 dupKill.Add(FigRoot(mf.transform).gameObject);
@@ -5016,9 +5065,208 @@ namespace Afterhumans.EditorTools
             foreach (var g in dupKill) if (g != null) { Object.DestroyImmediate(g); purgedHumans++; }
             Debug.Log($"[WireBotanikaNpcs] purged {purgedHumans} pre-existing human dupes (by shared mesh)");
 
+            // QA-only acceptance tour (activates only with ?tour=1 on the WebGL URL; harmless otherwise).
+            if (npcRoot.GetComponent<Afterhumans.Art.NpcTourCam>() == null)
+                npcRoot.AddComponent<Afterhumans.Art.NpcTourCam>();
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
             Debug.Log($"[WireBotanikaNpcs] DONE wired={wired}/5 totalClips={totalClips} dog={(dog != null)}");
+        }
+
+        /// <summary>
+        /// DIAGNOSTIC: enumerate EVERY humanoid figure in the scene (not just the 5 wired NPCs),
+        /// flagging headless/half-head figures, duplicate meshes, missing NpcVoice, dog tag, and
+        /// AudioListener presence. Writes a clean report to /root/afterhumans/audit.txt and the log.
+        /// </summary>
+        public static void AuditAllFigures()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var sb = new System.Text.StringBuilder();
+            void L(string s) { sb.AppendLine(s); Debug.Log(s); }
+
+            var seen = new HashSet<GameObject>();
+            var figs = new List<GameObject>();
+            // Collect figure roots from BOTH skinned meshes AND static MeshFilters (the NPCs are
+            // static GLB meshes, not skinned), grouping each renderer up to its figure container.
+            Transform RootOf(Transform t)
+            {
+                var root = t;
+                while (root.parent != null
+                       && root.parent.name != "NPCs_Botanika" && root.parent.name != "RealAssets"
+                       && root.parent.name != "Botanika_Greybox") root = root.parent;
+                return root;
+            }
+            foreach (var smr in Object.FindObjectsByType<SkinnedMeshRenderer>(FindObjectsSortMode.None))
+            { var r = RootOf(smr.transform); if (seen.Add(r.gameObject)) figs.Add(r.gameObject); }
+            foreach (var mf in Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
+            { var r = RootOf(mf.transform); if (seen.Add(r.gameObject)) figs.Add(r.gameObject); }
+
+            L($"[AUDITALL] ===== {figs.Count} figure/object root(s); listing HUMANOID-height (0.9-2.4m) =====");
+            foreach (var f in figs)
+            {
+                var rends = f.GetComponentsInChildren<Renderer>(true);
+                if (rends.Length == 0) continue;
+                Bounds b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
+                string ln = f.name.ToLower();
+                bool nameLooksHuman = ln.Contains("npc") || ln.Contains("person") || ln.Contains("human")
+                                       || ln.Contains("man") || ln.Contains("char") || ln.Contains("figure");
+                // skip clearly non-humanoid sizes unless the name screams "person"
+                if (!nameLooksHuman && (b.size.y < 0.9f || b.size.y > 2.4f)) continue;
+                // head heuristic: any renderer whose top reaches the upper 16% band AND sits above centre
+                float topBand = b.max.y - b.size.y * 0.16f;
+                bool headGeo = false;
+                foreach (var r in rends) if (r.bounds.max.y >= topBand && r.bounds.center.y > b.center.y) { headGeo = true; break; }
+                string path = f.name; var p = f.transform.parent; while (p != null) { path = p.name + "/" + path; p = p.parent; }
+                var meshNames = new HashSet<string>();
+                foreach (var smr in f.GetComponentsInChildren<SkinnedMeshRenderer>(true)) if (smr.sharedMesh != null) meshNames.Add(smr.sharedMesh.name);
+                foreach (var mf in f.GetComponentsInChildren<MeshFilter>(true)) if (mf.sharedMesh != null) meshNames.Add(mf.sharedMesh.name);
+                bool hasVoice = f.GetComponent<Afterhumans.Audio.NpcVoice>() != null;
+                L($"[AUDITALL] '{f.name}' path={path} pos=({f.transform.position.x:F2},{f.transform.position.y:F2},{f.transform.position.z:F2}) h={b.size.y:F2} top={b.max.y:F2} HEAD={headGeo} voice={hasVoice} rends={rends.Length} meshes=[{string.Join(",", meshNames)}]");
+            }
+
+            foreach (var v in Object.FindObjectsByType<Afterhumans.Audio.NpcVoice>(FindObjectsSortMode.None))
+                L($"[AUDITALL-VOICE] on '{v.gameObject.name}' clips={(v.clips == null ? -1 : v.clips.Length)} subs={(v.subtitles == null ? -1 : v.subtitles.Length)} radius={v.talkRadius} tag={v.targetTag} name={v.targetName}");
+
+            var dog = GameObject.Find("Hero_Corgi");
+            L($"[AUDITALL-DOG] Hero_Corgi found={dog != null} tag={(dog != null ? dog.tag : "-")} audioSrcOnNpcs?");
+            L($"[AUDITALL-AUDIO] AudioListeners={Object.FindObjectsByType<AudioListener>(FindObjectsSortMode.None).Length} (0 = NO SOUND AT ALL)");
+            int srcCount = 0; foreach (var a in Object.FindObjectsByType<AudioSource>(FindObjectsSortMode.None)) srcCount++;
+            L($"[AUDITALL-AUDIO] AudioSources={srcCount}");
+            var cam = Camera.main;
+            L($"[AUDITALL-AUDIO] Camera.main={(cam != null ? cam.name : "NULL")} hasAudioListener={(cam != null && cam.GetComponent<AudioListener>() != null)}");
+
+            try { System.IO.File.WriteAllText("/root/afterhumans/audit.txt", sb.ToString()); L("[AUDITALL] wrote /root/afterhumans/audit.txt"); }
+            catch (System.Exception e) { Debug.LogWarning("[AUDITALL] file write failed: " + e.Message); }
+        }
+
+        /// <summary>
+        /// Surgically re-add the greybox structural SHELL (Floor, walls, door, server, glazing frame)
+        /// if a prior purge removed it — WITHOUT wiping art/NPCs/plants/lighting. Each piece is
+        /// guarded by name so surviving pieces are not duplicated. Recovery for the chair-Cube purge
+        /// bug that deleted the floor and made the dog fall through.
+        /// </summary>
+        public static void RestoreGreyboxShell()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            EnsureGreyboxShell();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene, ScenePath);
+            Debug.Log("[RestoreGreyboxShell] saved");
+        }
+
+        private static void EnsureGreyboxShell()
+        {
+            var root = GameObject.Find("Botanika_Greybox") ?? new GameObject("Botanika_Greybox");
+            var grey      = MakeGreyMaterial();
+            var glassGrey = MakeMaterial("GlassPlaceholder", new Color(0.62f, 0.66f, 0.64f), 0.2f, doubleSided: true);
+            var darkGrey  = MakeMaterial("DarkGrey", new Color(0.30f, 0.30f, 0.32f));
+            int added = 0;
+            float sideH = EaveHeight;
+
+            if (GameObject.Find("Floor") == null)
+            {
+                var floor = MakeBox(root, "Floor", new Vector3(0, -0.05f, 0), new Vector3(NaveWidth, 0.1f, NaveLength), grey);
+                var c = floor.GetComponent<Collider>(); if (c != null) Object.DestroyImmediate(c);
+                var mc = floor.AddComponent<MeshCollider>(); mc.convex = false;
+                ColliderHelper.MarkStaticProp(floor); added++;
+            }
+            if (GameObject.Find("Wall_GlassEast") == null)
+            { var w = MakeBox(root, "Wall_GlassEast", new Vector3(NaveHalfW, sideH * 0.5f, 0), new Vector3(0.15f, sideH, NaveLength), glassGrey); w.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; added++; }
+            if (GameObject.Find("Wall_GlassWest") == null)
+            { var w = MakeBox(root, "Wall_GlassWest", new Vector3(-NaveHalfW, sideH * 0.5f, 0), new Vector3(0.15f, sideH, NaveLength), glassGrey); w.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; added++; }
+            if (GameObject.Find("Wall_North") == null)
+            { var w = MakeBox(root, "Wall_North", new Vector3(0, VaultApex * 0.5f, NaveHalfL), new Vector3(NaveWidth, VaultApex, 0.2f), grey); w.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; added++; }
+            float doorGapHalf = 2f, sidePanelW = (NaveHalfW - doorGapHalf), sidePanelCenterX = doorGapHalf + sidePanelW * 0.5f;
+            if (GameObject.Find("Wall_South_L") == null) { MakeBox(root, "Wall_South_L", new Vector3(-sidePanelCenterX, sideH * 0.5f, -NaveHalfL), new Vector3(sidePanelW, sideH, 0.2f), grey); added++; }
+            if (GameObject.Find("Wall_South_R") == null) { MakeBox(root, "Wall_South_R", new Vector3(sidePanelCenterX, sideH * 0.5f, -NaveHalfL), new Vector3(sidePanelW, sideH, 0.2f), grey); added++; }
+            if (GameObject.Find("Wall_South_Lintel") == null) { MakeBox(root, "Wall_South_Lintel", new Vector3(0, sideH - 0.4f, -NaveHalfL), new Vector3(doorGapHalf * 2f, 0.8f, 0.2f), grey); added++; }
+            if (GameObject.Find("SouthDoorBlock") == null) { var sb = MakeBox(root, "SouthDoorBlock", new Vector3(0, sideH * 0.5f, -NaveHalfL), new Vector3(doorGapHalf * 2f, sideH, 0.2f), grey); sb.GetComponent<Renderer>().enabled = false; added++; }
+            if (GameObject.Find("ServerRack") == null) { MakeBox(root, "ServerRack", PosServerRack + Vector3.up * 0.9f, new Vector3(0.6f, 1.8f, 0.5f), darkGrey); added++; }
+            if (GameObject.Find("DoorToCity_Placeholder") == null) { var d = MakeBox(root, "DoorToCity_Placeholder", new Vector3(0, 1.4f, DoorZ), new Vector3(2.4f, 2.8f, 0.15f), darkGrey); ColliderHelper.MarkStaticProp(d); added++; }
+
+            bool frameGone = true;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true)) if (t.name.StartsWith("Rafter_")) { frameGone = false; break; }
+            if (frameGone) { var timber = MakeMaterial("Timber", new Color(0.16f, 0.12f, 0.09f), 0.1f); CreateGlazingFrame(root, timber); added++; }
+
+            Debug.Log($"[EnsureGreyboxShell] restored {added} missing shell group(s) (0 = shell already intact)");
+        }
+
+        /// <summary>
+        /// FREEZE FIX: remove every component of the old Ink dialogue path so pressing E
+        /// (or anything else) can never re-enter the hang. Kills PlayerInteraction on the
+        /// player/dog, all Interactable + NpcFacing on NPCs, and the DialogueManager /
+        /// DialogueUI / EventSystem objects. NpcVoice + NpcDialogueHud replace them.
+        /// </summary>
+        private static void StripInkDialogueInfra()
+        {
+            int n = 0;
+            foreach (var pi in Object.FindObjectsByType<Afterhumans.Player.PlayerInteraction>(FindObjectsSortMode.None))
+            { Object.DestroyImmediate(pi); n++; }
+            foreach (var fa in Object.FindObjectsByType<Afterhumans.Art.NpcFacing>(FindObjectsSortMode.None))
+            { Object.DestroyImmediate(fa); n++; }
+            foreach (var it in Object.FindObjectsByType<Afterhumans.Dialogue.Interactable>(FindObjectsSortMode.None))
+            { Object.DestroyImmediate(it); n++; }
+            foreach (var ui in Object.FindObjectsByType<Afterhumans.Dialogue.DialogueUI>(FindObjectsSortMode.None))
+            { if (ui != null) Object.DestroyImmediate(ui.gameObject); n++; }
+            foreach (var dm in Object.FindObjectsByType<Afterhumans.Dialogue.DialogueManager>(FindObjectsSortMode.None))
+            { if (dm != null) Object.DestroyImmediate(dm.gameObject); n++; }
+            // Also strip the door/scene-exit Ink triggers — they call DialogueManager.StartKnot
+            // too, so they're a second door to the same freeze. Botanika has no city-exit flow.
+            foreach (var d in Object.FindObjectsByType<Afterhumans.Scenes.DoorToCity>(FindObjectsSortMode.None))
+            { Object.DestroyImmediate(d); n++; }
+            foreach (var se in Object.FindObjectsByType<Afterhumans.Scenes.SceneExitTrigger>(FindObjectsSortMode.None))
+            { Object.DestroyImmediate(se); n++; }
+            Debug.Log($"[WireBotanikaNpcs] StripInkDialogueInfra removed {n} stale Ink component(s)/object(s) — freeze fix");
+        }
+
+        /// <summary>
+        /// Rebuild every NPC renderer's material as URP/Lit while KEEPING the imported albedo
+        /// texture. The GLB ships glTFast metallic-roughness materials that render dark/flat
+        /// ("растрированные") under the scene's URP lighting; this forces metallic=0, low
+        /// smoothness and a bright base tint so NPCs are lit like the rest of the scene.
+        /// </summary>
+        private static void RelightNpc(GameObject go, Color tint)
+        {
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                var srcMats = r.sharedMaterials;
+                var outMats = new Material[srcMats.Length];
+                for (int i = 0; i < srcMats.Length; i++)
+                {
+                    var s = srcMats[i];
+                    Texture albedo = null;
+                    Color baseCol = Color.white;
+                    if (s != null)
+                    {
+                        foreach (var prop in new[] { "_BaseMap", "_MainTex", "baseColorTexture", "_BaseColorMap" })
+                            if (s.HasProperty(prop) && s.GetTexture(prop) != null) { albedo = s.GetTexture(prop); break; }
+                        if (s.HasProperty("_BaseColor")) baseCol = s.GetColor("_BaseColor");
+                        else if (s.HasProperty("_Color")) baseCol = s.GetColor("_Color");
+                    }
+                    var m = (lit != null) ? new Material(lit)
+                                          : new Material(s != null ? s.shader : Shader.Find("Standard"));
+                    m.name = (s != null ? s.name : "npc") + "_lit";
+                    if (albedo != null)
+                    {
+                        if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", albedo);
+                        if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", albedo);
+                    }
+                    // When a texture carries the colour, drive _BaseColor straight from the
+                    // bright tint (glTFast sometimes imports a dark _BaseColor that would
+                    // multiply the texture down to mud). Untextured → tint over baseCol.
+                    Color final = (albedo != null) ? tint : baseCol * tint;
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", final);
+                    if (m.HasProperty("_Color")) m.SetColor("_Color", final);
+                    if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+                    if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.12f);
+                    if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", 0.12f);
+                    if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 0f); // opaque
+                    outMats[i] = m;
+                }
+                r.sharedMaterials = outMats;
+            }
         }
 
         private static GameObject LoadFirstAsset(string[] paths, out string usedPath)
@@ -5046,6 +5294,70 @@ namespace Afterhumans.EditorTools
             rends = go.GetComponentsInChildren<Renderer>(true);
             b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
             go.transform.position += new Vector3(0f, pos.y - b.min.y, 0f);
+        }
+
+        private static Bounds CombinedBounds(GameObject go)
+        {
+            var rends = go.GetComponentsInChildren<Renderer>(true);
+            if (rends.Length == 0) return new Bounds(go.transform.position, Vector3.zero);  // guard: no IndexOOR
+            var b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
+            return b;
+        }
+
+        /// <summary>
+        /// Scale + seat an NPC. Standing models scale to human height and ground to the floor.
+        /// Sitting/lounging models (person.glb / npc_reading.glb) are physically shorter, so they
+        /// scale to a smaller bounds-height (otherwise they become giants) and their lowest point
+        /// is aligned to a SEAT — the sofa, a spawned chair, or the floor (cross-legged) — which
+        /// fixes Tim's «персонаж на диване оторван от дивана».
+        /// </summary>
+        private static void PlaceNpc(GameObject go, NpcSpec sp)
+        {
+            float target = sp.sit ? 1.15f : 1.72f;
+            var b = CombinedBounds(go);
+            float h = Mathf.Max(0.001f, b.size.y);
+            go.transform.localScale = Vector3.one * (target / h);
+            b = CombinedBounds(go);
+
+            float seatY = 0f;   // floor by default (standing NPCs, cross-legged Mila)
+            if (sp.sit && sp.seat == "sofa")
+            {
+                var sofa = GameObject.Find("Hero_Sofa");
+                if (sofa != null) { var sb = CombinedBounds(sofa); seatY = sb.max.y - sb.size.y * 0.45f; }
+                else seatY = 0.45f;
+            }
+            else if (sp.sit && sp.seat == "chair")
+            {
+                seatY = SpawnChair("Chair_" + sp.id, sp.pos);
+            }
+
+            // centre on sp.x/z, rest the lowest point on the seat (or floor)
+            go.transform.position += new Vector3(sp.pos.x - b.center.x, seatY - b.min.y, sp.pos.z - b.center.z);
+        }
+
+        /// <summary>Spawn a simple wooden chair box under a sitting NPC; returns the seat-top Y.</summary>
+        private static float SpawnChair(string name, Vector3 pos)
+        {
+            var old = GameObject.Find(name);
+            if (old != null) Object.DestroyImmediate(old);
+            const float seatTop = 0.45f, legBottom = 0f;
+            var chair = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            chair.name = name;
+            var chCol = chair.GetComponent<Collider>();
+            if (chCol != null) Object.DestroyImmediate(chCol);  // cosmetic prop — don't block the dog
+            var npcRoot = GameObject.Find("NPCs_Botanika");
+            if (npcRoot != null) chair.transform.SetParent(npcRoot.transform, true);
+            chair.transform.position = new Vector3(pos.x, (seatTop + legBottom) * 0.5f, pos.z);
+            chair.transform.localScale = new Vector3(0.5f, seatTop - legBottom, 0.5f);
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit != null)
+            {
+                var m = new Material(lit) { name = "ChairWood" };
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", new Color(0.40f, 0.27f, 0.16f));
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.1f);
+                chair.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            return seatTop;
         }
 
         private static void ApplyNpcTint(GameObject go, Color c)

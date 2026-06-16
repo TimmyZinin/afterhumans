@@ -58,7 +58,9 @@ namespace Afterhumans.Kafka
         // ACTUAL follow-camera distance + downward pitch to the dog once per second so the
         // fix can be CONFIRMED with numbers via the browser console (CDP). Expect a healthy
         // 3rd-person: dist ~6-7 m, pitchDeg ~10-25 (NOT <2.5 m в упор, NOT >55 top-down).
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         private float _probeTimer;
+#endif
         private Camera _probeCam;
 
         // SCRIPTED DETERMINISTIC FOLLOW CAMERA. The Cinemachine FreeLook recenter kept
@@ -73,6 +75,10 @@ namespace Afterhumans.Kafka
         [SerializeField] private float camLookHeight = 0.45f;// look-at point above the dog's root
         [SerializeField] private float camLerp = 9f;         // position smoothing
         [SerializeField] private float camMouseYawSpeed = 2.4f;
+        [Tooltip("Radius of the camera collision probe so it doesn't poke through walls/columns.")]
+        [SerializeField] private float camCollisionRadius = 0.28f;
+        [Tooltip("Keep the camera at least this far from the dog when pulled in by collision.")]
+        [SerializeField] private float camMinDistance = 0.6f;
         private float _camYaw;            // mouse-orbit yaw offset around the dog
         private Behaviour _camBrain;      // CinemachineBrain, disabled so we own the transform
         private bool _camInit;
@@ -118,7 +124,13 @@ namespace Afterhumans.Kafka
             // the camera → "собака ходит попой вперёд". Reverted.) Camera is still freely
             // mouse-orbited via Cinemachine FreeLook + pointer-lock above.
             float horizontal = Input.GetAxisRaw("Horizontal"); // A/D → turn
-            float vertical = -Input.GetAxisRaw("Vertical");    // W/S → forward/back (negated to match mesh facing)
+            // W/S → forward/back. NO negation: the corgi mesh is placed yaw -90 so its NOSE
+            // aligns with +root.forward (measured live: NAVPROBE fwd=(0,1) while the dog faces
+            // the NPCs/door at +Z). So +Vertical (W) must drive +transform.forward = toward the
+            // nose. The old negation came from an EARLIER mesh offset and made W moonwalk the dog
+            // SOUTH, away from every NPC (Tim: «нажимаю E — ничего», because the dog could never
+            // reach an NPC). Verified: with negation removed, W decreases the dog→NPC distance.
+            float vertical = Input.GetAxisRaw("Vertical");
             bool sprinting = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
             transform.Rotate(0f, horizontal * turnSpeedDeg * dt, 0f, Space.World);
@@ -237,18 +249,55 @@ namespace Afterhumans.Kafka
                     _camYaw += Input.GetAxis("Mouse X") * camMouseYawSpeed;
 
                 Vector3 dog = transform.position;
-                // TAIL direction = +transform.forward (nose is -forward, measured via camSide).
-                // Add the mouse-orbit yaw around world-up so the player can look around.
-                Vector3 backDir = Quaternion.AngleAxis(_camYaw, Vector3.up) * transform.forward;
-                Vector3 targetPos = dog + backDir * camDistance + Vector3.up * camHeight;
+                // BEHIND the dog = -transform.forward. The corgi's NOSE is +transform.forward
+                // (measured live: NAVPROBE fwd=(0,1) while the dog faces the NPCs at +Z), so the
+                // follow camera must sit on the OPPOSITE side to show the dog's back and look ahead
+                // toward where it walks. The old +transform.forward put the camera on the NOSE side
+                // AND, in the nave, straight at the central concrete column → wall/floor close-ups.
+                // Now the camera trails in the open space behind the dog. Mouse-orbit yaw on top.
+                Vector3 backDir = Quaternion.AngleAxis(_camYaw, Vector3.up) * (-transform.forward);
+                // Pivot the camera around a point above the dog's root (matches the look-at height).
+                Vector3 pivot = dog + Vector3.up * camHeight;
+                Vector3 desired = dog + backDir * camDistance + Vector3.up * camHeight;
+
+                // CAMERA COLLISION (fix: camera was clipping INTO the central concrete column and
+                // walls when the dog walked into the nave centre — the frame filled with plaster and
+                // the dog/NPC vanished). SphereCast from the pivot toward the desired position; if the
+                // path is blocked, pull the camera in to just before the hit. Ignore the dog's own
+                // colliders so it never collapses onto the dog.
+                float wishDist = camDistance;
+                Vector3 dir = desired - pivot;
+                float dirLen = dir.magnitude;
+                if (dirLen > 0.0001f)
+                {
+                    dir /= dirLen;
+                    // Pull in ONLY for static environment (the central concrete column, walls).
+                    // SphereCastAll + skip the dog's own colliders AND the NPC characters, so the
+                    // camera doesn't jam onto a person every time the dog stands next to one.
+                    var hits = Physics.SphereCastAll(pivot, camCollisionRadius, dir, dirLen, ~0, QueryTriggerInteraction.Ignore);
+                    float nearest = dirLen;
+                    for (int h = 0; h < hits.Length; h++)
+                    {
+                        var col = hits[h].collider;
+                        if (col == null) continue;
+                        var ct = col.transform;
+                        if (ct.IsChildOf(transform)) continue;       // the dog itself
+                        if (IsUnderNpcRoot(ct)) continue;            // an NPC character
+                        if (hits[h].distance > 0.001f && hits[h].distance < nearest) nearest = hits[h].distance;
+                    }
+                    if (nearest < dirLen) wishDist = Mathf.Max(camMinDistance, nearest);
+                }
+                Vector3 targetPos = pivot + dir * wishDist;
+
                 float t = 1f - Mathf.Exp(-camLerp * Time.deltaTime);
                 _probeCam.transform.position = Vector3.Lerp(_probeCam.transform.position, targetPos, t);
                 _probeCam.transform.rotation = Quaternion.LookRotation(
                     (dog + Vector3.up * camLookHeight) - _probeCam.transform.position, Vector3.up);
             }
 
-            // RUNTIME camera telemetry (runs in the BUILD too, not just editor). Emitted
-            // after our scripted follow has positioned the camera this frame.
+            // Camera telemetry — EDITOR / development builds only. In a release WebGL build this
+            // logged a string every second → devtools console spam + avoidable GC (Codex LOW).
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             _probeTimer += Time.deltaTime;
             if (_probeTimer >= 1f)
             {
@@ -272,6 +321,16 @@ namespace Afterhumans.Kafka
                     Debug.Log($"[CAMPROBE] dist={dist:F2} pitchDeg={pitchDeg:F1} camY={cam.y:F2} dogY={dog.y:F2} camSide={camSide:F2}");
                 }
             }
+#endif
+        }
+
+        // True if the transform sits under the NPCs_Botanika container — lets the camera-collision
+        // cast ignore the NPC characters and pull in only for static walls/columns.
+        private static bool IsUnderNpcRoot(Transform t)
+        {
+            for (var p = t; p != null; p = p.parent)
+                if (p.name == "NPCs_Botanika") return true;
+            return false;
         }
 
 #if UNITY_EDITOR

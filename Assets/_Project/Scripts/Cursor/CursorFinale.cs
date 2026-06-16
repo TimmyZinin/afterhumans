@@ -79,16 +79,23 @@ namespace Afterhumans.Cursor
             // Freeze player movement (would go through PlayerController in real impl)
             yield return new WaitForSeconds(1f);
 
-            // Start the cursor knot (player picks one of 5 inputs)
-            DialogueManager.Instance?.StartKnot(cursorKnotName);
-
-            // Listen for dialogue end to trigger credits scene
-            DialogueManager.Instance.OnDialogueEnd += OnCursorDialogueEnd;
+            // Start the cursor knot (player picks one of 5 inputs). Guard the manager once:
+            // it may be absent (the Botanika flow strips Ink dialogue) — without this the
+            // second deref below threw an NRE and broke the finale (Codex HIGH).
+            var dm = DialogueManager.Instance;
+            if (dm == null)
+            {
+                SceneTransition.Instance?.LoadScene("Scene_Credits");
+                yield break;
+            }
+            dm.OnDialogueEnd += OnCursorDialogueEnd;   // subscribe before starting the knot
+            dm.StartKnot(cursorKnotName);
         }
 
         private void OnCursorDialogueEnd()
         {
-            DialogueManager.Instance.OnDialogueEnd -= OnCursorDialogueEnd;
+            var dm = DialogueManager.Instance;
+            if (dm != null) dm.OnDialogueEnd -= OnCursorDialogueEnd;
             SceneTransition.Instance?.LoadScene("Scene_Credits");
         }
     }
