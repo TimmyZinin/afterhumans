@@ -4866,7 +4866,7 @@ namespace Afterhumans.EditorTools
                 var src = LoadFirstAsset(sp.meshPaths, out usedPath);
                 if (src == null) { Debug.LogWarning($"[WireNPC] mesh MISSING for {sp.id} (tried {string.Join(",", sp.meshPaths)})"); continue; }
 
-                var go = (GameObject)PrefabUtility.InstantiatePrefab(src) ?? Object.Instantiate(src);
+                var go = Object.Instantiate(src);   // plain copy (no prefab-instance component quirks)
                 go.name = "NPC_" + sp.id;
                 go.transform.SetParent(npcRoot.transform, false);
                 go.transform.rotation = Quaternion.Euler(0f, sp.yaw, 0f);
@@ -4878,7 +4878,8 @@ namespace Afterhumans.EditorTools
                 if (usedPath != null && usedPath.ToLower().EndsWith(".fbx"))
                     ApplyNpcTint(go, sp.tint);
 
-                var asrc = go.GetComponent<AudioSource>() ?? go.AddComponent<AudioSource>();
+                var asrc = go.GetComponent<AudioSource>();
+                if (asrc == null) asrc = go.AddComponent<AudioSource>();
                 asrc.playOnAwake = false; asrc.spatialBlend = 1f;
                 asrc.minDistance = 1.5f; asrc.maxDistance = 14f; asrc.rolloffMode = AudioRolloffMode.Linear;
 
@@ -4963,7 +4964,13 @@ namespace Afterhumans.EditorTools
         private static Dictionary<string, List<LineRow>> LoadLinesByNpc(string tsv)
         {
             var d = new Dictionary<string, List<LineRow>>();
+            if (!File.Exists(tsv))
+            {
+                foreach (var fb in new[] { "/opt/piper/lines.tsv", "/root/afterhumans/Assets/_Project/Audio/lines.tsv" })
+                    if (File.Exists(fb)) { tsv = fb; break; }
+            }
             if (!File.Exists(tsv)) { Debug.LogWarning("[WireNPC] lines.tsv MISSING at " + tsv); return d; }
+            Debug.Log("[WireNPC] reading lines from " + tsv);
             var ls = File.ReadAllLines(tsv);
             for (int i = 1; i < ls.Length; i++)
             {
