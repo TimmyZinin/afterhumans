@@ -4813,10 +4813,12 @@ namespace Afterhumans.EditorTools
             public float yaw;
             public bool turnOnInteract;
             public Color tint;
+            public bool walk;
             public NpcSpec(string id, string display, string voice, string knot, string[] meshPaths,
-                           Vector3 pos, float yaw, bool turn, Color tint)
+                           Vector3 pos, float yaw, bool turn, Color tint, bool walk)
             { this.id = id; this.display = display; this.voice = voice; this.knot = knot;
-              this.meshPaths = meshPaths; this.pos = pos; this.yaw = yaw; this.turnOnInteract = turn; this.tint = tint; }
+              this.meshPaths = meshPaths; this.pos = pos; this.yaw = yaw; this.turnOnInteract = turn;
+              this.tint = tint; this.walk = walk; }
         }
 
         private class LineRow { public string lineId; public string text; }
@@ -4832,22 +4834,26 @@ namespace Afterhumans.EditorTools
             // → faces/clothes render; FBX would come in white and need a flat tint).
             var specs = new[]
             {
-                new NpcSpec("nikolai", "Николай", "denis", "nikolai_first",
-                    new[] { "Assets/_Project/Models/NPC/person.glb" },
-                    new Vector3(0f, 0f, 4.0f), 180f, true,  new Color(0.22f, 0.34f, 0.30f)),
-                new NpcSpec("mila", "Мила", "irina", "mila_first",
-                    new[] { "Assets/_Project/Models/NPC/npc_reading.glb" },
-                    new Vector3(-2.2f, 0f, -4.6f), 150f, false, new Color(0.45f, 0.20f, 0.26f)),
-                new NpcSpec("kirill", "Кирилл", "ruslan", "kirill_first",
-                    new[] { "Assets/_Project/Vendor/Sketchfab/Botanika/poster_kirill_clean.glb",
-                            "Assets/_Project/Models/Generated/kirill.fbx" },
-                    new Vector3(3.0f, 0f, -5.2f), 205f, false, new Color(0.22f, 0.30f, 0.45f)),
-                new NpcSpec("stas", "Стас", "dmitri", "stas_first",
-                    new[] { "Assets/_Project/Models/NPC/person2.glb" },
-                    new Vector3(-4.3f, 0f, 1.6f), 70f, false, new Color(0.55f, 0.32f, 0.18f)),
+                // Саша — философ, разваливается на диване (person.glb = lounging pose). y=0.45 = на сиденье.
                 new NpcSpec("sasha", "Саша", "dmitri", "sasha_first",
                     new[] { "Assets/_Project/Models/NPC/person.glb" },
-                    new Vector3(4.4f, 0f, 0.6f), 250f, false, new Color(0.55f, 0.46f, 0.20f)),
+                    new Vector3(0.2f, 0.45f, -2.3f), 180f, false, new Color(0.80f, 0.82f, 0.90f), false),
+                // Мила — пишет манифест, сидит/читает у дивана (npc_reading.glb).
+                new NpcSpec("mila", "Мила", "irina", "mila_first",
+                    new[] { "Assets/_Project/Models/NPC/npc_reading.glb" },
+                    new Vector3(-2.7f, 0f, -3.4f), 30f, false, new Color(0.80f, 0.88f, 0.80f), false),
+                // Кирилл — варит грибы у левого «кухонного» стола, стоит (person2.glb).
+                new NpcSpec("kirill", "Кирилл", "ruslan", "kirill_first",
+                    new[] { "Assets/_Project/Models/NPC/person2.glb" },
+                    new Vector3(-4.3f, 0f, 1.9f), 105f, false, new Color(0.96f, 0.82f, 0.60f), false),
+                // Николай — седой «начальник» у правого стола, поворачивается к игроку (ключ к двери).
+                new NpcSpec("nikolai", "Николай", "denis", "nikolai_first",
+                    new[] { "Assets/_Project/Models/NPC/person2.glb" },
+                    new Vector3(4.1f, 0f, -0.3f), 250f, true, new Color(0.74f, 0.80f, 0.95f), false),
+                // Стас — параноик, ХОДИТ туда-сюда у двери (NpcWalk), person2.glb.
+                new NpcSpec("stas", "Стас", "dmitri", "stas_first",
+                    new[] { "Assets/_Project/Models/NPC/person2.glb" },
+                    new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(0.94f, 0.74f, 0.60f), true),
             };
 
             var byNpc = LoadLinesByNpc("Assets/_Project/Audio/lines.tsv");
@@ -4874,9 +4880,12 @@ namespace Afterhumans.EditorTools
                 go.transform.localScale = Vector3.one;
                 GroundAndScaleNpc(go, sp.pos, 1.65f);
 
-                // tint ONLY when the loaded mesh is an untextured FBX; GLB keeps faces.
+                // Recolor for variety while KEEPING the embedded texture (BaseColor multiply
+                // on a per-NPC material instance). Untextured FBX falls back to a flat tint.
                 if (usedPath != null && usedPath.ToLower().EndsWith(".fbx"))
                     ApplyNpcTint(go, sp.tint);
+                else
+                    TintKeepTexture(go, sp.tint);
 
                 var asrc = go.GetComponent<AudioSource>();
                 if (asrc == null) asrc = go.AddComponent<AudioSource>();
@@ -4897,8 +4906,17 @@ namespace Afterhumans.EditorTools
                 voice.subtitles = subs.ToArray();
                 totalClips += clips.Count;
 
-                var bob = go.AddComponent<Afterhumans.Art.NpcIdleBob>();
-                bob.SetPhase(i * 0.2f);
+                // Movement: most NPCs breathe in place (NpcIdleBob); Стас paces (NpcWalk).
+                if (sp.walk)
+                {
+                    var w = go.AddComponent<Afterhumans.Art.NpcWalk>();
+                    w.axis = Vector3.right; w.range = 1.6f; w.speed = 0.5f; w.faceTravel = true;
+                }
+                else
+                {
+                    var bob = go.AddComponent<Afterhumans.Art.NpcIdleBob>();
+                    bob.SetPhase(i * 0.2f);
+                }
 
                 // Interactable has [RequireComponent(typeof(Collider))] — Collider is ABSTRACT,
                 // so Unity can't auto-add it and AddComponent<Interactable> returns null.
@@ -4967,6 +4985,26 @@ namespace Afterhumans.EditorTools
             if (m.HasProperty("_Color")) m.SetColor("_Color", c);
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.15f);
             foreach (var r in go.GetComponentsInChildren<Renderer>(true)) r.sharedMaterial = m;
+        }
+
+        // Recolor while preserving the embedded texture: instance each material and
+        // multiply its _BaseColor (so _BaseMap/faces stay) — per-character variety for
+        // GLB NPCs without flattening them to a solid colour.
+        private static void TintKeepTexture(GameObject go, Color tint)
+        {
+            foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+            {
+                var mats = r.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                {
+                    if (mats[i] == null) continue;
+                    var m = new Material(mats[i]);
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", m.GetColor("_BaseColor") * tint);
+                    else if (m.HasProperty("_Color")) m.SetColor("_Color", m.GetColor("_Color") * tint);
+                    mats[i] = m;
+                }
+                r.sharedMaterials = mats;
+            }
         }
 
         private static Dictionary<string, List<LineRow>> LoadLinesByNpc(string tsv)
