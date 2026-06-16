@@ -355,7 +355,7 @@ namespace Afterhumans.EditorTools
             EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
 
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-            RenderSettings.ambientLight = new Color(0.92f, 0.90f, 0.84f);
+            RenderSettings.ambientLight = new Color(1.35f, 1.32f, 1.22f);  // strong global flat — reaches dark corners (Nikolai)
             RenderSettings.ambientIntensity = 1.0f;
             RenderSettings.fog = false;
 
@@ -396,7 +396,7 @@ namespace Afterhumans.EditorTools
                 // were too dark for review otherwise — judge could not assess Nikolai).
                 var key = new GameObject("AH_KeyLight"); key.hideFlags = HideFlags.HideAndDontSave;
                 var kl = key.AddComponent<Light>();
-                kl.type = LightType.Point; kl.range = 14f; kl.intensity = 7f;
+                kl.type = LightType.Point; kl.range = 18f; kl.intensity = 14f;
                 kl.shadows = LightShadows.None; kl.color = new Color(1f, 0.97f, 0.92f);
                 key.transform.position = camPos + Vector3.up * 0.4f;
                 CaptureLitShot(camPos, rot, "np_" + id + ".png", false);
