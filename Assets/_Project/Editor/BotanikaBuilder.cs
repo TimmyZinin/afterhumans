@@ -4861,6 +4861,21 @@ namespace Afterhumans.EditorTools
 
             var npcRoot = GameObject.Find("NPCs_Botanika") ?? new GameObject("NPCs_Botanika");
 
+            // Remove pre-existing NPC figures from the original scene build so we don't
+            // get DUPLICATES / clusters next to our NPC_{id}. Covers the raw GLB instances
+            // (person/person2/npc_reading) and any legacy capsule NPCs. Furniture (Hero_Sofa…)
+            // and the dog (Hero_Corgi) are NOT in this list — safe.
+            int purged = 0;
+            foreach (var dead in new[] {
+                "person", "person2", "npc_reading",
+                "Hero_Person", "Hero_PersonA", "Hero_PersonB", "Hero_NpcRead", "Hero_NpcReader",
+                "NPC_HeroLounger", "NPC_HeroWest", "NPC_HeroEast", "NPC_HeroReader" })
+            {
+                var g = GameObject.Find(dead);
+                while (g != null) { Object.DestroyImmediate(g); purged++; g = GameObject.Find(dead); }
+            }
+            Debug.Log($"[WireBotanikaNpcs] purged {purged} pre-existing NPC figures (dedup)");
+
             int wired = 0, totalClips = 0;
             for (int i = 0; i < specs.Length; i++)
             {

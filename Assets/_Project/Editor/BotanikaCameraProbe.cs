@@ -376,10 +376,12 @@ namespace Afterhumans.EditorTools
                 var b = rends.Length > 0 ? rends[0].bounds : new Bounds(npc.transform.position, Vector3.one * 1.6f);
                 foreach (var r in rends) b.Encapsulate(r.bounds);
                 var aim = new Vector3(b.center.x, b.max.y - 0.18f, b.center.z); // near head
-                var dir = npc.transform.position - center; dir.y = 0f;
-                if (dir.sqrMagnitude < 0.01f) dir = Vector3.forward;
-                dir.Normalize();
-                var camPos = new Vector3(npc.transform.position.x, aim.y + 0.05f, npc.transform.position.z) - dir * 2.4f;
+                // camera in FRONT of the NPC (along its facing) so we see the face and
+                // the column/interior sits behind it, never occluding.
+                var fwd = npc.transform.forward; fwd.y = 0f;
+                if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.back;
+                fwd.Normalize();
+                var camPos = new Vector3(npc.transform.position.x, aim.y + 0.05f, npc.transform.position.z) + fwd * 2.4f;
                 var rot = Quaternion.LookRotation((aim - camPos).normalized, Vector3.up);
                 Debug.Log($"[NpcCloseup] {id} cam={camPos} aim={aim} headY={b.max.y:0.00} baseY={b.min.y:0.00}");
                 CaptureLitShot(camPos, rot, "np_" + id + ".png", false);
