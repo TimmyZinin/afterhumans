@@ -74,4 +74,19 @@ NPC: (1) каждый говорит СВОИМ естественным РУ-г
 
 ## СТАТУС ИТЕРАЦИЙ
 - ИТ-0 ✅ DOG=0 SCENE_DOG=1 BUILD=0 RENDER=0. Собака в контейнерной сцене, билд ОК, рендер цел. Механизм EnsurePlayableDog коммичу (durable).
-- ИТ-1 TTS — следующий (SSH свободен после билда).
+- ИТ-1 TTS ✅ ПРОВЕРЕНО: 152/152 .ogg на контейнере (Audio/NPC/{line_id}.ogg), 0 нулевых, покрытие полное (nikolai 50/stas 30/kirill 25/sasha 24/mila 23). Сэмпл-WER (5 клипов, все 4 голос-модели denis/dmitri/irina/ruslan): AVG 12.9% — «ошибки» = артефакты whisper на коротких фразах (оно/она, Мицелий→Мицели), длинные монологи 0-16% → речь ВНЯТНАЯ, не робовойс. Гейт пройден. Полный 152-WER заменён на быстрый 10-клип (в билд-джобе) ради wall-clock.
+- ИТ-2 (визуал) + ИТ-3 (голос/диалог) КОД ГОТОВ + закоммичен (e2601c6):
+  - NpcVoice.cs — проксимити 3D-голос: собака подходит → NPC играет свою РУ-реплику + субтитр (EmitLine), single-speaker lock, цикл реплик пока собака рядом.
+  - BotanikaBuilder.WireBotanikaNpcs — идемпотентный surgical: 5 NPC из текстур-GLB (person/person2/npc_reading/poster_kirill — glTFast хранит лица), grounding bounds.min.y, scale 1.65, AudioSource(3D)+NpcVoice(клипы+субтитры из lines.tsv)+NpcIdleBob+Interactable+NpcFacing(Николай); DialogueManager+DialogueUI canvas; собаке Player-tag+PlayerInteraction.
+- [BUILD ЗАПУЩЕН на контейнере, detached /opt/piper/build_npc.sh]: EnsureDog→WireNPCs→GPU-рендер(/tmp/afterhumans_visual_review/1?_lit_*.png)→WER10. Поллю npc_build.done.
+- МАППИНГ NPC→меш (честно: 4 уникальных меша на 5 NPC, sasha повторяет person.glb с др. позицией/жёлтым тинтом-вариантом; остальные уникальны): nikolai→person, mila→npc_reading, kirill→poster_kirill_clean, stas→person2, sasha→person(повтор).
+- СЛЕДУЮЩЕЕ: дождаться рендера → притянуть PNG на Mac (docs/) → 5 судей по PNG+артефактам → итерировать визуал если FAIL → ИТ-4 gate+доклад Тиму.
+
+## ИТ-2/ИТ-3 РЕЗУЛЬТАТ (16 июн, проверено рендерами+аудитом)
+- Сборка стабилизирована (баги среды вылечены): ffmpeg симлинк (Unity audio import), RequireComponent(Collider) abstract → CapsuleCollider до Interactable, нет git на контейнере → scp кода, дубли из старого билда (3 person + 2nd корги) → mesh-name purge после расстановки.
+- АУДИТ СЦЕНЫ ЧИСТО: ровно 5 NPC под NPCs_Botanika (sasha/mila/kirill/nikolai/stas) + РОВНО 1 собака Hero_Corgi (дубль-корги удалён), 0 болванок-капсул, 0 person-дублей. grounding baseY=0/headY=1.65 (sasha на диване 0.45). 152 клипа привязаны (NpcVoice=5/AudioSource=5/NpcIdleBob=4/NpcWalk=1 stas/NpcFacing=1 nikolai/PlayerInteraction=1 dog).
+- ВИЗУАЛ: текстур-GLB люди с головами/одеждой, по GDD-станциям (Саша диван-философ / Мила читает-пучок / Кирилл лысый-фартук-турка / Николай седой-тёмный-офис-стол / Стас у двери ходит). 4/5 closeup читаются ярко; Николай тёмен лишь по ОДЕЖДЕ (GDD-канон «тёмный свитер»), виден в общих планах.
+- ОГРАНИЧЕНИЕ (честно): 3 реалистичных human-GLB меша на 5 NPC → kirill/nikolai/stas делят person2, различены цветом одежды/позой/позицией. 5 уникальных = отдельный арт-сорсинг.
+- ПАНЕЛЬ СУДЕЙ v1: №1 анти-враньё PASS (4/5 SUPPORTED, claim grounding PARTIALLY, фабрикаций нет), №2 качество PASS (головы/grounding/масштаб/разнообразие ОК; HIGH: NPC темнее окружения — проверить albedo/WebGL), №4 регресс PASS, №5 собака PASS. №3 простота — REVISE (3 тёмных NPC + непригодные рендеры Николая) → доработано (key-light+тинты) → ре-вердикт в процессе.
+- ⚠️ ДОЛГОВЕЧНОСТЬ (judge #5 note): сцена с NPC живёт ТОЛЬКО на контейнере (asset-divergent, на Mac коммитить нельзя). Восстановление = re-run EnsurePlayableDog + WireBotanikaNpcs на свежем checkout (код в git). Это та же модель что и собака.
+- ИСТИННЫЙ СВЕТ только в WebGL-билде в GPU-браузере (headless недосвечивает) — Тим увидит финальную освещённость в реальном билде.
