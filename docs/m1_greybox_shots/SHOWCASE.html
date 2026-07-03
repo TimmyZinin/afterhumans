@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Afterhumans · Botanika — результат подгонки под референс</title>
+<style>
+  :root{
+    --bg:#f4ede1; --card:#fffaf2; --ink:#2a2420; --muted:#7a6f60;
+    --accent:#c8792e; --accent2:#3f7d5a; --line:#e3d8c6;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1180px;margin:0 auto;padding:40px 22px 80px}
+  h1{font-size:34px;line-height:1.1;margin:0 0 6px;letter-spacing:-.5px}
+  h1 small{display:block;font-size:15px;font-weight:400;color:var(--muted);margin-top:10px;letter-spacing:0}
+  h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);
+     margin:54px 0 16px;border-bottom:2px solid var(--line);padding-bottom:8px}
+  p.lead{color:var(--muted);max-width:760px}
+  .pill{display:inline-block;background:var(--accent);color:#fff;font-size:12px;font-weight:600;
+    padding:4px 11px;border-radius:20px;letter-spacing:.3px;vertical-align:middle}
+  .pill.green{background:var(--accent2)}
+  .pill.ghost{background:#efe4d2;color:var(--muted)}
+
+  .compare{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px}
+  @media(max-width:760px){.compare{grid-template-columns:1fr}}
+  figure{margin:0;background:var(--card);border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;box-shadow:0 4px 18px rgba(60,40,20,.06)}
+  figure img{display:block;width:100%;height:auto}
+  figcaption{padding:11px 14px;font-size:13.5px;color:var(--muted)}
+  figcaption b{color:var(--ink)}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.5px;
+    padding:3px 9px;border-radius:6px;margin-bottom:0}
+  .tag.ref{background:#efe4d2;color:#6a5c45}
+  .tag.fin{background:#16301f;color:#7fe0a3}
+  .cap-head{padding:11px 14px 4px}
+
+  .strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-top:16px}
+  @media(max-width:900px){.strip{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:520px){.strip{grid-template-columns:repeat(2,1fr)}}
+  .strip figure img{aspect-ratio:16/10;object-fit:cover}
+  .strip figcaption{padding:8px 10px;font-size:11.5px;line-height:1.35}
+  .strip .n{font-weight:700;color:var(--accent)}
+
+  .gallery{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}
+  @media(max-width:900px){.gallery{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:520px){.gallery{grid-template-columns:repeat(2,1fr)}}
+  .gallery figure{background:#fff}
+  .gallery img{aspect-ratio:1/1;object-fit:contain;background:#fbfbfb;padding:4px}
+  .gallery figcaption{padding:7px 10px;font-size:12px;text-align:center}
+
+  .note{background:var(--card);border-left:4px solid var(--accent2);border-radius:0 12px 12px 0;
+    padding:16px 18px;margin-top:20px;font-size:14.5px}
+  .note b{color:var(--ink)}
+  .note ul{margin:8px 0 0;padding-left:20px;color:var(--muted)}
+  .note li{margin:3px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .foot{margin-top:46px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
+  code{background:#efe4d2;padding:1px 6px;border-radius:5px;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Afterhumans · «Ботаника»
+    <small>Подгонка игровой сцены (Unity 6 / URP, WebGL-рендер на GPU) под референс-концепт. Все кадры ниже — настоящий рендер игрового билда, снятый в браузере с видеокартой.</small>
+  </h1>
+
+  <a href="http://127.0.0.1:8911/index.html?c=W" target="_blank"
+     style="display:block;margin-top:22px;background:linear-gradient(100deg,#c8792e,#3f7d5a);
+            color:#fff;text-decoration:none;border-radius:14px;padding:20px 24px;
+            box-shadow:0 6px 22px rgba(120,70,30,.18)">
+    <span style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;opacity:.85">▶ Открыть в браузере</span>
+    <span style="display:block;font-size:22px;font-weight:700;margin-top:4px">Живая интерактивная сцена «Ботаника»</span>
+    <span style="display:block;font-size:13.5px;opacity:.9;margin-top:5px">
+      Зайди и сам походи корги по оранжерее. Это сам движок, а не картинка.
+      Если не открывается — серверу нужно работать на этом Маке (порт 8911).</span>
+  </a>
+
+  <h2>Результат vs Референс <span class="pill green">главное</span></h2>
+  <p class="lead">Слева — твой эталон-концепт. Справа — текущая сцена в движке (Cycle W). Архитектура, золотой час, наполнение и люди подогнаны под референс. Корги теперь <b>живой</b> — циклит состояния (сидит / нюхает / озирается / idle), дышит и виляет хвостом.</p>
+  <div class="compare">
+    <figure>
+      <div class="cap-head"><span class="tag ref">РЕФЕРЕНС / ЭТАЛОН</span></div>
+      <img src="../concepts/refs_channel/ref_botanika.jpg" alt="референс">
+      <figcaption>Викторианская оранжерея на закате: бетонная колонна-ось, ферменный остеклённый свод, кожаный диван, люди, корги, золотая дымка.</figcaption>
+    </figure>
+    <figure>
+      <div class="cap-head"><span class="tag fin">ДВИЖОК · GPU-РЕНДЕР (Cycle W)</span></div>
+      <img src="46_cycleW_crop.png" alt="финал">
+      <figcaption><b>Что в кадре:</b> реальные 3D-люди (Gemini→Hunyuan3D) — на диване, читающая на полу, мастер с кружкой; кожаный честерфилд, персидский ковёр с бахромой, стопка книг, глобус, ящики, лабораторное стекло, каскадные лозы, граффити «WATCH OUT» на колонне, зелёное свечение CRT, <b>живой корги-герой</b> на переднем плане, закатный ключ с длинными тенями, god-rays.</figcaption>
+    </figure>
+  </div>
+
+  <h2>Эволюция за сессию <span class="pill ghost">грейбокс → обжитая оранжерея</span></h2>
+  <p class="lead">Путь от плоского серого блока до тёплой обжитой сцены. Каждый шаг — отдельный билд, проверенный глазами + приёмкой 5 агентов-судей.</p>
+  <div class="strip">
+    <figure><img src="20_webgl_gpu_hero.png" alt="старт"><figcaption><span class="n">Старт.</span> Плоский дневной свет, пустой грейбокс — пост-обработка не применялась.</figcaption></figure>
+    <figure><img src="34_cycleM_crop.png" alt="M"><figcaption><span class="n">Cycle M.</span> Золотой час включён, god-rays, фото-лес сквозь стекло.</figcaption></figure>
+    <figure><img src="38_cycleQ_crop.png" alt="Q"><figcaption><span class="n">Cycle Q.</span> Плотный clutter (книги/бутылки/перегонка), мягкие лучи.</figcaption></figure>
+    <figure><img src="41_cycleS_crop.png" alt="S"><figcaption><span class="n">Cycle S.</span> Низкий закатный ключ — длинные направленные тени, SSAO-заземление.</figcaption></figure>
+    <figure><img src="43_cycleT2_crop.png" alt="T"><figcaption><span class="n">Cycle T.</span> Реальный 3D-человек на диване, лозы, персидский ковёр.</figcaption></figure>
+    <figure><img src="46_cycleW_crop.png" alt="W"><figcaption><span class="n">Cycle W.</span> Книги, глобус, ящики, читающая NPC, ковёр с бахромой, живой корги. Текущий лучший.</figcaption></figure>
+  </div>
+
+  <h2>Сгенерённые ассеты-примеры <span class="pill">Gemini → Hunyuan3D</span></h2>
+  <p class="lead">Пайплайн: текстовый промпт → чистая product-картинка (Gemini 3 Pro Image) → image-to-3D (Hunyuan3D) → текстуры через Blender → расстановка в Unity. Ниже — исходные картинки, по которым сгенерены 3D-модели и текстуры в сцене.</p>
+  <div class="gallery">
+    <figure><img src="../../art_pipeline/gen/person_seated.png" alt="person"><figcaption>Человек на диван (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/person_stand.png" alt="person2"><figcaption>«Мастер» с кружкой (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/sofa_clean.png" alt="sofa"><figcaption>Кожаный честерфилд (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/bookshelf_clean.png" alt="shelf"><figcaption>Книжный шкаф (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/server_rack_clean.png" alt="server"><figcaption>Серверная стойка (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/crt_monitor_clean.png" alt="crt"><figcaption>CRT-монитор (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/coffee_table_clean.png" alt="table"><figcaption>Журнальный столик (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/fern_clean.png" alt="fern"><figcaption>Папоротник (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/potted_plant_clean.png" alt="pot"><figcaption>Горшечное растение (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/hanging_vine_clean.png" alt="vine"><figcaption>Каскадные лозы (→ 3D)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/persian_rug.png" alt="rug"><figcaption>Персидский ковёр (текстура)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/watchout.png" alt="graffiti"><figcaption>WATCH OUT (декаль)</figcaption></figure>
+    <figure><img src="../../art_pipeline/gen/forest_backdrop.png" alt="forest"><figcaption>Золотой лес за стеклом (задник)</figcaption></figure>
+  </div>
+
+  <h2>Честно про оценку</h2>
+  <div class="grid2">
+    <div class="note">
+      <b>Что подтянулось (приёмка 5 судей, порог 10/10):</b>
+      <ul>
+        <li>Свет / атмосфера — направленный закатный ключ, длинные тени, god-rays, тёплый грейд</li>
+        <li>Наполнение — реальные люди, мебель, лозы, ковёр, граффити, плотный clutter</li>
+        <li>Заземление — SSAO-контактные тени (чинил баг: радиус AO стоял 4 см)</li>
+        <li>Узнаваемость кадра — колонна-ось, ферменный свод, корги — как в рефе</li>
+      </ul>
+    </div>
+    <div class="note" style="border-left-color:var(--accent)">
+      <b>Остаток до фотореал-10/10 — это ассеты/движок, не код:</b>
+      <ul>
+        <li>настоящая объёмная волюметрика/god-rays → нужен <b>HDRP</b> или кастомный render-pass (URP-туман равномерный)</li>
+        <li>авторский <b>glass-шейдер</b> (рефракция / Fresnel / отражения)</li>
+        <li>авторские <b>wear/grime</b> текстуры (потёртости, грязь, патина)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="foot">
+    Живой интерактивный билд: <code>http://localhost:8911</code> (если сервер поднят). Прогресс-лог: <code>LIT_VIEW.html</code> в этой же папке.<br>
+    Вектор на выбор: <b>HDRP</b> (настоящая волюметрика) · <b>ещё ассеты/пропсы</b> тем же пайплайном · <b>принять текущее</b>.
+  </div>
+
+</div>
+</body>
+</html>

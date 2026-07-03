@@ -1607,8 +1607,11 @@ namespace Afterhumans.EditorTools
             var pw = GameObject.CreatePrimitive(PrimitiveType.Quad);
             pw.name="Clut_WatchOut"; Object.DestroyImmediate(pw.GetComponent<Collider>());
             pw.transform.SetParent(root.transform,false);
-            pw.transform.position = new Vector3(-0.2f, 2.0f, -0.9f); // on the south column face, facing camera
-            pw.transform.rotation = Quaternion.Euler(0,180f,2f);
+            // Unity Quad's visible face looks down its -Z: yaw 0 = readable from the SOUTH
+            // (player side). The previous yaw 180 flipped it north — invisible from spawn,
+            // confirmed live (tour cam from the north saw it, spawn cam never did).
+            pw.transform.position = new Vector3(-0.2f, 2.0f, -0.95f);
+            pw.transform.rotation = Quaternion.Euler(0, 0f, 2f);
             pw.transform.localScale = new Vector3(1.5f,0.78f,1f); // 2:1 image aspect
             pw.GetComponent<Renderer>().sharedMaterial = paintMat;
 
@@ -1661,6 +1664,12 @@ namespace Afterhumans.EditorTools
                 anim.applyRootMotion = false;
                 if (corgiMesh.GetComponent<CorgiStateAnimator>() == null)
                     corgiMesh.AddComponent<CorgiStateAnimator>();
+                // Living-dog behaviour (sit/scratch/sniff/lie/shake/sneeze + sounds) on the ROOT.
+                if (corgiRoot.GetComponent<Afterhumans.Kafka.DogBehavior>() == null)
+                {
+                    var dogBeh = corgiRoot.AddComponent<Afterhumans.Kafka.DogBehavior>();
+                    dogBeh.EditorAutoWireAudio();   // wire any SFX already present in Audio/SFX/Dog/
+                }
 
                 // VANISH FIX (Build K): the IK-baked FBX moves with the camera but the mesh was
                 // invisible — the SkinnedMeshRenderer's localBounds came out stale/degenerate from
@@ -4001,6 +4010,12 @@ namespace Afterhumans.EditorTools
             anim.runtimeAnimatorController = null;
             anim.applyRootMotion = false;
             if (mesh.GetComponent<CorgiStateAnimator>() == null) mesh.AddComponent<CorgiStateAnimator>();
+            // Living-dog behaviour on the root (idempotent — see DogBehavior INTEGRATION block).
+            if (root.GetComponent<Afterhumans.Kafka.DogBehavior>() == null)
+            {
+                var dogBeh = root.AddComponent<Afterhumans.Kafka.DogBehavior>();
+                dogBeh.EditorAutoWireAudio();
+            }
 
             // VANISH FIX: degenerate skinned bounds get frustum-culled → force live bounds.
             foreach (var smr in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
@@ -5017,6 +5032,12 @@ namespace Afterhumans.EditorTools
                 // no Ink/freeze. Also covers the case where auto-proximity didn't trigger.
                 if (dog.GetComponent<Afterhumans.Audio.NpcInteractor>() == null)
                     dog.AddComponent<Afterhumans.Audio.NpcInteractor>();
+                // Living-dog behaviour (idempotent; wires dog SFX by prefix if present).
+                if (dog.GetComponent<Afterhumans.Kafka.DogBehavior>() == null)
+                {
+                    var dogBeh = dog.AddComponent<Afterhumans.Kafka.DogBehavior>();
+                    dogBeh.EditorAutoWireAudio();
+                }
             }
             else Debug.LogWarning("[WireBotanikaNpcs] Hero_Corgi NOT found — run EnsurePlayableDog first.");
 
@@ -5069,9 +5090,390 @@ namespace Afterhumans.EditorTools
             if (npcRoot.GetComponent<Afterhumans.Art.NpcTourCam>() == null)
                 npcRoot.AddComponent<Afterhumans.Art.NpcTourCam>();
 
+            // ── REFERENCE DRESS-UP (docs/concepts/refs_channel/ref_botanika.jpg) ──
+            // Warm golden haze + plank floor + persian rugs + ivy on the column/beams +
+            // red "WATCH OUT" tag + two book-stuffed cases + glowing green CRTs + floor
+            // cabling + a book-piled coffee table + a denser kitchen corner. Runs LAST so
+            // it dresses the fully-wired scene; idempotent (owns Botanika_RefDress, rebuilt
+            // each call) so re-running WireBotanikaNpcs never doubles the set.
+            DressSetToReference();
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
             Debug.Log($"[WireBotanikaNpcs] DONE wired={wired}/5 totalClips={totalClips} dog={(dog != null)}");
+        }
+
+        /// <summary>
+        /// REFERENCE DRESS-UP — nudges the wired scene toward
+        /// docs/concepts/refs_channel/ref_botanika.jpg: warm golden haze, a plank floor
+        /// under persian rugs, ivy climbing the central column &amp; roof beams, a red
+        /// "WATCH OUT" tag, two book-stuffed cases, glowing green CRTs, cabling snaking the
+        /// floor, a book-piled coffee table and a denser kitchen corner. Purely additive set
+        /// dressing built from primitives + the ref textures in Textures/Reference/.
+        /// Idempotent: owns the root "Botanika_RefDress" and rebuilds it from scratch each
+        /// call, so re-running WireBotanikaNpcs never doubles up. Only its own objects plus a
+        /// few LIVE light/fog params are touched — never NPC/audio/dedup/shell logic.
+        /// </summary>
+        private static void DressSetToReference()
+        {
+            AssetDatabase.Refresh(); // pick up Textures/Reference/*.png on first import
+            const string REF = "Assets/_Project/Textures/Reference/";
+
+            string ColStr(Color c) => $"({c.r:0.00},{c.g:0.00},{c.b:0.00})";
+
+            // fresh root each run → idempotent
+            var oldRoot = GameObject.Find("Botanika_RefDress");
+            if (oldRoot != null) Object.DestroyImmediate(oldRoot);
+            var root = new GameObject("Botanika_RefDress");
+
+            var lit = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+
+            // ---- material factories (solid surfaces reuse DecorMat/MakeEmissive) ----
+            Material TexOpaque(string nm, string rel, Color tint, float smooth, Vector2 tile, bool dbl)
+            {
+                var m = new Material(lit) { name = nm };
+                var t = RealTex(REF + rel);
+                if (t != null) { m.SetTexture("_BaseMap", t); m.SetTextureScale("_BaseMap", tile); }
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", smooth);
+                if (dbl && m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
+                return m;
+            }
+            Material TexAlphaClip(string nm, string rel, Color tint)
+            {
+                var m = new Material(lit) { name = nm };
+                var t = RealTex(REF + rel);
+                if (t != null) m.SetTexture("_BaseMap", t);
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", tint);
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.06f);
+                if (m.HasProperty("_Surface")) m.SetFloat("_Surface", 0f);   // opaque + alpha clip
+                if (m.HasProperty("_AlphaClip")) m.SetFloat("_AlphaClip", 1f);
+                m.EnableKeyword("_ALPHATEST_ON");
+                if (m.HasProperty("_Cutoff")) m.SetFloat("_Cutoff", 0.35f);
+                if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);         // double-sided
+                return m;
+            }
+            Material TexScreen(string nm, string rel, Color emis, float inten)
+            {
+                var m = new Material(lit) { name = nm };
+                var t = RealTex(REF + rel);
+                if (t != null) { m.SetTexture("_BaseMap", t); m.SetTexture("_EmissionMap", t); }
+                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", new Color(0.05f, 0.09f, 0.06f));
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.35f);
+                m.EnableKeyword("_EMISSION");
+                m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", emis * inten);
+                if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
+                return m;
+            }
+
+            // ---- primitive factories (all static, decorative colliders stripped) ----
+            GameObject Quad(string nm, Vector3 pos, Quaternion rot, Vector2 size, Material m, Transform par)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                go.name = nm; go.transform.SetParent(par ?? root.transform, true);
+                go.transform.position = pos; go.transform.rotation = rot;
+                go.transform.localScale = new Vector3(size.x, size.y, 1f);
+                go.isStatic = true;
+                var c = go.GetComponent<Collider>(); if (c != null) Object.DestroyImmediate(c);
+                go.GetComponent<Renderer>().sharedMaterial = m;
+                return go;
+            }
+            void BoxP(string nm, Vector3 pos, Vector3 size, float yaw, Material m, Transform par, bool collide)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = nm; go.transform.SetParent(par ?? root.transform, true);
+                go.transform.position = pos; go.transform.localScale = size;
+                go.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+                go.isStatic = true;
+                var c = go.GetComponent<Collider>();
+                if (collide && c != null) ColliderHelper.MarkStaticProp(go);
+                else if (c != null) Object.DestroyImmediate(c);
+                go.GetComponent<Renderer>().sharedMaterial = m;
+            }
+            void CylP(string nm, Vector3 basePos, float rad, float hgt, Material m, Transform par)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                go.name = nm; go.transform.SetParent(par ?? root.transform, true);
+                go.transform.position = basePos + Vector3.up * hgt * 0.5f;
+                go.transform.localScale = new Vector3(rad * 2f, hgt * 0.5f, rad * 2f);
+                go.isStatic = true;
+                var c = go.GetComponent<Collider>(); if (c != null) Object.DestroyImmediate(c);
+                go.GetComponent<Renderer>().sharedMaterial = m;
+            }
+
+            // ---- materials ----
+            var mRugHero = TexOpaque("Ref_RugHero", "ref_rug_persian.png", Color.white, 0.06f, Vector2.one, true);
+            var mRugRun  = TexOpaque("Ref_RugRunner", "ref_rug_runner.png", Color.white, 0.06f, Vector2.one, true);
+            var mPlanks  = TexOpaque("Ref_Planks", "ref_wood_planks.png", new Color(0.88f, 0.76f, 0.60f), 0.10f, new Vector2(4f, 7f), false);
+            var mBookA   = TexOpaque("Ref_BooksA", "ref_book_spines_a.png", Color.white, 0.05f, Vector2.one, false);
+            var mBookB   = TexOpaque("Ref_BooksB", "ref_book_spines_b.png", Color.white, 0.05f, Vector2.one, false);
+            var mLeaf    = TexAlphaClip("Ref_IvyLeaf", "ref_ivy_leaf.png", new Color(0.74f, 0.88f, 0.64f));
+            var mWatch   = TexAlphaClip("Ref_WatchOut", "ref_watchout_decal.png", Color.white);
+            var mScreen  = TexScreen("Ref_CRT", "ref_monitor_green.png", new Color(0.5f, 1.0f, 0.6f), 2.6f);
+            var mWood    = DecorMat("Ref_Wood",   new Color(0.34f, 0.24f, 0.16f), 0.16f);
+            var mWoodLt  = DecorMat("Ref_WoodLt", new Color(0.50f, 0.37f, 0.24f), 0.14f);
+            var mBody    = DecorMat("Ref_MonBody", new Color(0.09f, 0.10f, 0.11f), 0.35f);
+            var mWire    = DecorMat("Ref_Wire",   new Color(0.05f, 0.05f, 0.06f), 0.30f);
+            var mMetal   = DecorMat("Ref_Metal",  new Color(0.16f, 0.16f, 0.18f), 0.55f);
+            var mCopper  = DecorMat("Ref_Copper", new Color(0.55f, 0.32f, 0.16f), 0.60f);
+            var mJar     = DecorMat("Ref_Jar",    new Color(0.62f, 0.58f, 0.44f), 0.40f);
+            var mMug     = DecorMat("Ref_Mug",    new Color(0.75f, 0.72f, 0.68f), 0.30f);
+            var ledG     = MakeEmissive("Ref_LEDg", new Color(0.40f, 1.0f, 0.45f), 3.2f, new Color(0.04f, 0.06f, 0.04f));
+            var ledR     = MakeEmissive("Ref_LEDr", new Color(1.0f, 0.20f, 0.16f), 4.0f, new Color(0.08f, 0.03f, 0.03f));
+            var books = new[] {
+                DecorMat("Ref_Bk1", new Color(0.45f, 0.18f, 0.15f), 0.05f),
+                DecorMat("Ref_Bk2", new Color(0.20f, 0.30f, 0.42f), 0.05f),
+                DecorMat("Ref_Bk3", new Color(0.36f, 0.32f, 0.18f), 0.05f),
+                DecorMat("Ref_Bk4", new Color(0.22f, 0.34f, 0.22f), 0.05f),
+            };
+
+            // ---- 1. plank floor (retexture the existing greybox Floor in place) ----
+            var floor = GameObject.Find("Floor");
+            if (floor != null) { var fr = floor.GetComponent<Renderer>(); if (fr != null) fr.sharedMaterial = mPlanks; }
+
+            // ---- 2. persian rugs (flat quads just above the floor; X+90 lays them down) ----
+            var rugs = new GameObject("Ref_Rugs"); rugs.transform.SetParent(root.transform, false);
+            Quaternion Flat(float yaw) => Quaternion.AngleAxis(yaw, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+            Quad("Ref_Rug_Hero",   new Vector3(0f, 0.012f, -3.0f), Flat(0f),  new Vector2(5.2f, 4.6f), mRugHero, rugs.transform);
+            Quad("Ref_Rug_Runner", new Vector3(4.0f, 0.012f, -0.6f), Flat(14f), new Vector2(2.0f, 3.2f), mRugRun, rugs.transform);
+            Quad("Ref_Rug_North",  new Vector3(0.4f, 0.013f, 9.2f), Flat(0f),  new Vector2(2.4f, 1.7f), mRugRun, rugs.transform);
+
+            // ---- 3. WATCH OUT tag on the south face of the central column (faces spawn) ----
+            Quad("Ref_WatchOut", new Vector3(0f, 2.25f, -0.33f), Quaternion.Euler(0f, 0f, -3f), new Vector2(1.35f, 0.92f), mWatch, root.transform);
+
+            // ---- 4. workstations with glowing green CRTs (left cluster + Nikolai's desk) ----
+            var work = new GameObject("Ref_Workstations"); work.transform.SetParent(root.transform, false);
+            void Monitor(string id, Vector3 at, float yaw)
+            {
+                var fwd = Quaternion.Euler(0f, yaw, 0f) * Vector3.back; // toward the room / camera
+                BoxP($"Ref_MonBody_{id}", at, new Vector3(0.52f, 0.40f, 0.07f), yaw, mBody, work.transform, false);
+                BoxP($"Ref_MonStand_{id}", at + Vector3.down * 0.26f, new Vector3(0.08f, 0.14f, 0.08f), yaw, mBody, work.transform, false);
+                BoxP($"Ref_MonBase_{id}", at + Vector3.down * 0.34f, new Vector3(0.26f, 0.03f, 0.18f), yaw, mBody, work.transform, false);
+                Quad($"Ref_Screen_{id}", at + fwd * 0.042f, Quaternion.Euler(0f, yaw, 0f), new Vector2(0.46f, 0.33f), mScreen, work.transform);
+            }
+            void DeskLegs(string id, Vector3 c, float w, float d, Transform par)
+            {
+                foreach (var lx in new[] { -w, w })
+                    foreach (var lz in new[] { -d, d })
+                        BoxP($"Ref_DeskLeg_{id}_{lx}_{lz}", c + new Vector3(lx, -0.19f, lz), new Vector3(0.06f, 0.37f, 0.06f), 0f, mWood, par, false);
+            }
+            BoxP("Ref_DeskL", new Vector3(-3.3f, 0.40f, -0.05f), new Vector3(1.7f, 0.06f, 0.8f), 0f, mWoodLt, work.transform, true);
+            DeskLegs("L", new Vector3(-3.3f, 0.40f, -0.05f), 0.75f, 0.32f, work.transform);
+            Monitor("L1", new Vector3(-3.75f, 0.63f, -0.28f), 8f);
+            Monitor("L2", new Vector3(-2.95f, 0.63f, -0.20f), -6f);
+            BoxP("Ref_DeskR", new Vector3(4.2f, 0.40f, -0.95f), new Vector3(1.4f, 0.06f, 0.75f), 0f, mWoodLt, work.transform, true);
+            DeskLegs("R", new Vector3(4.2f, 0.40f, -0.95f), 0.6f, 0.3f, work.transform);
+            Monitor("R1", new Vector3(4.15f, 0.63f, -1.15f), 2f);
+
+            // ---- 5. glowing LEDs on the greybox server rack (skip if any already exist) ----
+            if (GameObject.Find("Server_LED_0a") == null && GameObject.Find("Ref_SrvLED_0a") == null)
+            {
+                var srv = GameObject.Find("ServerRack");
+                Vector3 sp = srv != null ? srv.transform.position : PosServerRack + Vector3.up * 0.9f;
+                for (int s = 0; s < 11; s++)
+                {
+                    float y = sp.y - 0.75f + s * 0.15f;
+                    BoxP($"Ref_SrvLED_{s}a", new Vector3(sp.x - 0.32f, y, sp.z - 0.12f), new Vector3(0.03f, 0.05f, 0.06f), 0f, (s % 3 == 0 ? ledR : ledG), root.transform, false);
+                    BoxP($"Ref_SrvLED_{s}b", new Vector3(sp.x - 0.32f, y, sp.z + 0.12f), new Vector3(0.03f, 0.05f, 0.06f), 0f, (s % 4 == 0 ? ledR : ledG), root.transform, false);
+                }
+            }
+
+            // ---- 6. floor cabling — chains of thin cylinders along Catmull-Rom paths ----
+            var wires = new GameObject("Ref_Wires"); wires.transform.SetParent(root.transform, false);
+            Vector3 CR(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, float t)
+            {
+                float t2 = t * t, t3 = t2 * t;
+                return 0.5f * ((2f * p1) + (-p0 + p2) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 + (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
+            }
+            void WireRun(string id, Vector3[] pts, float rad)
+            {
+                var prev = pts[0]; int seg = 0;
+                for (int i = 0; i < pts.Length - 1; i++)
+                {
+                    var p0 = pts[Mathf.Max(0, i - 1)]; var p1 = pts[i]; var p2 = pts[i + 1]; var p3 = pts[Mathf.Min(pts.Length - 1, i + 2)];
+                    for (int s = 1; s <= 8; s++)
+                    {
+                        var cur = CR(p0, p1, p2, p3, s / 8f);
+                        var d = cur - prev; float len = d.magnitude;
+                        if (len < 1e-4f) { prev = cur; continue; }
+                        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                        go.name = $"{id}_{seg++}"; go.transform.SetParent(wires.transform, true);
+                        go.transform.position = (prev + cur) * 0.5f;
+                        go.transform.rotation = Quaternion.FromToRotation(Vector3.up, d.normalized);
+                        go.transform.localScale = new Vector3(rad * 2f, len * 0.5f, rad * 2f);
+                        go.isStatic = true;
+                        var c = go.GetComponent<Collider>(); if (c != null) Object.DestroyImmediate(c);
+                        go.GetComponent<Renderer>().sharedMaterial = mWire;
+                        prev = cur;
+                    }
+                }
+            }
+            WireRun("Ref_WireA", new[] { new Vector3(4.9f, 0.03f, 1.9f), new Vector3(3.0f, 0.05f, -0.3f), new Vector3(1.4f, 0.03f, -3.1f), new Vector3(0.6f, 0.03f, -6.0f) }, 0.022f);
+            WireRun("Ref_WireB", new[] { new Vector3(-3.3f, 0.03f, -0.1f), new Vector3(-1.7f, 0.04f, -2.4f), new Vector3(-0.3f, 0.03f, -4.6f) }, 0.02f);
+            WireRun("Ref_WireC", new[] { new Vector3(4.2f, 0.03f, -1.2f), new Vector3(2.4f, 0.05f, -2.2f), new Vector3(1.0f, 0.03f, -3.9f) }, 0.02f);
+            WireRun("Ref_WireD", new[] { new Vector3(0.5f, 0.03f, -3.7f), new Vector3(-0.7f, 0.03f, -4.7f), new Vector3(0.4f, 0.03f, -5.7f) }, 0.018f);
+
+            // ---- 7. coffee table piled with books + a mug, in front of the sofa ----
+            var ct = new GameObject("Ref_CoffeeTable"); ct.transform.SetParent(root.transform, false);
+            BoxP("Ref_CT_Top", new Vector3(0f, 0.40f, -3.95f), new Vector3(1.5f, 0.05f, 0.9f), 0f, mWood, ct.transform, true);
+            foreach (var lx in new[] { -0.65f, 0.65f })
+                foreach (var lz in new[] { -0.38f, 0.38f })
+                    BoxP($"Ref_CT_Leg_{lx}_{lz}", new Vector3(lx, 0.19f, -3.95f + lz), new Vector3(0.06f, 0.38f, 0.06f), 0f, mWood, ct.transform, false);
+            var rndT = new System.Random(7);
+            for (int i = 0; i < 7; i++)
+            {
+                float bx = -0.5f + (float)rndT.NextDouble();
+                float bz = -4.2f + (float)rndT.NextDouble() * 0.5f;
+                float by = 0.45f + (i % 3) * 0.05f;
+                float rot = (float)rndT.NextDouble() * 40f - 20f;
+                BoxP($"Ref_CT_Book_{i}", new Vector3(bx, by, bz), new Vector3(0.28f, 0.05f, 0.20f), rot, books[i % books.Length], ct.transform, false);
+            }
+            CylP("Ref_CT_Mug", new Vector3(0.45f, 0.43f, -3.7f), 0.05f, 0.09f, mMug, ct.transform);
+
+            // ---- 8. denser kitchen corner (counter, pots, copper turka, jar shelf) ----
+            var kit = new GameObject("Ref_Kitchen"); kit.transform.SetParent(root.transform, false);
+            BoxP("Ref_K_Counter", new Vector3(-6.1f, 0.45f, 1.8f), new Vector3(0.7f, 0.9f, 3.0f), 0f, mWoodLt, kit.transform, true);
+            BoxP("Ref_K_Top", new Vector3(-6.1f, 0.92f, 1.8f), new Vector3(0.72f, 0.05f, 3.05f), 0f, mMetal, kit.transform, false);
+            CylP("Ref_K_Pot1", new Vector3(-6.05f, 0.94f, 1.2f), 0.14f, 0.17f, mMetal, kit.transform);
+            CylP("Ref_K_Pot2", new Vector3(-6.05f, 0.94f, 2.1f), 0.13f, 0.15f, mMetal, kit.transform);
+            CylP("Ref_K_Lid1", new Vector3(-6.05f, 1.11f, 1.2f), 0.135f, 0.02f, mMetal, kit.transform);
+            CylP("Ref_K_Turka", new Vector3(-6.05f, 0.94f, 0.5f), 0.08f, 0.12f, mCopper, kit.transform);
+            BoxP("Ref_K_Shelf", new Vector3(-6.45f, 1.7f, 1.8f), new Vector3(0.32f, 0.04f, 2.2f), 0f, mWood, kit.transform, false);
+            for (int j = 0; j < 5; j++)
+                CylP($"Ref_K_Jar_{j}", new Vector3(-6.45f, 1.72f, 1.0f + j * 0.42f), 0.06f, 0.16f, mJar, kit.transform);
+
+            // ---- 9. two book-stuffed cases flanking the column, behind the sofa ----
+            void BookCase(string id, Vector3 c, Material bookMat)
+            {
+                var bc = new GameObject($"Ref_Bookcase_{id}"); bc.transform.SetParent(root.transform, false);
+                BoxP($"Ref_BC_{id}_back", c + new Vector3(0f, 1.4f, 0.16f), new Vector3(1.5f, 2.0f, 0.05f), 0f, mWood, bc.transform, false);
+                BoxP($"Ref_BC_{id}_sL", c + new Vector3(-0.72f, 1.4f, 0f), new Vector3(0.06f, 2.0f, 0.36f), 0f, mWood, bc.transform, true);
+                BoxP($"Ref_BC_{id}_sR", c + new Vector3(0.72f, 1.4f, 0f), new Vector3(0.06f, 2.0f, 0.36f), 0f, mWood, bc.transform, true);
+                float[] shelfY = { 0.9f, 1.42f, 1.94f, 2.34f };
+                for (int s = 0; s < shelfY.Length; s++)
+                    BoxP($"Ref_BC_{id}_shelf{s}", c + new Vector3(0f, shelfY[s], 0f), new Vector3(1.45f, 0.04f, 0.36f), 0f, mWood, bc.transform, false);
+                for (int s = 0; s < 3; s++)   // spine-textured rows on the lower three shelves, facing -Z
+                    BoxP($"Ref_BC_{id}_row{s}", c + new Vector3(0f, shelfY[s] + 0.22f, -0.10f), new Vector3(1.34f, 0.36f, 0.14f), 0f, bookMat, bc.transform, false);
+            }
+            BookCase("L", new Vector3(-2.8f, 0f, 4.3f), mBookA);
+            BookCase("R", new Vector3(2.8f, 0f, 4.3f), mBookB);
+
+            // ---- 10. ivy — leaf sprigs spiralling the column and trailing along beams ----
+            var ivy = new GameObject("Ref_Ivy"); ivy.transform.SetParent(root.transform, false);
+            int li = 0;
+            void LeafQuad(Vector3 pos, float size, int seed)
+            {
+                var r = new System.Random(seed);
+                var rot = Quaternion.Euler((float)r.NextDouble() * 70f - 35f, (float)r.NextDouble() * 360f, (float)r.NextDouble() * 60f - 30f);
+                Quad($"Ref_Leaf_{li++}", pos, rot, new Vector2(size, size), mLeaf, ivy.transform);
+            }
+            const int NCOL = 56;   // spiral hugging the 0.3-radius column with leafy volume
+            for (int i = 0; i < NCOL; i++)
+            {
+                float f = i / (float)(NCOL - 1);
+                float y = Mathf.Lerp(0.6f, 6.2f, f);
+                float ang = i * 0.95f;
+                float rr = 0.46f + 0.05f * Mathf.Sin(i * 1.7f);
+                LeafQuad(new Vector3(Mathf.Cos(ang) * rr, y, Mathf.Sin(ang) * rr),
+                         Mathf.Lerp(0.30f, 0.20f, f) * (0.85f + 0.30f * Mathf.Abs(Mathf.Sin(i))), 1000 + i);
+            }
+            void BeamIvy(Vector3 a, Vector3 b, int n, int seedBase)
+            {
+                for (int i = 0; i < n; i++)
+                {
+                    float t = i / (float)(n - 1);
+                    var p = Vector3.Lerp(a, b, t);
+                    p.y -= 0.06f + ((i * 7) % 5) * 0.05f;   // leaves droop below the beam
+                    LeafQuad(p, 0.22f + ((i * 3) % 4) * 0.03f, seedBase + i);
+                }
+            }
+            BeamIvy(new Vector3(-4.0f, 4.0f, 2.2f), new Vector3(4.0f, 4.0f, 2.2f), 22, 2000);
+            BeamIvy(new Vector3(-3.4f, 5.4f, -2.4f), new Vector3(3.4f, 5.4f, -2.4f), 18, 3000);
+            BeamIvy(new Vector3(0f, 7.4f, -4.0f), new Vector3(0f, 7.4f, 4.0f), 20, 4000);
+
+            // ---- 11. warm golden grade + haze (ref = late sun, NOT an orange filter) ----
+            Light sun = null; float best = -1f;
+            foreach (var l in Object.FindObjectsByType<Light>(FindObjectsSortMode.None))
+                if (l.type == LightType.Directional && l.intensity > best && !l.name.Contains("Fill")) { best = l.intensity; sun = l; }
+            string sunNote = "none";
+            if (sun != null) { sunNote = $"{sun.name} {ColStr(sun.color)}→(1.00,0.82,0.55)"; sun.color = new Color(1.00f, 0.82f, 0.55f); }
+            string fogWas = $"{RenderSettings.fogMode}/{ColStr(RenderSettings.fogColor)}";
+            RenderSettings.fog = true;
+            RenderSettings.fogMode = FogMode.Exponential;
+            RenderSettings.fogDensity = 0.019f;
+            RenderSettings.fogColor = new Color(0.90f, 0.72f, 0.47f);
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
+            RenderSettings.ambientSkyColor = new Color(0.52f, 0.44f, 0.31f);
+            var fill = new GameObject("Ref_GoldenFill"); fill.transform.SetParent(root.transform, false);
+            fill.transform.position = new Vector3(0f, 6.2f, 0.5f);
+            var fl = fill.AddComponent<Light>();
+            fl.type = LightType.Point; fl.color = new Color(1.0f, 0.80f, 0.52f); fl.intensity = 0.7f; fl.range = 20f; fl.shadows = LightShadows.None;
+
+            // dust motes in the shafts — only if the scene doesn't already carry a system
+            if (GameObject.Find("DustParticles") == null && GameObject.Find("Ref_DustMotes") == null)
+            {
+                var dg = new GameObject("Ref_DustMotes"); dg.transform.SetParent(root.transform, false);
+                // HARD-SQUARE FIX v3 (geometry, not shaders): the WebGL build kept dropping the
+                // soft sprite (bare vertex-color quads survived two shader-side fixes). A 2-4px
+                // particle can't LOOK square, so keep every mote far from the lens: emitter box
+                // floats 2.3-5.3m up (sunbeam dust under the glass roof, like the reference) and
+                // sizes stay tiny. The camera rides at ~1.2-1.5m — nothing spawns near it.
+                // v3.1: bottom of the box raised to 3.2m — with the camera at ~1.4m and pitch
+                // clamped, the CLOSEST visible mote sits ≥3.5m away → ≤4px on screen. At that
+                // size squareness physically can't read, textured sprite or not.
+                dg.transform.position = new Vector3(-1.5f, 4.4f, 0f);
+                var ps = dg.AddComponent<ParticleSystem>();
+                var main = ps.main; main.startLifetime = 13f; main.startSpeed = 0.02f;
+                main.startSize = new ParticleSystem.MinMaxCurve(0.008f, 0.02f);
+                main.maxParticles = 380; main.startColor = new Color(1f, 0.90f, 0.66f, 0.30f);
+                main.simulationSpace = ParticleSystemSimulationSpace.World; main.gravityModifier = -0.004f;
+                var em = ps.emission; em.rateOverTime = 36f;
+                var sh = ps.shape; sh.shapeType = ParticleSystemShapeType.Box; sh.scale = new Vector3(12f, 2.4f, 18f);
+                var cl = ps.colorOverLifetime; cl.enabled = true;
+                var grad = new Gradient();
+                grad.SetKeys(
+                    new[] { new GradientColorKey(Color.white, 0), new GradientColorKey(Color.white, 1) },
+                    new[] { new GradientAlphaKey(0, 0), new GradientAlphaKey(0.5f, 0.3f), new GradientAlphaKey(0.5f, 0.7f), new GradientAlphaKey(0, 1) });
+                cl.color = grad;
+                var rend = dg.GetComponent<ParticleSystemRenderer>(); rend.renderMode = ParticleSystemRenderMode.Billboard;
+                // HARD-SQUARE FIX v2: fighting URP Particles/Unlit surface-setup from editor code
+                // did NOT take (squares survived a rebuild). Sprites/Default is inherently
+                // alpha-blended, URP-compatible and vertex-color driven — with the soft radial
+                // sprite it renders round fading motes. If the sprite is missing, DISABLE the
+                // system entirely: no dust beats hard yellow squares.
+                var dustTex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/_Project/Textures/Reference/ref_dust_soft.png");
+                if (dustTex == null)
+                {
+                    Debug.LogWarning("[DressSetToReference] ref_dust_soft.png NOT imported — dust motes disabled");
+                    Object.DestroyImmediate(dg);
+                }
+                else
+                {
+                    var pm = new Material(Shader.Find("Sprites/Default"));
+                    pm.mainTexture = dustTex;
+                    pm.color = new Color(1f, 0.90f, 0.66f, 0.32f);
+                    rend.sharedMaterial = pm;
+                }
+            }
+
+            // WATCH OUT decal lives in the SAVED scene (created long ago by ComposeRealAssets,
+            // which the current Wire pipeline never calls — editing that code changed nothing).
+            // Its yaw=180 faces the quad north, invisible from the player side; flip it here,
+            // in the pass that actually runs. Unity Quad's visible face looks down -Z: yaw 0 =
+            // readable from the SOUTH. z=-0.95 keeps it just off the r=0.85 column surface.
+            var wo = GameObject.Find("Clut_WatchOut");
+            if (wo != null)
+            {
+                // y=1.55: letters sit right above the sofa back — the player camera never
+                // pitches high enough to read anything at y=2.0 (verified across 3 builds).
+                wo.transform.position = new Vector3(-0.2f, 1.55f, -0.95f);
+                wo.transform.rotation = Quaternion.Euler(0f, 0f, 2f);
+            }
+
+            Debug.Log($"[DressSetToReference] floorPlanks={(floor != null)} rugs=3 ivyLeaves={ivy.transform.childCount} " +
+                      $"sun[{sunNote}] fog[{fogWas}→Exponential/0.019/(0.90,0.72,0.47)] dust={(GameObject.Find("Ref_DustMotes") != null)} " +
+                      $"watchOutFlipped={(wo != null)}");
         }
 
         /// <summary>

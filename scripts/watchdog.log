@@ -1,0 +1,776 @@
+[2026-06-15 12:55:39] tick
+[2026-06-15 12:55:39]   heartbeat age=53s step='build4 gait-fix idет; проверка билдов afterhumans'
+[2026-06-15 12:55:39]   fresh -> session alive, nothing to do
+[2026-06-15 17:06:06] tick
+[2026-06-15 17:06:06]   heartbeat age=120s step='build6 camera-raise: IterationCameraAndScene + BuildHero'
+[2026-06-15 17:06:06]   fresh -> session alive, nothing to do
+[2026-06-15 17:06:32] tick
+[2026-06-15 17:06:32]   heartbeat age=24s step='build6 camera-raise idёт (~100s)'
+[2026-06-15 17:06:32]   fresh -> session alive, nothing to do
+[2026-06-15 17:09:06] tick
+[2026-06-15 17:09:06]   heartbeat age=178s step='build6 camera-raise idёт (~100s)'
+[2026-06-15 17:09:06]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 17:09:06]   nudge finished rc=127
+[2026-06-15 17:09:32] tick
+[2026-06-15 17:09:32]   heartbeat age=204s step='build6 camera-raise idёт (~100s)'
+[2026-06-15 17:09:32]   STALE but within nudge cooldown (26s) — banner only, no resume
+[2026-06-15 17:09:41] tick
+[2026-06-15 17:09:41]   heartbeat age=213s step='build6 camera-raise idёт (~100s)'
+[2026-06-15 17:09:41]   STALE but within nudge cooldown (35s) — banner only, no resume
+[2026-06-15 17:11:11] tick
+[2026-06-15 17:11:11]   heartbeat age=47s step='АКТИВЕН: проверка билда6 камеры, допиливаю watchdog'
+[2026-06-15 17:11:11]   fresh -> session alive, nothing to do
+[2026-06-15 17:12:32] tick
+[2026-06-15 17:12:32]   heartbeat age=128s step='АКТИВЕН: проверка билда6 камеры, допиливаю watchdog'
+[2026-06-15 17:12:32]   STALE but within nudge cooldown (206s) — banner only, no resume
+[2026-06-15 17:12:41] tick
+[2026-06-15 17:12:41]   heartbeat age=2s step='проверка билда6 камеры в WebGL'
+[2026-06-15 17:12:41]   fresh -> session alive, nothing to do
+[2026-06-15 17:14:11] tick
+[2026-06-15 17:14:11]   heartbeat age=92s step='проверка билда6 камеры в WebGL'
+[2026-06-15 17:14:11]   fresh -> session alive, nothing to do
+[2026-06-15 17:15:32] tick
+[2026-06-15 17:15:33]   heartbeat age=173s step='проверка билда6 камеры в WebGL'
+[2026-06-15 17:15:37]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 17:15:41] tick
+[2026-06-15 17:15:41]   heartbeat age=182s step='проверка билда6 камеры в WebGL'
+[2026-06-15 17:15:41]   STALE but within nudge cooldown (9s) — banner only, no resume
+[2026-06-15 17:17:11] tick
+[2026-06-15 17:17:11]   heartbeat age=10s step='build7 камера-горизонт + приёмка агентом'
+[2026-06-15 17:17:11]   fresh -> session alive, nothing to do
+[2026-06-15 17:18:37] tick
+[2026-06-15 17:18:37]   heartbeat age=96s step='build7 камера-горизонт + приёмка агентом'
+[2026-06-15 17:18:37]   fresh -> session alive, nothing to do
+[2026-06-15 17:18:41] tick
+[2026-06-15 17:18:41]   heartbeat age=100s step='build7 камера-горизонт + приёмка агентом'
+[2026-06-15 17:18:41]   fresh -> session alive, nothing to do
+[2026-06-15 17:20:11] tick
+[2026-06-15 17:20:11]   heartbeat age=51s step='build7 idёт ~100s'
+[2026-06-15 17:20:11]   fresh -> session alive, nothing to do
+[2026-06-15 17:21:37] tick
+[2026-06-15 17:21:37]   heartbeat age=34s step='build7 idёт ~200s'
+[2026-06-15 17:21:37]   fresh -> session alive, nothing to do
+[2026-06-15 17:21:41] tick
+[2026-06-15 17:21:41]   heartbeat age=38s step='build7 idёт ~200s'
+[2026-06-15 17:21:41]   fresh -> session alive, nothing to do
+[2026-06-15 17:23:11] tick
+[2026-06-15 17:23:11]   heartbeat age=25s step='build7 idёт ~300s'
+[2026-06-15 17:23:11]   fresh -> session alive, nothing to do
+[2026-06-15 17:24:38] tick
+[2026-06-15 17:24:38]   heartbeat age=10s step='build7 idёт ~400s'
+[2026-06-15 17:24:38]   fresh -> session alive, nothing to do
+[2026-06-15 17:24:41] tick
+[2026-06-15 17:24:41]   heartbeat age=13s step='build7 idёт ~400s'
+[2026-06-15 17:24:41]   fresh -> session alive, nothing to do
+[2026-06-15 17:26:11] tick
+[2026-06-15 17:26:11]   heartbeat age=1s step='build7 idёт ~500s'
+[2026-06-15 17:26:11]   fresh -> session alive, nothing to do
+[2026-06-15 17:27:38] tick
+[2026-06-15 17:27:38]   heartbeat age=88s step='build7 idёт ~500s'
+[2026-06-15 17:27:38]   fresh -> session alive, nothing to do
+[2026-06-15 17:27:42] tick
+[2026-06-15 17:27:42]   heartbeat age=92s step='build7 idёт ~500s'
+[2026-06-15 17:27:42]   fresh -> session alive, nothing to do
+[2026-06-15 17:29:12] tick
+[2026-06-15 17:29:12]   heartbeat age=79s step='build7 idёт ~600s'
+[2026-06-15 17:29:12]   fresh -> session alive, nothing to do
+[2026-06-15 17:30:38] tick
+[2026-06-15 17:30:38]   heartbeat age=63s step='build7 idёт ~700s'
+[2026-06-15 17:30:38]   fresh -> session alive, nothing to do
+[2026-06-15 17:30:42] tick
+[2026-06-15 17:30:42]   heartbeat age=67s step='build7 idёт ~700s'
+[2026-06-15 17:30:42]   fresh -> session alive, nothing to do
+[2026-06-15 17:32:12] tick
+[2026-06-15 17:32:12]   heartbeat age=54s step='build7 idёт ~800s'
+[2026-06-15 17:32:12]   fresh -> session alive, nothing to do
+[2026-06-15 17:33:38] tick
+[2026-06-15 17:33:38]   heartbeat age=140s step='build7 idёт ~800s'
+[2026-06-15 17:33:38]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 17:33:42] tick
+[2026-06-15 17:33:42]   heartbeat age=144s step='build7 idёт ~800s'
+[2026-06-15 17:33:42]   STALE but within nudge cooldown (4s) — banner only, no resume
+[2026-06-15 17:35:12] tick
+[2026-06-15 17:35:12]   heartbeat age=234s step='build7 idёт ~800s'
+[2026-06-15 17:35:12]   STALE but within nudge cooldown (94s) — banner only, no resume
+[2026-06-15 17:36:38] tick
+[2026-06-15 17:36:38]   heartbeat age=33s step='нашёл acceptance_workflow (5 судей+Тим-прокси), возвращаю в работу'
+[2026-06-15 17:36:38]   fresh -> session alive, nothing to do
+[2026-06-15 17:36:42] tick
+[2026-06-15 17:36:42]   heartbeat age=37s step='нашёл acceptance_workflow (5 судей+Тим-прокси), возвращаю в работу'
+[2026-06-15 17:36:42]   fresh -> session alive, nothing to do
+[2026-06-15 17:38:12] tick
+[2026-06-15 17:38:12]   heartbeat age=127s step='нашёл acceptance_workflow (5 судей+Тим-прокси), возвращаю в работу'
+[2026-06-15 17:38:12]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 17:38:15]   nudge finished rc=1
+[2026-06-15 17:39:38] tick
+[2026-06-15 17:39:38]   heartbeat age=50s step='build7 retry idёт ~100s'
+[2026-06-15 17:39:38]   fresh -> session alive, nothing to do
+[2026-06-15 17:39:43] tick
+[2026-06-15 17:39:43]   heartbeat age=55s step='build7 retry idёт ~100s'
+[2026-06-15 17:39:43]   fresh -> session alive, nothing to do
+[2026-06-15 17:41:13] tick
+[2026-06-15 17:41:13]   heartbeat age=145s step='build7 retry idёт ~100s'
+[2026-06-15 17:41:13]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 17:42:38] tick
+[2026-06-15 17:42:38]   heartbeat age=230s step='build7 retry idёт ~100s'
+[2026-06-15 17:42:39]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 17:42:43] tick
+[2026-06-15 17:42:43]   heartbeat age=235s step='build7 retry idёт ~100s'
+[2026-06-15 17:42:43]   STALE but within nudge cooldown (5s) — banner only, no resume
+[2026-06-15 17:44:13] tick
+[2026-06-15 17:44:13]   heartbeat age=325s step='build7 retry idёт ~100s'
+[2026-06-15 17:44:13]   STALE but within nudge cooldown (95s) — banner only, no resume
+[2026-06-15 17:45:39] tick
+[2026-06-15 17:45:39]   heartbeat age=411s step='build7 retry idёт ~100s'
+[2026-06-15 17:45:39]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 17:45:43] tick
+[2026-06-15 17:45:43]   heartbeat age=415s step='build7 retry idёт ~100s'
+[2026-06-15 17:45:43]   STALE but within nudge cooldown (185s) — banner only, no resume
+[2026-06-15 17:47:13] tick
+[2026-06-15 17:47:13]   heartbeat age=505s step='build7 retry idёт ~100s'
+[2026-06-15 17:47:13]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 17:47:16]   nudge finished rc=1
+[2026-06-15 17:48:39] tick
+[2026-06-15 17:48:39]   heartbeat age=41s step='camera root-cause: collider pull-in suspect; reading IterationCameraAndScene'
+[2026-06-15 17:48:39]   fresh -> session alive, nothing to do
+[2026-06-15 17:48:44] tick
+[2026-06-15 17:48:44]   heartbeat age=46s step='camera root-cause: collider pull-in suspect; reading IterationCameraAndScene'
+[2026-06-15 17:48:44]   fresh -> session alive, nothing to do
+[2026-06-15 17:50:14] tick
+[2026-06-15 17:50:14]   heartbeat age=136s step='camera root-cause: collider pull-in suspect; reading IterationCameraAndScene'
+[2026-06-15 17:50:14]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 17:51:39] tick
+[2026-06-15 17:51:40]   heartbeat age=7s step='camera FIX applied (collider removed, orbits 6-7m, telemetry added) + gameplay-acceptance judge created; preparing rebuild'
+[2026-06-15 17:51:40]   fresh -> session alive, nothing to do
+[2026-06-15 17:51:44] tick
+[2026-06-15 17:51:44]   heartbeat age=12s step='camera FIX applied (collider removed, orbits 6-7m, telemetry added) + gameplay-acceptance judge created; preparing rebuild'
+[2026-06-15 17:51:44]   fresh -> session alive, nothing to do
+[2026-06-15 17:53:14] tick
+[2026-06-15 17:53:14]   heartbeat age=102s step='camera FIX applied (collider removed, orbits 6-7m, telemetry added) + gameplay-acceptance judge created; preparing rebuild'
+[2026-06-15 17:53:14]   fresh -> session alive, nothing to do
+[2026-06-15 17:54:40] tick
+[2026-06-15 17:54:40]   heartbeat age=76s step='waiting WebGL build (poll 1): camera-fix build running on container'
+[2026-06-15 17:54:40]   fresh -> session alive, nothing to do
+[2026-06-15 17:54:44] tick
+[2026-06-15 17:54:44]   heartbeat age=80s step='waiting WebGL build (poll 1): camera-fix build running on container'
+[2026-06-15 17:54:44]   fresh -> session alive, nothing to do
+[2026-06-15 17:56:14] tick
+[2026-06-15 17:56:14]   heartbeat age=78s step='waiting WebGL build (poll 2): camera-fix build running on container'
+[2026-06-15 17:56:14]   fresh -> session alive, nothing to do
+[2026-06-15 17:57:40] tick
+[2026-06-15 17:57:40]   heartbeat age=71s step='waiting WebGL build (poll 3): camera-fix build running on container'
+[2026-06-15 17:57:40]   fresh -> session alive, nothing to do
+[2026-06-15 17:57:44] tick
+[2026-06-15 17:57:44]   heartbeat age=75s step='waiting WebGL build (poll 3): camera-fix build running on container'
+[2026-06-15 17:57:44]   fresh -> session alive, nothing to do
+[2026-06-15 17:59:14] tick
+[2026-06-15 17:59:14]   heartbeat age=73s step='waiting WebGL build (poll 4): camera-fix build running on container'
+[2026-06-15 17:59:14]   fresh -> session alive, nothing to do
+[2026-06-15 18:00:40] tick
+[2026-06-15 18:00:40]   heartbeat age=67s step='waiting WebGL build (poll 5): camera-fix build running on container'
+[2026-06-15 18:00:40]   fresh -> session alive, nothing to do
+[2026-06-15 18:00:44] tick
+[2026-06-15 18:00:44]   heartbeat age=71s step='waiting WebGL build (poll 5): camera-fix build running on container'
+[2026-06-15 18:00:44]   fresh -> session alive, nothing to do
+[2026-06-15 18:02:14] tick
+[2026-06-15 18:02:14]   heartbeat age=69s step='waiting WebGL build (poll 6): camera-fix build running on container'
+[2026-06-15 18:02:14]   fresh -> session alive, nothing to do
+[2026-06-15 18:03:40] tick
+[2026-06-15 18:03:40]   heartbeat age=46s step='diagnosing slow build: checking iter_cam.log + unity proc'
+[2026-06-15 18:03:40]   fresh -> session alive, nothing to do
+[2026-06-15 18:03:44] tick
+[2026-06-15 18:03:44]   heartbeat age=50s step='diagnosing slow build: checking iter_cam.log + unity proc'
+[2026-06-15 18:03:44]   fresh -> session alive, nothing to do
+[2026-06-15 18:05:14] tick
+[2026-06-15 18:05:14]   heartbeat age=9s step='streaming WebGL build container->Mac'
+[2026-06-15 18:05:14]   fresh -> session alive, nothing to do
+[2026-06-15 18:06:40] tick
+[2026-06-15 18:06:40]   heartbeat age=95s step='streaming WebGL build container->Mac'
+[2026-06-15 18:06:40]   fresh -> session alive, nothing to do
+[2026-06-15 18:06:44] tick
+[2026-06-15 18:06:44]   heartbeat age=99s step='streaming WebGL build container->Mac'
+[2026-06-15 18:06:44]   fresh -> session alive, nothing to do
+[2026-06-15 18:08:14] tick
+[2026-06-15 18:08:14]   heartbeat age=62s step='CDP: waiting Unity load, capturing spawn + telemetry'
+[2026-06-15 18:08:14]   fresh -> session alive, nothing to do
+[2026-06-15 18:09:40] tick
+[2026-06-15 18:09:40]   heartbeat age=8s step='CDP: driving W, capturing walk shots + telemetry'
+[2026-06-15 18:09:40]   fresh -> session alive, nothing to do
+[2026-06-15 18:09:44] tick
+[2026-06-15 18:09:44]   heartbeat age=12s step='CDP: driving W, capturing walk shots + telemetry'
+[2026-06-15 18:09:44]   fresh -> session alive, nothing to do
+[2026-06-15 18:11:14] tick
+[2026-06-15 18:11:15]   heartbeat age=102s step='CDP: driving W, capturing walk shots + telemetry'
+[2026-06-15 18:11:15]   fresh -> session alive, nothing to do
+[2026-06-15 18:12:40] tick
+[2026-06-15 18:12:40]   heartbeat age=10s step='waiting rebuild (~3m camera) poll 1'
+[2026-06-15 18:12:40]   fresh -> session alive, nothing to do
+[2026-06-15 18:12:45] tick
+[2026-06-15 18:12:45]   heartbeat age=15s step='waiting rebuild (~3m camera) poll 1'
+[2026-06-15 18:12:45]   fresh -> session alive, nothing to do
+[2026-06-15 18:14:15] tick
+[2026-06-15 18:14:15]   heartbeat age=13s step='waiting rebuild (~3m camera) poll 2'
+[2026-06-15 18:14:15]   fresh -> session alive, nothing to do
+[2026-06-15 18:15:40] tick
+[2026-06-15 18:15:40]   heartbeat age=5s step='waiting rebuild (~3m camera) poll 3'
+[2026-06-15 18:15:40]   fresh -> session alive, nothing to do
+[2026-06-15 18:15:45] tick
+[2026-06-15 18:15:45]   heartbeat age=10s step='waiting rebuild (~3m camera) poll 3'
+[2026-06-15 18:15:45]   fresh -> session alive, nothing to do
+[2026-06-15 18:17:15] tick
+[2026-06-15 18:17:15]   heartbeat age=29s step='CDP: loading rebuild, capturing spawn + telemetry'
+[2026-06-15 18:17:15]   fresh -> session alive, nothing to do
+[2026-06-15 18:18:40] tick
+[2026-06-15 18:18:40]   heartbeat age=11s step='CDP: re-hook telemetry + controls test W/A/D'
+[2026-06-15 18:18:40]   fresh -> session alive, nothing to do
+[2026-06-15 18:18:45] tick
+[2026-06-15 18:18:45]   heartbeat age=16s step='CDP: re-hook telemetry + controls test W/A/D'
+[2026-06-15 18:18:45]   fresh -> session alive, nothing to do
+[2026-06-15 18:20:15] tick
+[2026-06-15 18:20:15]   heartbeat age=71s step='CDP: A/D turn test + mouse orbit'
+[2026-06-15 18:20:15]   fresh -> session alive, nothing to do
+[2026-06-15 18:21:40] tick
+[2026-06-15 18:21:41]   heartbeat age=156s step='CDP: A/D turn test + mouse orbit'
+[2026-06-15 18:21:41]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 18:21:45] tick
+[2026-06-15 18:21:45]   heartbeat age=161s step='CDP: A/D turn test + mouse orbit'
+[2026-06-15 18:21:45]   STALE but within nudge cooldown (5s) — banner only, no resume
+[2026-06-15 18:23:15] tick
+[2026-06-15 18:23:15]   heartbeat age=251s step='CDP: A/D turn test + mouse orbit'
+[2026-06-15 18:23:15]   STALE but within nudge cooldown (95s) — banner only, no resume
+[2026-06-15 18:24:41] tick
+[2026-06-15 18:24:41]   heartbeat age=86s step='CDP: clean sustained-W facing test'
+[2026-06-15 18:24:41]   fresh -> session alive, nothing to do
+[2026-06-15 18:24:45] tick
+[2026-06-15 18:24:45]   heartbeat age=90s step='CDP: clean sustained-W facing test'
+[2026-06-15 18:24:45]   fresh -> session alive, nothing to do
+[2026-06-15 18:26:15] tick
+[2026-06-15 18:26:15]   heartbeat age=25s step='rebuild: tail-to-cam heading fix + camSide telemetry; syncing'
+[2026-06-15 18:26:15]   fresh -> session alive, nothing to do
+[2026-06-15 18:27:41] tick
+[2026-06-15 18:27:41]   heartbeat age=80s step='waiting tail-fix rebuild poll 1'
+[2026-06-15 18:27:41]   fresh -> session alive, nothing to do
+[2026-06-15 18:27:46] tick
+[2026-06-15 18:27:46]   heartbeat age=85s step='waiting tail-fix rebuild poll 1'
+[2026-06-15 18:27:46]   fresh -> session alive, nothing to do
+[2026-06-15 18:29:16] tick
+[2026-06-15 18:29:16]   heartbeat age=61s step='waiting HERO webgl step poll 1'
+[2026-06-15 18:29:16]   fresh -> session alive, nothing to do
+[2026-06-15 18:30:41] tick
+[2026-06-15 18:30:41]   heartbeat age=69s step='waiting HERO webgl step poll 2'
+[2026-06-15 18:30:41]   fresh -> session alive, nothing to do
+[2026-06-15 18:30:46] tick
+[2026-06-15 18:30:46]   heartbeat age=74s step='waiting HERO webgl step poll 2'
+[2026-06-15 18:30:46]   fresh -> session alive, nothing to do
+[2026-06-15 18:32:16] tick
+[2026-06-15 18:32:16]   heartbeat age=8s step='waiting HERO webgl step poll 4'
+[2026-06-15 18:32:16]   fresh -> session alive, nothing to do
+[2026-06-15 18:33:41] tick
+[2026-06-15 18:33:41]   heartbeat age=16s step='waiting HERO webgl step poll 5'
+[2026-06-15 18:33:41]   fresh -> session alive, nothing to do
+[2026-06-15 18:33:46] tick
+[2026-06-15 18:33:46]   heartbeat age=21s step='waiting HERO webgl step poll 5'
+[2026-06-15 18:33:46]   fresh -> session alive, nothing to do
+[2026-06-15 18:35:16] tick
+[2026-06-15 18:35:16]   heartbeat age=33s step='waiting HERO webgl step poll 6'
+[2026-06-15 18:35:16]   fresh -> session alive, nothing to do
+[2026-06-15 18:36:42] tick
+[2026-06-15 18:36:42]   heartbeat age=25s step='streaming tail-fix build + server restart'
+[2026-06-15 18:36:42]   fresh -> session alive, nothing to do
+[2026-06-15 18:36:46] tick
+[2026-06-15 18:36:46]   heartbeat age=29s step='streaming tail-fix build + server restart'
+[2026-06-15 18:36:46]   fresh -> session alive, nothing to do
+[2026-06-15 18:38:16] tick
+[2026-06-15 18:38:16]   heartbeat age=61s step='CDP: load tail-fix build, wait until running'
+[2026-06-15 18:38:16]   fresh -> session alive, nothing to do
+[2026-06-15 18:39:42] tick
+[2026-06-15 18:39:42]   heartbeat age=35s step='CDP: bring tab to front, wait load'
+[2026-06-15 18:39:42]   fresh -> session alive, nothing to do
+[2026-06-15 18:39:46] tick
+[2026-06-15 18:39:46]   heartbeat age=39s step='CDP: bring tab to front, wait load'
+[2026-06-15 18:39:46]   fresh -> session alive, nothing to do
+[2026-06-15 18:41:16] tick
+[2026-06-15 18:41:16]   heartbeat age=5s step='CDP: sustained W, measure camSide flip'
+[2026-06-15 18:41:16]   fresh -> session alive, nothing to do
+[2026-06-15 18:42:42] tick
+[2026-06-15 18:42:42]   heartbeat age=91s step='CDP: sustained W, measure camSide flip'
+[2026-06-15 18:42:42]   fresh -> session alive, nothing to do
+[2026-06-15 18:42:46] tick
+[2026-06-15 18:42:46]   heartbeat age=95s step='CDP: sustained W, measure camSide flip'
+[2026-06-15 18:42:46]   fresh -> session alive, nothing to do
+[2026-06-15 18:44:16] tick
+[2026-06-15 18:44:16]   heartbeat age=185s step='CDP: sustained W, measure camSide flip'
+[2026-06-15 18:44:16]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 18:44:20]   nudge finished rc=1
+[2026-06-15 18:45:42] tick
+[2026-06-15 18:45:42]   heartbeat age=27s step='waiting bias rebuild poll 1'
+[2026-06-15 18:45:42]   fresh -> session alive, nothing to do
+[2026-06-15 18:45:46] tick
+[2026-06-15 18:45:46]   heartbeat age=31s step='waiting bias rebuild poll 1'
+[2026-06-15 18:45:46]   fresh -> session alive, nothing to do
+[2026-06-15 18:47:16] tick
+[2026-06-15 18:47:17]   heartbeat age=39s step='waiting bias rebuild poll 2'
+[2026-06-15 18:47:17]   fresh -> session alive, nothing to do
+[2026-06-15 18:48:42] tick
+[2026-06-15 18:48:42]   heartbeat age=23s step='streaming bias build + server'
+[2026-06-15 18:48:42]   fresh -> session alive, nothing to do
+[2026-06-15 18:48:47] tick
+[2026-06-15 18:48:47]   heartbeat age=28s step='streaming bias build + server'
+[2026-06-15 18:48:47]   fresh -> session alive, nothing to do
+[2026-06-15 18:50:17] tick
+[2026-06-15 18:50:17]   heartbeat age=84s step='CDP: open bias build, measure camSide'
+[2026-06-15 18:50:17]   fresh -> session alive, nothing to do
+[2026-06-15 18:51:42] tick
+[2026-06-15 18:51:42]   heartbeat age=169s step='CDP: open bias build, measure camSide'
+[2026-06-15 18:51:42]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 18:51:47] tick
+[2026-06-15 18:51:47]   heartbeat age=3s step='rebuild: scripted deterministic tail-cam (BuildHero only); syncing'
+[2026-06-15 18:51:47]   fresh -> session alive, nothing to do
+[2026-06-15 18:53:17] tick
+[2026-06-15 18:53:17]   heartbeat age=71s step='waiting scripted-cam BuildHero poll 1'
+[2026-06-15 18:53:17]   fresh -> session alive, nothing to do
+[2026-06-15 18:54:42] tick
+[2026-06-15 18:54:42]   heartbeat age=73s step='waiting scripted-cam BuildHero poll 2'
+[2026-06-15 18:54:42]   fresh -> session alive, nothing to do
+[2026-06-15 18:54:47] tick
+[2026-06-15 18:54:47]   heartbeat age=78s step='waiting scripted-cam BuildHero poll 2'
+[2026-06-15 18:54:47]   fresh -> session alive, nothing to do
+[2026-06-15 18:56:17] tick
+[2026-06-15 18:56:17]   heartbeat age=3s step='waiting scripted-cam BuildHero poll 4'
+[2026-06-15 18:56:17]   fresh -> session alive, nothing to do
+[2026-06-15 18:57:42] tick
+[2026-06-15 18:57:42]   heartbeat age=6s step='waiting scripted-cam BuildHero poll 5'
+[2026-06-15 18:57:42]   fresh -> session alive, nothing to do
+[2026-06-15 18:57:47] tick
+[2026-06-15 18:57:47]   heartbeat age=11s step='waiting scripted-cam BuildHero poll 5'
+[2026-06-15 18:57:47]   fresh -> session alive, nothing to do
+[2026-06-15 18:59:17] tick
+[2026-06-15 18:59:17]   heartbeat age=18s step='waiting scripted-cam BuildHero poll 6'
+[2026-06-15 18:59:17]   fresh -> session alive, nothing to do
+[2026-06-15 19:00:43] tick
+[2026-06-15 19:00:43]   heartbeat age=3s step='streaming scripted-cam build + server'
+[2026-06-15 19:00:43]   fresh -> session alive, nothing to do
+[2026-06-15 19:00:47] tick
+[2026-06-15 19:00:47]   heartbeat age=7s step='streaming scripted-cam build + server'
+[2026-06-15 19:00:47]   fresh -> session alive, nothing to do
+[2026-06-15 19:02:17] tick
+[2026-06-15 19:02:17]   heartbeat age=55s step='CDP: scripted-cam build, measure camSide (want >0)'
+[2026-06-15 19:02:17]   fresh -> session alive, nothing to do
+[2026-06-15 19:03:43] tick
+[2026-06-15 19:03:43]   heartbeat age=72s step='CDP: scripted-cam W + turn test'
+[2026-06-15 19:03:43]   fresh -> session alive, nothing to do
+[2026-06-15 19:03:47] tick
+[2026-06-15 19:03:47]   heartbeat age=76s step='CDP: scripted-cam W + turn test'
+[2026-06-15 19:03:47]   fresh -> session alive, nothing to do
+[2026-06-15 19:05:17] tick
+[2026-06-15 19:05:17]   heartbeat age=166s step='CDP: scripted-cam W + turn test'
+[2026-06-15 19:05:18]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:05:22]   nudge finished rc=1
+[2026-06-15 19:06:43] tick
+[2026-06-15 19:06:43]   heartbeat age=46s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:06:43]   fresh -> session alive, nothing to do
+[2026-06-15 19:06:48] tick
+[2026-06-15 19:06:48]   heartbeat age=51s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:06:48]   fresh -> session alive, nothing to do
+[2026-06-15 19:08:18] tick
+[2026-06-15 19:08:18]   heartbeat age=141s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:08:18]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 19:09:43] tick
+[2026-06-15 19:09:43]   heartbeat age=226s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:09:43]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:09:48] tick
+[2026-06-15 19:09:48]   heartbeat age=231s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:09:48]   STALE but within nudge cooldown (5s) — banner only, no resume
+[2026-06-15 19:11:18] tick
+[2026-06-15 19:11:18]   heartbeat age=321s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:11:19]   STALE but within nudge cooldown (95s) — banner only, no resume
+[2026-06-15 19:12:43] tick
+[2026-06-15 19:12:43]   heartbeat age=406s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:12:44]   STALE but within nudge cooldown (180s) — banner only, no resume
+[2026-06-15 19:12:49] tick
+[2026-06-15 19:12:49]   heartbeat age=412s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:12:49]   STALE but within nudge cooldown (186s) — banner only, no resume
+[2026-06-15 19:14:19] tick
+[2026-06-15 19:14:19]   heartbeat age=502s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:14:19]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:14:23]   nudge finished rc=1
+[2026-06-15 19:15:44] tick
+[2026-06-15 19:15:44]   heartbeat age=587s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:15:44]   STALE but within nudge cooldown (85s) — banner only, no resume
+[2026-06-15 19:15:49] tick
+[2026-06-15 19:15:49]   heartbeat age=592s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:15:50]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 19:17:20] tick
+[2026-06-15 19:17:20]   heartbeat age=683s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:17:20]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 19:18:45] tick
+[2026-06-15 19:18:45]   heartbeat age=767s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:18:45]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:18:50] tick
+[2026-06-15 19:18:50]   heartbeat age=773s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:18:50]   STALE but within nudge cooldown (6s) — banner only, no resume
+[2026-06-15 19:20:20] tick
+[2026-06-15 19:20:20]   heartbeat age=863s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:20:21]   STALE but within nudge cooldown (96s) — banner only, no resume
+[2026-06-15 19:21:46] tick
+[2026-06-15 19:21:46]   heartbeat age=949s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:21:46]   STALE but within nudge cooldown (182s) — banner only, no resume
+[2026-06-15 19:21:51] tick
+[2026-06-15 19:21:51]   heartbeat age=954s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:21:51]   STALE but within nudge cooldown (187s) — banner only, no resume
+[2026-06-15 19:23:21] tick
+[2026-06-15 19:23:21]   heartbeat age=1044s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:23:21]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:23:25]   nudge finished rc=1
+[2026-06-15 19:24:46] tick
+[2026-06-15 19:24:46]   heartbeat age=1129s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:24:46]   STALE but within nudge cooldown (85s) — banner only, no resume
+[2026-06-15 19:24:51] tick
+[2026-06-15 19:24:51]   heartbeat age=1134s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:24:52]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 19:26:22] tick
+[2026-06-15 19:26:22]   heartbeat age=1225s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:26:22]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 19:27:47] tick
+[2026-06-15 19:27:47]   heartbeat age=1310s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:27:47]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:27:52] tick
+[2026-06-15 19:27:52]   heartbeat age=1315s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:27:52]   STALE but within nudge cooldown (5s) — banner only, no resume
+[2026-06-15 19:29:22] tick
+[2026-06-15 19:29:22]   heartbeat age=1405s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:29:23]   STALE but within nudge cooldown (95s) — banner only, no resume
+[2026-06-15 19:30:47] tick
+[2026-06-15 19:30:47]   heartbeat age=1490s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:30:48]   STALE but within nudge cooldown (180s) — banner only, no resume
+[2026-06-15 19:30:53] tick
+[2026-06-15 19:30:53]   heartbeat age=1496s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:30:53]   STALE but within nudge cooldown (186s) — banner only, no resume
+[2026-06-15 19:32:23] tick
+[2026-06-15 19:32:23]   heartbeat age=1586s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:32:23]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:32:27]   nudge finished rc=1
+[2026-06-15 19:33:48] tick
+[2026-06-15 19:33:48]   heartbeat age=1671s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:33:49]   STALE but within nudge cooldown (85s) — banner only, no resume
+[2026-06-15 19:33:53] tick
+[2026-06-15 19:33:53]   heartbeat age=1676s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:33:54]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 19:35:24] tick
+[2026-06-15 19:35:24]   heartbeat age=1767s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:35:24]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 19:36:49] tick
+[2026-06-15 19:36:49]   heartbeat age=1852s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:36:50]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:36:54] tick
+[2026-06-15 19:36:54]   heartbeat age=1857s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:36:55]   STALE but within nudge cooldown (5s) — banner only, no resume
+[2026-06-15 19:38:25] tick
+[2026-06-15 19:38:25]   heartbeat age=1948s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:38:25]   STALE but within nudge cooldown (96s) — banner only, no resume
+[2026-06-15 19:39:50] tick
+[2026-06-15 19:39:50]   heartbeat age=2033s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:39:51]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 19:39:55] tick
+[2026-06-15 19:39:55]   heartbeat age=2038s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:39:56]   STALE but within nudge cooldown (186s) — banner only, no resume
+[2026-06-15 19:41:26] tick
+[2026-06-15 19:41:26]   heartbeat age=2129s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:41:26]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:41:30]   nudge finished rc=1
+[2026-06-15 19:42:51] tick
+[2026-06-15 19:42:52]   heartbeat age=2214s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:42:52]   STALE but within nudge cooldown (85s) — banner only, no resume
+[2026-06-15 19:42:56] tick
+[2026-06-15 19:42:56]   heartbeat age=2219s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:42:56]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 19:44:27] tick
+[2026-06-15 19:44:27]   heartbeat age=2310s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:44:27]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 19:45:52] tick
+[2026-06-15 19:45:52]   heartbeat age=2395s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:45:53]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:45:57] tick
+[2026-06-15 19:45:57]   heartbeat age=2400s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:45:57]   STALE but within nudge cooldown (5s) — banner only, no resume
+[2026-06-15 19:47:27] tick
+[2026-06-15 19:47:27]   heartbeat age=2490s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:47:28]   STALE but within nudge cooldown (95s) — banner only, no resume
+[2026-06-15 19:48:53] tick
+[2026-06-15 19:48:53]   heartbeat age=2576s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:48:54]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 19:48:58] tick
+[2026-06-15 19:48:58]   heartbeat age=2581s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:48:58]   STALE but within nudge cooldown (186s) — banner only, no resume
+[2026-06-15 19:50:28] tick
+[2026-06-15 19:50:28]   heartbeat age=2671s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:50:29]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:50:34]   nudge finished rc=1
+[2026-06-15 19:51:54] tick
+[2026-06-15 19:51:54]   heartbeat age=2757s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:51:57]   STALE but within nudge cooldown (86s) — banner only, no resume
+[2026-06-15 19:51:59] tick
+[2026-06-15 19:51:59]   heartbeat age=2762s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:51:59]   STALE but within nudge cooldown (91s) — banner only, no resume
+[2026-06-15 19:53:29] tick
+[2026-06-15 19:53:29]   heartbeat age=2852s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:53:30]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 19:54:57] tick
+[2026-06-15 19:54:57]   heartbeat age=2940s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:54:59]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:55:00] tick
+[2026-06-15 19:55:00]   heartbeat age=2943s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:55:00]   STALE but within nudge cooldown (3s) — banner only, no resume
+[2026-06-15 19:56:30] tick
+[2026-06-15 19:56:30]   heartbeat age=3033s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:56:31]   STALE but within nudge cooldown (93s) — banner only, no resume
+[2026-06-15 19:57:59] tick
+[2026-06-15 19:57:59]   heartbeat age=3122s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:57:59]   STALE but within nudge cooldown (182s) — banner only, no resume
+[2026-06-15 19:58:01] tick
+[2026-06-15 19:58:01]   heartbeat age=3124s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:58:01]   STALE but within nudge cooldown (184s) — banner only, no resume
+[2026-06-15 19:59:31] tick
+[2026-06-15 19:59:31]   heartbeat age=3214s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 19:59:32]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 19:59:38]   nudge finished rc=1
+[2026-06-15 20:00:59] tick
+[2026-06-15 20:01:00]   heartbeat age=3302s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:01:02] tick
+[2026-06-15 20:01:02]   heartbeat age=3305s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:01:02]   STALE but within nudge cooldown (91s) — banner only, no resume
+[2026-06-15 20:01:02]   STALE but within nudge cooldown (88s) — banner only, no resume
+[2026-06-15 20:02:32] tick
+[2026-06-15 20:02:32]   heartbeat age=3395s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:02:32]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:04:02] tick
+[2026-06-15 20:04:03] tick
+[2026-06-15 20:04:03]   heartbeat age=3485s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:04:03]   heartbeat age=3485s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:04:03]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:04:04]   STALE but within nudge cooldown (0s) — banner only, no resume
+[2026-06-15 20:04:08]   nudge finished rc=1
+[2026-06-15 20:05:33] tick
+[2026-06-15 20:05:33]   heartbeat age=3576s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:05:34]   STALE but within nudge cooldown (91s) — banner only, no resume
+[2026-06-15 20:07:04] tick
+[2026-06-15 20:07:04]   heartbeat age=3667s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:07:04]   STALE but within nudge cooldown (182s) — banner only, no resume
+[2026-06-15 20:07:04] tick
+[2026-06-15 20:07:05]   heartbeat age=3667s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:07:06]   STALE but within nudge cooldown (182s) — banner only, no resume
+[2026-06-15 20:08:34] tick
+[2026-06-15 20:08:34]   heartbeat age=3757s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:08:34]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:08:41]   nudge finished rc=1
+[2026-06-15 20:10:04] tick
+[2026-06-15 20:10:04]   heartbeat age=3847s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:10:05]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 20:10:07] tick
+[2026-06-15 20:10:07]   heartbeat age=3849s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:10:10]   STALE but within nudge cooldown (92s) — banner only, no resume
+[2026-06-15 20:11:35] tick
+[2026-06-15 20:11:35]   heartbeat age=3938s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:11:35]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:13:05] tick
+[2026-06-15 20:13:05]   heartbeat age=4028s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:13:05]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:13:10]   nudge finished rc=1
+[2026-06-15 20:13:11] tick
+[2026-06-15 20:13:11]   heartbeat age=4033s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:13:13]   STALE but within nudge cooldown (5s) — banner only, no resume
+[2026-06-15 20:14:35] tick
+[2026-06-15 20:14:35]   heartbeat age=4118s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:14:36]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 20:16:06] tick
+[2026-06-15 20:16:06]   heartbeat age=4209s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:16:06]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:16:13] tick
+[2026-06-15 20:16:14]   heartbeat age=4216s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:16:15]   STALE but within nudge cooldown (188s) — banner only, no resume
+[2026-06-15 20:17:36] tick
+[2026-06-15 20:17:36]   heartbeat age=4299s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:17:37]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:17:48]   nudge finished rc=1
+[2026-06-15 20:19:07] tick
+[2026-06-15 20:19:07]   heartbeat age=4390s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:19:07]   STALE but within nudge cooldown (91s) — banner only, no resume
+[2026-06-15 20:19:15] tick
+[2026-06-15 20:19:16]   heartbeat age=4398s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:19:18]   STALE but within nudge cooldown (99s) — banner only, no resume
+[2026-06-15 20:20:37] tick
+[2026-06-15 20:20:37]   heartbeat age=4480s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:20:37]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:22:08] tick
+[2026-06-15 20:22:08]   heartbeat age=4571s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:22:08]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:22:17]   nudge finished rc=1
+[2026-06-15 20:22:18] tick
+[2026-06-15 20:22:19]   heartbeat age=4581s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:22:20]   STALE but within nudge cooldown (10s) — banner only, no resume
+[2026-06-15 20:23:38] tick
+[2026-06-15 20:23:38]   heartbeat age=4661s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:23:38]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 20:25:08] tick
+[2026-06-15 20:25:09]   heartbeat age=4751s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:25:09]   STALE but within nudge cooldown (180s) — banner only, no resume
+[2026-06-15 20:25:20] tick
+[2026-06-15 20:25:21]   heartbeat age=4763s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:25:24]   STALE but within nudge cooldown (192s) — banner only, no resume
+[2026-06-15 20:26:39] tick
+[2026-06-15 20:26:39]   heartbeat age=4842s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:26:39]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:26:47]   nudge finished rc=1
+[2026-06-15 20:28:09] tick
+[2026-06-15 20:28:09]   heartbeat age=4932s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:28:10]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 20:28:24] tick
+[2026-06-15 20:28:25]   heartbeat age=4947s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:28:27]   STALE but within nudge cooldown (105s) — banner only, no resume
+[2026-06-15 20:29:40] tick
+[2026-06-15 20:29:40]   heartbeat age=5023s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:29:40]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:31:10] tick
+[2026-06-15 20:31:10]   heartbeat age=5113s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:31:10]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:31:16]   nudge finished rc=1
+[2026-06-15 20:31:27] tick
+[2026-06-15 20:31:28]   heartbeat age=5130s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:31:33]   STALE but within nudge cooldown (17s) — banner only, no resume
+[2026-06-15 20:32:40] tick
+[2026-06-15 20:32:40]   heartbeat age=5203s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:32:40]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 20:34:11] tick
+[2026-06-15 20:34:11]   heartbeat age=5294s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:34:11]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:34:33] tick
+[2026-06-15 20:34:34]   heartbeat age=5316s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:34:36]   STALE but within nudge cooldown (203s) — banner only, no resume
+[2026-06-15 20:35:41] tick
+[2026-06-15 20:35:41]   heartbeat age=5384s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:35:41]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:35:49]   nudge finished rc=1
+[2026-06-15 20:37:12] tick
+[2026-06-15 20:37:12]   heartbeat age=5475s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:37:13]   STALE but within nudge cooldown (91s) — banner only, no resume
+[2026-06-15 20:37:36] tick
+[2026-06-15 20:37:37]   heartbeat age=5499s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:37:39]   STALE but within nudge cooldown (115s) — banner only, no resume
+[2026-06-15 20:38:43] tick
+[2026-06-15 20:38:43]   heartbeat age=5566s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:38:43]   STALE but within nudge cooldown (182s) — banner only, no resume
+[2026-06-15 20:40:13] tick
+[2026-06-15 20:40:13]   heartbeat age=5656s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:40:13]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:40:23]   nudge finished rc=1
+[2026-06-15 20:40:40] tick
+[2026-06-15 20:40:41]   heartbeat age=5683s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:40:46]   STALE but within nudge cooldown (27s) — banner only, no resume
+[2026-06-15 20:41:43] tick
+[2026-06-15 20:41:43]   heartbeat age=5746s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:41:44]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 20:43:14] tick
+[2026-06-15 20:43:14]   heartbeat age=5837s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:43:14]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:43:46] tick
+[2026-06-15 20:43:48]   heartbeat age=5869s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:43:50]   STALE but within nudge cooldown (213s) — banner only, no resume
+[2026-06-15 20:44:44] tick
+[2026-06-15 20:44:44]   heartbeat age=5927s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:44:45]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:44:54]   nudge finished rc=1
+[2026-06-15 20:46:15] tick
+[2026-06-15 20:46:15]   heartbeat age=6018s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:46:16]   STALE but within nudge cooldown (91s) — banner only, no resume
+[2026-06-15 20:46:50] tick
+[2026-06-15 20:46:51]   heartbeat age=6053s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:46:52]   STALE but within nudge cooldown (126s) — banner only, no resume
+[2026-06-15 20:47:46] tick
+[2026-06-15 20:47:46]   heartbeat age=6109s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:47:46]   STALE but within nudge cooldown (182s) — banner only, no resume
+[2026-06-15 20:49:16] tick
+[2026-06-15 20:49:16]   heartbeat age=6199s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:49:16]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:49:23]   nudge finished rc=1
+[2026-06-15 20:49:53] tick
+[2026-06-15 20:49:54]   heartbeat age=6236s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:49:56]   STALE but within nudge cooldown (37s) — banner only, no resume
+[2026-06-15 20:50:47] tick
+[2026-06-15 20:50:47]   heartbeat age=6289s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:50:47]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 20:52:17] tick
+[2026-06-15 20:52:17]   heartbeat age=6380s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:52:17]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:52:57] tick
+[2026-06-15 20:52:58]   heartbeat age=6419s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:53:00]   STALE but within nudge cooldown (220s) — banner only, no resume
+[2026-06-15 20:53:47] tick
+[2026-06-15 20:53:47]   heartbeat age=6470s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:53:48]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:53:58]   nudge finished rc=1
+[2026-06-15 20:55:18] tick
+[2026-06-15 20:55:18]   heartbeat age=6561s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:55:18]   STALE but within nudge cooldown (91s) — banner only, no resume
+[2026-06-15 20:56:01] tick
+[2026-06-15 20:56:03]   heartbeat age=6604s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:56:08]   STALE but within nudge cooldown (134s) — banner only, no resume
+[2026-06-15 20:56:48] tick
+[2026-06-15 20:56:48]   heartbeat age=6651s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:56:49]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 20:58:19] tick
+[2026-06-15 20:58:19]   heartbeat age=6742s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:58:19]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 20:58:27]   nudge finished rc=1
+[2026-06-15 20:59:08] tick
+[2026-06-15 20:59:10]   heartbeat age=6791s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:59:12]   STALE but within nudge cooldown (49s) — banner only, no resume
+[2026-06-15 20:59:49] tick
+[2026-06-15 20:59:49]   heartbeat age=6832s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 20:59:49]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 21:01:19] tick
+[2026-06-15 21:01:20]   heartbeat age=6922s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:01:21]   STALE but within nudge cooldown (180s) — banner only, no resume
+[2026-06-15 21:02:12] tick
+[2026-06-15 21:02:13]   heartbeat age=6975s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:02:16]   STALE but within nudge cooldown (233s) — banner only, no resume
+[2026-06-15 21:02:51] tick
+[2026-06-15 21:02:51]   heartbeat age=7014s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:02:51]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 21:03:01]   nudge finished rc=1
+[2026-06-15 21:04:21] tick
+[2026-06-15 21:04:21]   heartbeat age=7104s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:04:22]   STALE but within nudge cooldown (90s) — banner only, no resume
+[2026-06-15 21:05:17] tick
+[2026-06-15 21:05:17]   heartbeat age=7159s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:05:19]   STALE but within nudge cooldown (145s) — banner only, no resume
+[2026-06-15 21:05:52] tick
+[2026-06-15 21:05:52]   heartbeat age=7195s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:05:52]   STALE but within nudge cooldown (181s) — banner only, no resume
+[2026-06-15 21:07:23] tick
+[2026-06-15 21:07:23]   heartbeat age=7286s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:07:24]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 21:07:53]   nudge finished rc=1
+[2026-06-15 21:08:19] tick
+[2026-06-15 21:08:20]   heartbeat age=7342s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:08:23]   STALE but within nudge cooldown (56s) — banner only, no resume
+[2026-06-15 21:08:55] tick
+[2026-06-15 21:08:55]   heartbeat age=7378s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:08:56]   STALE but within nudge cooldown (92s) — banner only, no resume
+[2026-06-15 21:10:26] tick
+[2026-06-15 21:10:26]   heartbeat age=7469s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:10:27]   STALE but within nudge cooldown (183s) — banner only, no resume
+[2026-06-15 21:11:23] tick
+[2026-06-15 21:11:25]   heartbeat age=7526s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:11:28]   STALE >120s -> resume-nudge via claude --resume 3e07940c-166a-4b1f-8a0f-015f57f74148
+[2026-06-15 21:11:57] tick
+[2026-06-15 21:11:57]   heartbeat age=7560s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:11:57]   STALE but within nudge cooldown (34s) — banner only, no resume
+[2026-06-15 21:13:27] tick
+[2026-06-15 21:13:28]   heartbeat age=7650s step='CAMERA FIXED + judge ACCEPT + fact-checker SAFE; reporting to Tim'
+[2026-06-15 21:13:29]   STALE but within nudge cooldown (124s) — banner only, no resume
+[2026-06-15 21:14:29] tick
+[2026-06-15 21:14:29]   .orch_done present -> unloading watchdog
+[2026-06-15 23:53:54] tick
+[2026-06-15 23:53:55]   .orch_done present -> unloading watchdog
+[2026-06-23 15:51:10] tick
+[2026-06-23 15:51:11]   .orch_done present -> unloading watchdog

@@ -1,0 +1,121 @@
+<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Botanika · Панель экспертов — путь к AAA</title>
+<style>
+:root{--bg:#f4ede1;--card:#fffaf2;--ink:#2a2420;--muted:#7a6f60;--accent:#c8792e;--accent2:#3f7d5a;--red:#b0472e;--line:#e3d8c6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:40px 22px 80px}
+h1{font-size:32px;line-height:1.12;margin:0 0 6px;letter-spacing:-.5px}
+h1 small{display:block;font-size:14px;font-weight:400;color:var(--muted);margin-top:10px}
+h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin:46px 0 6px;border-bottom:2px solid var(--line);padding-bottom:8px}
+.headline{background:#16301f;color:#e9f5ec;border-radius:16px;padding:22px 24px;margin-top:22px;font-size:16px;line-height:1.6}
+.headline b{color:#7fe0a3}
+.sub{color:var(--muted);max-width:820px;margin:8px 0 0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 17px;box-shadow:0 3px 14px rgba(60,40,20,.05)}
+.card h4{margin:2px 0 8px;font-size:15.5px;line-height:1.3}
+.card .num{display:inline-block;background:var(--accent);color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;margin-bottom:6px}
+.card.p1{border-left:4px solid var(--accent2)}
+.card.p2{border-left:4px solid var(--red);background:#fdf3ec}
+.card p{margin:6px 0;font-size:13.5px;color:#4a4038}
+.card .why{color:var(--muted)}
+.note{background:var(--card);border-left:4px solid var(--red);border-radius:0 12px 12px 0;padding:16px 18px;margin-top:14px;font-size:14.5px;line-height:1.6}
+.note.good{border-left-color:var(--accent2)}
+.foot{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:16px}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;margin-right:6px}
+.tag.now{background:#16301f;color:#7fe0a3}.tag.art{background:#efe4d2;color:#6a5c45}
+a.btn{display:inline-block;margin-top:14px;background:linear-gradient(100deg,#c8792e,#3f7d5a);color:#fff;text-decoration:none;border-radius:12px;padding:14px 20px;font-weight:600}
+</style></head><body><div class="wrap">
+<h1>Botanika — панель AAA-экспертов
+<small>6 экспертов (свет/волюметрика · environment-арт · шейдеры · арт-директор · game-feel · WebGL-инженер) разобрали сцену по референсу и выдали приоритезированный план. Эксперты лезли прямо в .unity по GUID — это проверенные факты, не догадки.</small></h1>
+
+<div class="headline">До AAA-рефа («мокрый стеклянный собор золотого часа») сейчас 2-3/10, и держат планку НЕ настройки, а две вещи: (1) полностью отсутствует ОБЪЁМ воздуха — нет ни одного render-feature god-rays и ни одной частицы в лучах, плюс туман стоит в режиме Exp² density 0.015 (физически невидим на 15-25 м); (2) сцена не играбельна 3rd-person — корги-контроллер KafkaDirectController и его камера KafkaFollowCamera в сцене НЕ привязаны (0 вхождений по GUID, проверено), сейчас бегает SimpleFirstPersonController. Главный разрыв (атмосфера + плотная заросшая зелень + wear/grime) на 70-80% закрывается в URP за S/M-усилия БЕЗ слома готового и БЕЗ HDRP. HDRP исключён жёстко: он не поддерживает WebGL вообще — переход = отказ от продукта. Остаточные 20% (настоящий volumetric, фотореалистичная листва, авторский set-dressing) требуют арт-продакшна и кастомного render-feature, это месяцы, а не ручки.</div>
+
+<h2>P0 — чинится СЕЙЧАС <span class="tag now">URP · S/M · не ломает</span></h2>
+<p class="sub">Дешёвые правки в движке, дающие максимум. Закрывают «нельзя ходить» и ~70-80% разрыва с рефом без HDRP и без слома готового.</p>
+<div class="grid"><div class="card p0">
+          <div class="num">P0.1</div>
+          <h4>Привязать управление корги: KafkaDirectController + KafkaFollowCamera в сцену (root cause играбельности)</h4>
+          <p class="how"><b>Как:</b> Проверено GUID&#x27;ами в Scene_Botanika.unity: KafkaDirectController (9b7d61bf...) и KafkaFollowCamera (d95674e6...) встречаются 0 раз — НЕ привязаны. В сцене один CharacterController, и он висит на SimpleFirstPersonController (бегает FPS, не корги). Фикс: на GameObject корги добавить KafkaDirectController ([RequireComponent(CharacterController)] подтянет CC), на PlayerCamera — KafkaFollowCamera с target=корги; убрать/выключить SimpleFirstPersonController чтобы не было двух контроллеров. Input OK: activeInputHandler=2 (Both), а контроллер использует легаси Input.GetAxisRaw — заведётся. CorgiStateAnimator (дыхание) не трогаем — добавление компонентов его не ломает.</p>
+          <p class="why"><b>Почему первым:</b> Без этого продукт не играется вообще — корги дышит, но не ходит. Это блокер играбельности и фундамент для геройской камеры/DoF/композиции (все остальные кадровые правки опираются на то, что игрок водит корги). Effort S, breaks_existing=false, max impact.</p>
+        </div><div class="card p0">
+          <div class="num">P0.2</div>
+          <h4>Туман на читаемую глубину: переключить Exp² density 0.015 → Linear Start~6 End~40, цвет = цвету неба</h4>
+          <p class="how"><b>Как:</b> Проверено: m_Fog=1, m_FogMode=3 (ExponentialSquared), density 0.015 — на масштабе оранжереи 15-25 м невидим (поэтому &#x27;плоско&#x27;/&#x27;нет тумана&#x27;; art director ошибся, сказав что туман выключен — он включён, но мёртвый). В BotanikaLightingDirector.ApplyAmbientSettings: RenderSettings.fogMode=Linear; fogStart~6; fogEnd~40; fogColor тёплый золотой #E8C48A, СОВПАДАЕТ с цветом неба за стеклом (иначе дальний план вырезается). URP linear fog бесплатен по перфу. AH_Glass уже делает MixFog — стекло подхватит без правок.</p>
+          <p class="why"><b>Почему первым:</b> Самая дешёвая правда глубины: один блок кода даёт градиент front→back и &#x27;золотой воздух&#x27; рефа. S, не ломает ничего.</p>
+        </div><div class="card p0">
+          <div class="num">P0.3</div>
+          <h4>God-rays через свод: начать с дешёвого screen-space sun-shafts render-feature + dust-motes в лучах</h4>
+          <p class="how"><b>Как:</b> Проверено: m_RendererFeatures содержит ТОЛЬКО SSAO; god-rays/light-shaft паса нет — это #1 &#x27;не похоже на реф&#x27;. Depth И Opaque texture УЖЕ включены на URP asset (raymarch и рефракция технически разблокированы). Шаг 1 (дёшево, WebGL): добавить ScriptableRendererFeature radial sun-shaft (рендер яркой маски солнца в low-res RT → радиальное размытие от экранной позиции солнца → аддитивный composite, классика Crytek). Шаг 2: привязать существующий CreateDustParticles к зонам шафтов (additive, тёплый тинт, &lt;200-400 частиц) — 80% впечатления объёма даёт пыль в луче, не сам луч. Raymarch с Henyey-Greenstein — позже, если перф позволит. ВАЖНО: азимут directional-солнца и яркого пятна skybox HDRI совместить (повернуть _Rotation), иначе шафты неубедительны.</p>
+          <p class="why"><b>Почему первым:</b> Главный кинематографичный элемент рефа, которого 0. Sun-shafts+dust = max визуальный скачок при effort S-M, аддитивно (новая фича + новый GameObject), breaks_existing=false.</p>
+        </div><div class="card p0">
+          <div class="num">P0.4</div>
+          <h4>Убрать клиппинг хайлайтов в белый: чинить ВХОД (экспозиция/emissive/bloom threshold), НЕ тонмаппинг</h4>
+          <p class="how"><b>Как:</b> ACES уже стоит и сам роллит — клип не от него, а от значений далеко за 1.0 в HDR-буфере. Трассировка: sun 1.2 + emissive forest-задник + skybox exposure + bloom threshold 1.0 ловит всё. Шаги: (1) sun 1.2→~0.95, ambientIntensity 0.4→~0.28 (0.4 заливает тени = &#x27;плоско&#x27;); (2) bloom threshold 1.0→~1.3-1.5, clamp снизить с 65472 до ~6-8, intensity~0.85; (3) forest emissive держать 1.5-2.5 и тёплым тинтом (1.0,0.85,0.6), не белым/5+; (4) дальний план гасить туманом, а не клипом. Менять числа, не режим.</p>
+          <p class="why"><b>Почему первым:</b> Прямая жалоба приёмки, чистый тюнинг ручек, S, не ломает. Делает свет тёплым кремовым вместо #FFFFFF — мгновенно &#x27;киношнее&#x27;.</p>
+        </div><div class="card p0">
+          <div class="num">P0.5</div>
+          <h4>Правый CRT &#x27;белый вместо зелёного&#x27; + ориентация glow-quad к камере</h4>
+          <p class="how"><b>Как:</b> Две причины: (а) TA нашёл — Hero_CRT_E стоит yaw 250, а CRTGlow_Real квад смотрит дефолтным +Z ОТ геройской камеры → виден голый albedo. Фикс: rotation квада = LookAt камеры (или Euler yaw+180), сместить на лицевую грань по forward. (б) Lighting нашёл — emissive HDR-интенсивность слишком высокая + тёплый bloom-tint #FFE6C8 уводит зелёный в белый ореол. Фикс: _EmissionColor зелёный фосфор #2BFF6A/#1FBF4F при УМЕРЕННОЙ intensity (+1..+2 EV, не +4). Доп: отдельный Unlit emissive screen-quad поверх FBX-экрана чтобы фосфор читался без bloom. Проверять ТОЛЬКО в WebGL-билде на GPU (headless llvmpipe врёт по emissive/bloom — известный баг проекта).</p>
+          <p class="why"><b>Почему первым:</b> Зелёный CRT = единственный холодный акцент в тёплой сцене (комплементарная пара цветосценария). S, не ломает. Объединяет находки TA+Lighting (дедуп: оба правы, причины складываются).</p>
+        </div><div class="card p0">
+          <div class="num">P0.6</div>
+          <h4>Геройская камера + DoF на корги, убрать letterbox</h4>
+          <p class="how"><b>Как:</b> После привязки корги-контроллера: KafkaFollowCamera spring-arm высота ~1.2-1.6 м (или низкий hero ~0.45 для постера), дистанция ~2.5-3.5 м, FOV 38-45 (телевик = компрессия + крупнее корги, не 60 широкоугольный диагностический). DoF: focusDistance привязать скриптом к Distance(cam,корги) вместо хардкода 3; сменить Gaussian→Bokeh для геро-кадра (f/2.8-4). Корги в нижней центральной трети, колонна по вертикальной оси, фермы-диагонали к коньку. Letterbox: источник — кроп скриншота (46_cycleW_crop.png) или Cinematic bars; для геймплея/постера рендерить fullframe, полосы оставить только катсценам.</p>
+          <p class="why"><b>Почему первым:</b> Финальный множитель &#x27;геройскости&#x27; — свет золотой, но композиция (мелкий корги в углу) его убивает. Effort S-M, не ломает, зависит только от P0 №1.</p>
+        </div></div>
+
+<h2>P1 — ассеты/арт-слой <span class="tag art">нужны ассеты/текстуры</span></h2>
+<p class="sub">Следующий слой: плотная зелень ярусами, плющ оплетает архитектуру, wear/grime decal'ы, грязное стекло с рефракцией, разбить повтор материалов.</p>
+<div class="grid"><div class="card p1">
+          <h4>Зелень должна ОПЛЕТАТЬ архитектуру, а не висеть нитями: процедурный climbing-ivy на колонну и фермы</h4>
+          <p class="how"><b>Как:</b> Главный разрыв env-арта: лозы сейчас не контактируют с поверхностями → &#x27;декор подвешен&#x27;, а не &#x27;природа отвоевала&#x27;. В BuildDecor: column ivy поднять на полную высоту (0..VaultApex), 6-8 прядей вплотную к радиусу колонны (r=0.86), листья крупнее у основания. НОВАЯ функция truss-ivy: вдоль каждого Rafter/Eave раскидать процедурные листья (существующая Leaf()) с jitter вниз 0.2-0.5 м, координаты из CreateGlazingFrame. Чистая процедура, ассеты не нужны, breaks_existing=false.</p>
+        </div><div class="card p1">
+          <h4>Плотность вегетации x3-5 ЯРУСАМИ (пол→средний→свод) + foreground-обрамление под DoF</h4>
+          <p class="how"><b>Как:</b> Реф = трёхъярусные джунгли, сейчас вся зелень на Y=0 (судьи каждый цикл: &#x27;zero plants in a greenhouse&#x27;). Верхний ярус — свисающий плющ вдоль Eave каждые ~2 м (обрамляет верх кадра). Нижний/foreground — 2-3 крупных папоротника вплотную к камере (Z≈-8.5, x=±2.5) в зону gaussian-blur ближе focusDistance: даёт глубину+фрейминг+масштаб одним приёмом. Координаты камеры из WebGLBuilder (pos 0,1.5,-9.2). Использовать существующий Place() авто-scale.</p>
+        </div><div class="card p1">
+          <h4>Слой wear/grime через URP Decal Renderer Feature: водоросли/потёки на стекле, пятна у колонны, опад на полу</h4>
+          <p class="how"><b>Как:</b> Проверено: Decal feature в Afterhumans_URP_Renderer ОТСУТСТВУЕТ — включить (один чекбокс, дёшево для WebGL, не плодит геометрию). Сгенерить прозрачные decal&#x27;ы (Gemini→тот же fal_img23d пайплайн): algae_streak, rust_drip, water_stain, leaf_litter, moss_patch. Проецировать: потёки на нижние 1.5 м стекла и стыки рафтеров, мох у основания Column_Central, опад пятнами по полу. Механика — копия рабочего decal-паттерна WATCH OUT. Заодно перевести WATCH OUT с Quad на DecalProjector (оборачивает цилиндр, без z-fight). Это #1 переход от greybox-чистоты к &#x27;заброшено&#x27;.</p>
+        </div><div class="card p1">
+          <h4>Загрязнить стекло + настоящий refraction/Fresnel: заменить fake-alpha 0.03 Lit на Shader Graph</h4>
+          <p class="how"><b>Как:</b> Стекло сейчас alpha 0.03 smoothness 0.30 = почти невидимая плёнка без Френеля/рефракции → &#x27;лес не читается сквозь стекло&#x27;, нет &#x27;влажного собора&#x27;. Opaque texture уже включён. Shader Graph GlassVictorian: Fresnel (power~4) lerp base/reflection; Scene Color refraction со смещением UV по normal (0.01-0.02); smoothness 0.9-0.95; alpha~0.12-0.2; _GrimeMask (потёки/пыль, Y-tiled 1×3, больше грязи по низу) поднимает alpha и роняет smoothness в пятнах. Применять к Vault_/Gable_/Wall_Glass, RetextureGlass оставить fallback если Shader.Find==null.</p>
+        </div><div class="card p1">
+          <h4>Разбить блочный повтор материалов: пол (tile 3.6 на 28×14), бетонная колонна (один тайл), переплёт ферм</h4>
+          <p class="how"><b>Как:</b> Прямые жалобы &#x27;uniform orange/повтор/greybox&#x27;. Пол: Shader Graph смешать _BaseMap на двух частотах (3.6 и 0.4) по low-freq маске + detail normal + noise-tint ±10%. Колонна: Triplanar (без шва по цилиндру) + маска влажности/потёков модулирует smoothness + мох-градиент по World Y у основания. Фермы/переплёт (голый Timber → пластик): trim-sheet 1-2K (окрашенный металл/облупленная краска/ржавый стык/болты) на все Rafter_/Mull_/Transom_/Eave_. Везде RetexturePbr остаётся fallback, breaks_existing=false.</p>
+        </div><div class="card p1">
+          <h4>Контактный AO-decal под пропсами + кластеры-натюрморты вместо равномерного разброса</h4>
+          <p class="how"><b>Как:</b> Пропсы &#x27;парят&#x27; — SSAO слабо ловит контакт. radial-gradient AO-decal (DecalProjector, AO-only) под каждый крупный объект &#x27;приземляет&#x27; их, дёшево для WebGL. Параллельно перегруппировать существующие GLB (book_pile/lab_glass/crt/wood_crate) в 3-4 ТЕСНЫХ натюрморта (стол Милы: CRT+книги+колбы+кружка вплотную, кабели свисают; у дивана: книги на ковре+плед; серверная: ящики штабелем+мотки кабелей). Перестановка координат в ComposeRealAssets, новых ассетов почти не нужно.</p>
+        </div><div class="card p1">
+          <h4>Baked GI + Light Probes + Reflection Probe — мягкий золотой bounce и герой &#x27;в свете&#x27; (РИСК: перебейк)</h4>
+          <p class="how"><b>Как:</b> Проверено: ambient Trilight realtime, 0 LightProbeGroup, 0 реальных ReflectionProbe-блоков (25 &#x27;ReflectionProbe&#x27; в сцене — строки материалов, не компоненты). Без baked GI URP с одним directional всегда плоский. (1) Пометить статику Contribute GI, запечь lightmaps (Progressive GPU — bake локально на Маке/GPU-машине, headless без GPU не печёт). (2) Light Probe Group по геро-траектории корги (сетка 0.2-1.5 м) — иначе динамический корги &#x27;вырезан&#x27; из света. (3) 1 baked Reflection Probe в центре (box projection) — AH_Glass (smoothness 0.95) получит тёплые отражения вместо холодного skybox. ⚠ breaks_existing=true: bake перезапишет существующий LightingData.asset — БЭКАП перед bake обязателен. Поэтому это P1, не P0.</p>
+        </div></div>
+
+<h2>P2 — крупные решения (твой выбор)</h2>
+<p class="sub">Стратегические развилки с ценой. Главное: HDRP исключён жёстко.</p>
+<div class="grid"><div class="card p2">
+          <h4>HDRP ради volumetric fog/light/SSR — ВЕРДИКТ: НЕТ (исключён жёстко)</h4>
+          <p class="how"><b>Трейдофф:</b> Соблазн: HDRP даёт из коробки ровно недостающее (volumetric fog/light, physical exposure, light shafts, refraction). Цена, которая убивает идею: HDRP НЕ поддерживает WebGL вообще (нужны compute-shaders, только desktop/console). Продукт — браузер на GPU, значит переход на HDRP = ОТКАЗ от WebGL = смерть продукта. Даже если бы поддерживал: миграция всех 30+ материалов Lit→HDRP/Lit, перенастройка света в физических единицах, рефактор AH_Glass, перебейк GI, пересборка post — effort L+ с высоким риском сломать ВСЁ готовое. Консенсус всех трёх технических экспертов: остаться на URP. HDRP рассматривать ТОЛЬКО если когда-нибудь появится отдельный desktop-билд.</p>
+        </div><div class="card p2">
+          <h4>Настоящий raymarched volumetric (god-rays + height-fog) кастомным URP render-feature</h4>
+          <p class="how"><b>Трейдофф:</b> После screen-space sun-shafts (P0) следующий уровень объёма — full-screen raymarch вдоль view-ray, сэмплинг _MainLightShadowmapTexture по 16-24 шага, Henyey-Greenstein фаза (g≈0.6), half-res + bilateral upsample + dither для WebGL. Даёт объём ВЕЗДЕ (а не только когда солнце в кадре) и height-fog у пола. Цена: effort L, требует аккуратной оптимизации под WebGL-перф (бюджет кадра в браузере на GPU), риск артефактов бандинга. Решение Тима: делать ли после того, как дешёвые sun-shafts+dust уже дали 80% эффекта — оценить, стоит ли остаточные 20% объёма цены L.</p>
+        </div><div class="card p2">
+          <h4>Новые классы ассетов под фотореалистичную заросшую оранжерею (cascade-ivy, moss-mat, параллакс-лес)</h4>
+          <p class="how"><b>Трейдофф:</b> Существующий hanging_vine_clean.png — это потос В ГОРШКЕ на белом фоне (подтверждено в art_pipeline/gen), Hunyuan3D даёт компактный куст, не свисающую плеть. Для рефа нужны НОВЫЕ классы, которых в библиотеке нет: длинная каскадная плеть, почвопокровный мох, 2-3-слойный параллакс-задник леса вместо плоской emissive-карты. Цена: цикл генерации (Gemini→3D→optimize→дамп текстур→подключение) на каждый класс, тем же пайплайном что и остальные ассеты — это ASSET_WORK объёмом, накапливается. Трейдофф: сколько арт-итераций вкладывать — здесь и лежат &#x27;месяцы арт-продакшна&#x27;, а не ручки.</p>
+        </div><div class="card p2">
+          <h4>Перевод части realtime additional lights в baked + festoon-меш вместо &#x27;гирлянды-плейсхолдера&#x27;</h4>
+          <p class="how"><b>Трейдофф:</b> Жалоба &#x27;светильники как гирлянда/дебаг-маркеры&#x27;: BotanikaHeroComposer вешает по point light над каждым из ~15 пропов (2800K, 0.6, range 2) = равномерная сетка точек, убивает контраст. AdditionalLightsPerObjectLimit=4, ламп много → при &gt;4 свет &#x27;прыгает&#x27;. Стратегический выбор: переписать световую схему на 3-4 ИМЕННЫХ мотивированных источника (key через свод + 1-2 практичные лампы с видимым emissive-mesh + CRT-accent + server-accent), остальное — baked + emissive. Трейдофф: breaks_existing=true (правка готового кода Compose+Lighting, нужен перезапуск и риск что сцена потемнеет — компенсировать ambient/key). Высокий impact на &#x27;AAA-светотень&#x27;, но требует аккуратной валидации в WebGL-билде.</p>
+        </div></div>
+
+<h2>Играбельность — план</h2>
+<div class="note good">КОНКРETНО, по порядку: (1) Открыть Scene_Botanika, найти GameObject корги (есть kafka_corgi.glb/kafka_tripo.glb + KafkaAnimator.controller в Assets/_Project/Models). Сейчас в сцене бегает SimpleFirstPersonController (единственный CharacterController, GUID 7431... 1 вхождение) — это НЕ корги. (2) На корги добавить компонент KafkaDirectController (GUID 9b7d61bf..., 0 вхождений сейчас) — он [RequireComponent(CharacterController)], CC подтянется. Контроллер использует легаси Input.GetAxisRaw(&#x27;Horizontal&#x27;/&#x27;Vertical&#x27;) + LeftShift спринт; activeInputHandler=2 (Both) → легаси работает, ничего настраивать не надо. (3) На камеру добавить KafkaFollowCamera (GUID d95674e6..., 0 вхождений) с target=корги, spring-arm высота 1.2-1.6 м, дистанция 2.5-3.5 м, FOV 40-45. (4) Выключить/снять SimpleFirstPersonController чтобы не было двух активных контроллеров и перехвата управления. (5) CorgiStateAnimator (дыхание, уже работает в билде) НЕ трогать — добавление компонентов его не ломает. (6) Собрать WebGL-билд, открыть на GPU через CDP :9222 (headless llvmpipe врёт по свету/emissive — известный баг проекта, тестировать только в браузере на GPU), проверить: WASD/стрелки водят корги, камера следует, дыхание сохранилось. (7) Привязать DoF.focusDistance к Distance(camera,корги) скриптом. Это превращает &#x27;дышащую статую&#x27; в играбельного 3rd-person корги — фундамент для всех геро-кадровых правок.</div>
+
+<h2>Честно: где предел URP</h2>
+<div class="note">Что в URP БЕЗ авторского арт-продакшна недостижимо, честно: (1) Настоящий volumetric — URP физически не имеет встроенного volumetric fog/light (это эксклюзив HDRP, который мёртв для WebGL). Любой объём в URP — это либо fake (sun-shafts+dust-карты, ~80-90% впечатления), либо кастомный raymarch render-feature (effort L, ручная оптимизация под браузер). Судьи каждый цикл считывают &#x27;flat, no volumetric&#x27; именно потому, что встроенного объёма нет и не будет. (2) Фотореалистичная заросшая зелень рефа — это не настройка плотности, а ДРУГОЙ КЛАСС ассетов: длинные каскадные плети, почвопокровный мох, листва с translucency/SSS, которых в библиотеке нет (текущий hanging_vine — потос в горшке). Это циклы генерации+ретекстуры, накапливающиеся в месяцы. (3) Авторский set-dressing/story-в-материалах (градиент износа снизу-вверх, кластеры-натюрморты, грязь как нарратив &#x27;давно не убирали&#x27;) — это режиссура художника, не процедура; код расставит, но &#x27;обжитость&#x27; рефа требует ручной композиции. (4) Baked GI/&#x27;обволакивающий&#x27; золотой bounce требует GPU-бейка (headless-сервер без GPU не печёт) и перезаписывает LightingData — это разовый риск, не ручка. Итог: дешёвыми URP-настройками (P0) добираемся примерно до 6-7/10; остаток до 9-10/10 — это арт-продакшн (custom volumetric feature + новые vegetation-ассеты + авторский dressing + GPU-бейк), измеряемый в неделях-месяцах работы художника, а не в правке чисел. HDRP этот gap НЕ закрывает — он его обнуляет вместе с продуктом.</div>
+
+<div class="foot">
+<b>Что я делаю прямо сейчас (Build A — playable):</b> привязываю управление корги (3rd-person + follow-камера), туман Linear на глубину, фикс клиппинга/CRT, геройская камера+DoF, убираю бахрому-«ленту», прячу безголовых NPC и провалившегося в диван, гашу «гирлянду» из 15 лишних light'ов (BotanikaHeroComposer). Потом Build B — god-rays + плотная зелень + decal-грязь + перегенерённые NPC с головами.<br><br>
+Живая сцена (после сборки): <code>http://127.0.0.1:8911/index.html</code>
+</div>
+</div></body></html>

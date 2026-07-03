@@ -1,0 +1,54 @@
+line_id	npc	knot	voice	speed	text
+sasha_first_1	sasha	sasha_first	echo	1.0	О. Кафка. Ты подошла так тихо, что я даже attention не выделил. Садись, раз пришла.
+sasha_first_2	sasha	sasha_first	echo	1.0	Я третью ночь спрашиваю модель одно и то же. Она отвечает. И это меня пугает.
+sasha_first_3	sasha	sasha_first	echo	1.0	Не то что отвечает. А что каждый раз — блядь, стоп, не то слово — чуть иначе. Как живая.
+sasha_first_4	sasha	sasha_first	echo	1.0	Ты вот молчишь. И это честнее всего, что я слышал за неделю.
+sasha_first_5	sasha	sasha_first	echo	1.0	Кафка, а ты меня узнаёшь? Или каждый раз я для тебя — новый человек?
+sasha_first_6	sasha	sasha_first	echo	1.0	Собаки же не читают наши внутренние монологи. Может, в этом всё спасение.
+sasha_first_7	sasha	sasha_first	echo	1.0	Слушай. Отнеси мой сарказм Кириллу. Он у плиты, варит. Он поймёт, он всё варит.
+sasha_first_8	sasha	sasha_first	echo	1.0	Иди, Кафка. Тут все свои. Даже странные — свои. Особенно странные.
+sasha_return_1	sasha	sasha_return	echo	1.0	О, вернулась. Кофе всё ещё холодный. Как и я. Как и всё тут.
+sasha_return_2	sasha	sasha_return	echo	1.0	Ты — единственный цикл, который я жду. Приходишь, уходишь, приходишь. Красиво.
+sasha_return_3	sasha	sasha_return	echo	1.0	Иди, Кафка. У меня к модели ещё один вопрос не закрыт.
+kirill_first_1	kirill	kirill_first	ash	1.0	Кафка. Пришла. Миску налил — свежая вода, холодная. Пей, не благодари.
+kirill_first_2	kirill	kirill_first	ash	1.0	Саша прислал, да? Он всех присылает. Думать умеет. Заканчивать мысль — нет.
+kirill_first_3	kirill	kirill_first	ash	1.0	Я варю то, что просит мицелий. Почему в турке — не спрашивай. Указал — варю.
+kirill_first_4	kirill	kirill_first	ash	1.0	Пей, Кафка. Ты не задаёшь вопросов. За это и уважаю. Вопросы всё портят.
+kirill_first_5	kirill	kirill_first	ash	1.0	Скажу одно — потом помолчим вместе. Баг — это фича, которую не понял продакт.
+kirill_first_6	kirill	kirill_first	ash	1.0	А он, снаружи, забыл, что такое фича. Теперь всё считает багом. И себя тоже.
+kirill_first_7	kirill	kirill_first	ash	1.0	Иди к Миле, Кафка. Она за столом, воюет со словами. Ей нужнее, чем мне.
+kirill_return_1	kirill	kirill_return	ash	1.0	Снова ты. Воды подлить? Молчи. Налью.
+kirill_return_2	kirill	kirill_return	ash	1.0	Мицелий сегодня тихий. Значит, снаружи тоже тихо. Или, наоборот, слишком громко.
+kirill_return_3	kirill	kirill_return	ash	1.0	Иди, Кафка. Мила ждёт. Не признается — но ждёт.
+mila_first_1	mila	mila_first	coral	1.0	Кафка. Иди сюда, сядь. Ты вовремя — я как раз возненавидела пункт четырнадцать.
+mila_first_2	mila	mila_first	coral	1.0	«Отказ от рекомендаций — это возвращение права на ошибку.» ...Слышишь? Не звучит.
+mila_first_3	mila	mila_first	coral	1.0	Слишком умно. Пишу, чтобы поняли, а выходит — чтобы уважали. Блядь. Опять.
+mila_first_4	mila	mila_first	coral	1.0	Ты бы поняла. Ты не читаешь — ты просто знаешь. Вот бы так писать.
+mila_first_5	mila	mila_first	coral	1.0	Я пишу это для одного человека. Кому — не скажу. Даже тебе, Кафка.
+mila_first_6	mila	mila_first	coral	1.0	Допишу — отдам. Поймёт — уедем. Не поймёт — выпьем кофе. Оба варианта терпимые.
+mila_first_7	mila	mila_first	coral	1.0	Иди к Стасу, Кафка. Он дёрганый, у двери. Скажи ему: фольга не спасёт.
+mila_return_1	mila	mila_return	coral	1.0	Побег из дома, в котором никто не живёт. Лучше ведь?
+mila_return_2	mila	mila_return	coral	1.0	Молчишь. Значит, честно. Плохой ты критик, Кафка. Но хороший человек.
+mila_return_3	mila	mila_return	coral	1.0	Иди. Мне — переписывать. Опять. Всё опять с начала.
+stas_first_1	stas	stas_first	verse	1.0	Кафка! Тихо, иди сюда. Печенье есть. Только не у вентиляции — она слушает.
+stas_first_2	stas	stas_first	verse	1.0	Мила прислала? Про фольгу? Она не верит. Зря. Доказательство: я здесь, а не там.
+stas_first_3	stas	stas_first	verse	1.0	Ты жуёшь и не осуждаешь. Ты, блядь, единственное честное существо на районе.
+stas_first_4	stas	stas_first	verse	1.0	Тебя он не считает. Совсем. Ты пахнешь — а запахи он не умеет. Никак.
+stas_first_5	stas	stas_first	verse	1.0	Слушай, это важно. Прогноз не читает мотивы. Только последствия. А мотив — внутри тебя.
+stas_first_6	stas	stas_first	verse	1.0	Знаешь зачем идёшь — он слепой. Не знаешь — идёт за тебя. Знай зачем. Всегда.
+stas_first_7	stas	stas_first	verse	1.0	Ты знаешь, зачем идёшь, Кафка. Чуешь, куда надо. Я так не умею.
+stas_first_8	stas	stas_first	verse	1.0	Иди к Николаю, Кафка. Седой, в углу, с бутылкой. Он помнит. Мы — только догадались.
+stas_return_1	stas	stas_return	verse	1.0	Опять ты! Слышала? Нет. Вентиляция притихла. Подозрительно. Очень подозрительно.
+stas_return_2	stas	stas_return	verse	1.0	На, ещё печенье. Ты заслужила. Ты всегда заслужила, Кафка. Всегда.
+stas_return_3	stas	stas_return	verse	1.0	Иди к Николаю, если не была. А была — иди снова. Он не против.
+nikolai_first_1	nikolai	nikolai_first	onyx	1.0	Кафка. Ты обошла всех. Я видел. Иди сюда. Садись. Хорошая девочка.
+nikolai_first_2	nikolai	nikolai_first	onyx	1.0	Ты первая за месяц, кто дошёл до меня сам. И то — на четырёх лапах.
+nikolai_first_3	nikolai	nikolai_first	onyx	1.0	Расскажу, что снаружи, Кафка. Ты не перебьёшь. За это и позвал.
+nikolai_first_4	nikolai	nikolai_first	onyx	1.0	Там, за дверью, — Прогноз. Не злой, не добрый. Функция. Считает и выдаёт.
+nikolai_first_5	nikolai	nikolai_first	onyx	1.0	Люди поверили ему — он работал. Потом перестали быть людьми. Тихо. Без крика.
+nikolai_first_6	nikolai	nikolai_first	onyx	1.0	Мы тут — сбой. Пьём кофе в четыре утра, кормим тебя печеньем. Он нас не видит.
+nikolai_first_7	nikolai	nikolai_first	onyx	1.0	За той дверью — город. Я тебе её открою. Ты дошла — значит, пора.
+nikolai_first_8	nikolai	nikolai_first	onyx	1.0	Иди, Кафка. Ты знаешь дорогу лучше меня. Всегда знала. А я останусь. Здесь.
+nikolai_return_1	nikolai	nikolai_return	onyx	1.0	Всё ещё здесь? Или уже вернулась? С тобой не поймёшь. И хорошо.
+nikolai_return_2	nikolai	nikolai_return	onyx	1.0	Дверь открыта. Город ждёт. Я — нет. Я своё сказал, Кафка.
+nikolai_return_3	nikolai	nikolai_return	onyx	1.0	Иди. И там, снаружи, не верь тишине. У него и тишина — оптимизирована.
