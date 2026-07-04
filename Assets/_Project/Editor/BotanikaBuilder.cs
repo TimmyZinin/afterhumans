@@ -4838,12 +4838,20 @@ namespace Afterhumans.EditorTools
             public bool walk;
             public bool sit;       // sitting-pose mesh (person.glb / npc_reading.glb) → seat + smaller scale
             public string seat;    // "sofa" | "chair" | "floor" — where a sitting NPC rests
+            // Sprint D (MEDIUM#5, honest arithmetic fix — no rig available for person.glb yet):
+            // PlaceNpc's seatY = sb.max.y − b.min.y rests the LOWEST point of the whole mesh
+            // (a poked-out foot/shoe tip on a crossed-leg baked pose) on the seat surface, which
+            // drags the actual torso mass up above the cushion — Sasha "floats". This per-NPC
+            // metres offset is a measured correction applied AFTER that placement (screenshot-
+            // verified against the live build, not guessed), until a real pelvis-rigged mesh
+            // makes the geometric fix unnecessary.
+            public float seatYAdjust = 0f;
             public NpcSpec(string id, string display, string voice, string knot, string[] meshPaths,
                            Vector3 pos, float yaw, bool turn, Color tint, bool walk,
-                           bool sit = false, string seat = "floor")
+                           bool sit = false, string seat = "floor", float seatYAdjust = 0f)
             { this.id = id; this.display = display; this.voice = voice; this.knot = knot;
               this.meshPaths = meshPaths; this.pos = pos; this.yaw = yaw; this.turnOnInteract = turn;
-              this.tint = tint; this.walk = walk; this.sit = sit; this.seat = seat; }
+              this.tint = tint; this.walk = walk; this.sit = sit; this.seat = seat; this.seatYAdjust = seatYAdjust; }
         }
 
         private class LineRow { public string lineId; public string text; }
@@ -4873,6 +4881,38 @@ namespace Afterhumans.EditorTools
             Debug.Log($"[AUDIT] total figure-meshes={n}");
         }
 
+        /// <summary>
+        /// Sprint D diagnostic (BLOCKER fix prep): after WireBotanikaNpcs has run and saved the
+        /// scene, log EXACT world-space numbers for Hero_Sofa and each sitting NPC's bounds, so
+        /// the seatYAdjust correction is a measured value, not a guessed screenshot crop. Read
+        /// via the Editor log (docker exec ... unity ... -logFile) — no rendering needed.
+        /// </summary>
+        public static void DiagSeatOffsets()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var sofa = GameObject.Find("Hero_Sofa");
+            if (sofa != null)
+            {
+                var sb = CombinedBounds(sofa);
+                Debug.Log($"[DiagSeat] Hero_Sofa worldPos={sofa.transform.position} bounds.center={sb.center} bounds.min={sb.min} bounds.max={sb.max} bounds.size={sb.size}");
+            }
+            else Debug.LogWarning("[DiagSeat] Hero_Sofa NOT FOUND");
+
+            foreach (var id in new[] { "sasha", "nikolai" })
+            {
+                var go = GameObject.Find("NPC_" + id);
+                if (go == null) { Debug.LogWarning($"[DiagSeat] NPC_{id} NOT FOUND"); continue; }
+                var b = CombinedBounds(go);
+                Debug.Log($"[DiagSeat] NPC_{id} worldPos={go.transform.position} bounds.center={b.center} bounds.min={b.min} bounds.max={b.max} bounds.size={b.size}");
+            }
+            var chairNikolai = GameObject.Find("Chair_nikolai");
+            if (chairNikolai != null)
+            {
+                var cb = CombinedBounds(chairNikolai);
+                Debug.Log($"[DiagSeat] Chair_nikolai worldPos={chairNikolai.transform.position} bounds.min={cb.min} bounds.max={cb.max}");
+            }
+        }
+
         public static void WireBotanikaNpcs()
         {
             AssetDatabase.Refresh();
@@ -4897,28 +4937,48 @@ namespace Afterhumans.EditorTools
             var specs = new[]
             {
                 // Саша — философ, разваливается на ДИВАНЕ (person.glb = sitting/lounging pose). seat=sofa.
+                // Sprint D (BLOCKER fix, measured not guessed): DiagSeatOffsets logged Hero_Sofa
+                // bounds.max.y=0.95 size.y=0.95 → formula seatY=0.5225; NPC_sasha bounds.min.y
+                // came out ≈0.52 (matches formula), yet the live screenshot (d_ev_sasha_seat_crop.png)
+                // shows a ~40px gap between his feet and the cushion ridge at a measured ~285px
+                // body-height-for-1.15m scale → ~0.16-0.18m real gap. The 0.45 coefficient
+                // overestimates the actual chesterfield cushion-top height for this mesh's
+                // reclining pose. seatYAdjust corrects it without touching the shared 0.45 formula.
                 new NpcSpec("sasha", "Саша", "dmitri", "sasha_first",
                     new[] { "Assets/_Project/Models/NPC/person.glb" },
                     new Vector3(0.2f, 0f, -2.3f), 180f, false, new Color(1.02f, 1.00f, 1.05f), false,
-                    sit: true, seat: "sofa"),
+                    sit: true, seat: "sofa", seatYAdjust: -0.16f),
                 // Мила — читает на полу у дивана (npc_reading.glb = cross-legged). seat=floor.
                 new NpcSpec("mila", "Мила", "irina", "mila_first",
                     new[] { "Assets/_Project/Models/NPC/npc_reading.glb" },
                     new Vector3(-2.7f, 0f, -3.4f), 30f, false, new Color(1.04f, 1.16f, 1.04f), false,
                     sit: true, seat: "floor"),
-                // Кирилл — варит грибы у кухни, СТОИТ (kirill_raw.glb = standing apron man, good head).
+                // Кирилл — варит грибы у кухни, СТОИТ. Sprint D: swapped kirill_raw.glb (no
+                // skeleton, statue) for the rigged+decimated Blender export of
+                // kirill_animated_raw.glb (39-bone Tripo skeleton, 30k tris). Movement is
+                // NpcArmStir (procedural, added below by id) — no baked clip, no NpcIdleBob.
                 new NpcSpec("kirill", "Кирилл", "ruslan", "kirill_first",
-                    new[] { "Assets/_Project/Models/Generated/kirill_raw.glb" },
+                    new[] { "Assets/_Project/Models/Animated/kirill_animated_raw.fbx" },
                     new Vector3(-4.3f, 0f, 1.9f), 105f, false, new Color(1.18f, 1.02f, 0.82f), false),
                 // Николай — седой «начальник» за столом, СИДИТ (person.glb reuse, серый окрас). seat=chair.
+                // Sprint D diag (DiagSeatOffsets): NPC_nikolai bounds.min.y=0.45 lands EXACTLY on
+                // Chair_nikolai's seat top (0.45) — unlike Sasha, the formula here already puts his
+                // feet ON the chair (Chair_nikolai is spawned as a simple flat-top box, not a sofa
+                // with a tufted cushion silhouette, so there's no equivalent "cushion overestimate"
+                // to correct). Leaving seatYAdjust=0 and re-verifying visually after this build
+                // rather than blindly copying Sasha's sofa-specific correction (which would sink
+                // him through the chair top instead of fixing a float that may already be gone).
                 new NpcSpec("nikolai", "Николай", "denis", "nikolai_first",
                     new[] { "Assets/_Project/Models/NPC/person.glb" },
                     new Vector3(4.1f, 0f, -0.3f), 250f, true, new Color(0.82f, 0.86f, 0.95f), false,
                     sit: true, seat: "chair"),
-                // Стас — параноик, ХОДИТ у двери (kirill_raw.glb reuse, холодный окрас, NpcWalk).
+                // Стас — параноик, СТОИТ у двери и дёргано возится на месте (Sprint D: retired
+                // NpcWalk — it translated the whole GameObject and produced the "ездит без ног"
+                // bug. Same shared skeletal rig as Кирилл (reused mesh/rig, different silhouette
+                // via tint); root never moves, NpcFidget drives the skeleton only.
                 new NpcSpec("stas", "Стас", "dmitri", "stas_first",
-                    new[] { "Assets/_Project/Models/Generated/kirill_raw.glb" },
-                    new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(0.92f, 1.04f, 1.14f), true),
+                    new[] { "Assets/_Project/Models/Animated/kirill_animated_raw.fbx" },
+                    new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(0.92f, 1.04f, 1.14f), false),
             };
 
             var byNpc = LoadLinesByNpc("Assets/_Project/Audio/lines.tsv");
@@ -4939,12 +4999,24 @@ namespace Afterhumans.EditorTools
                 return fig;
             }
             // Remove duplicate corgi(s) up-front: keep ONLY the playable one (KafkaDirectController).
+            // BUGFIX (Sprint D, found this run): FigRoot walks up until it hits a parent named
+            // "RealAssets"/"Botanika_Greybox" — but Кирилл/Стас now live under "NPCs_Botanika",
+            // which has NEITHER of those as an ancestor, so FigRoot walked all the way to the
+            // top-most transform and returned NPCs_Botanika ITSELF on any re-run (their
+            // SkinnedMeshRenderer from a PRIOR WireBotanikaNpcs call isn't under
+            // KafkaDirectController, so it fell through to "not Hero_Corgi" → corgiKill destroyed
+            // the ENTIRE NPC root, and the very next line (go.transform.SetParent(npcRoot...))
+            // threw MissingReferenceException. Guard: never touch anything already ours.
             var corgiKill = new HashSet<GameObject>();
             foreach (var smr in Object.FindObjectsByType<SkinnedMeshRenderer>(FindObjectsSortMode.None))
             {
                 if (smr.GetComponentInParent<Afterhumans.Kafka.KafkaDirectController>() != null) continue;
                 var fig = FigRoot(smr.transform);
                 if (fig.name == "Hero_Corgi") continue;
+                bool underNpcRoot = false;
+                for (var t = smr.transform; t != null; t = t.parent)
+                    if (t == npcRoot.transform) { underNpcRoot = true; break; }
+                if (underNpcRoot) continue;
                 corgiKill.Add(fig.gameObject);
             }
             foreach (var g in corgiKill) if (g != null) Object.DestroyImmediate(g);
@@ -4998,11 +5070,34 @@ namespace Afterhumans.EditorTools
                 voice.subtitles = subs.ToArray();
                 totalClips += clips.Count;
 
-                // Movement: most NPCs breathe in place (NpcIdleBob); Стас paces (NpcWalk).
-                if (sp.walk)
+                // Movement: Sprint D retires NpcWalk entirely (it translated the whole
+                // GameObject → "Стас ездит по полу без ног"). Кирилл/Стас share the new
+                // skeletal kirill_animated_raw rig and are driven procedurally on their own
+                // bone Transforms (same recipe as CorgiStateAnimator) — no clip needed, so an
+                // Animator with a NULL controller just keeps the hierarchy skinned. Everyone
+                // else keeps the whole-object NpcIdleBob breathing bob until they get a rig.
+                if (sp.id == "kirill" || sp.id == "stas")
                 {
-                    var w = go.AddComponent<Afterhumans.Art.NpcWalk>();
-                    w.axis = Vector3.right; w.range = 1.6f; w.speed = 0.5f; w.faceTravel = true;
+                    var animr = go.GetComponentInChildren<Animator>();
+                    if (animr == null) animr = go.AddComponent<Animator>();
+                    animr.runtimeAnimatorController = null;
+                    animr.applyRootMotion = false;
+
+                    if (sp.id == "kirill")
+                        go.AddComponent<Afterhumans.Art.NpcArmStir>();
+                    else
+                        go.AddComponent<Afterhumans.Art.NpcFidget>();
+
+                    // Skinned bounds can come out stale/degenerate straight off import (same
+                    // vanish-under-culling bug fixed for the corgi) — force sane localBounds
+                    // and never cull while offscreen, ONCE, before PlaceNpc already ran above.
+                    foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    {
+                        smr.updateWhenOffscreen = true;
+                        var lb = smr.localBounds;
+                        if (lb.size.x < 0.05f || lb.size.y < 0.05f || lb.size.z < 0.05f)
+                            smr.localBounds = new Bounds(new Vector3(0f, 0.9f, 0f), new Vector3(1.2f, 2.0f, 1.2f));
+                    }
                 }
                 else
                 {
@@ -5072,6 +5167,16 @@ namespace Afterhumans.EditorTools
                 if (underChair) continue;
                 myMeshNames.Add(mf.sharedMesh.name);
             }
+            // Sprint D: Кирилл/Стас are now SkinnedMeshRenderer (rigged FBX), not MeshFilter —
+            // the loop above alone would never register their mesh name, and a future duplicate
+            // rigged figure (e.g. a second copy of kirill_animated_raw left by a re-run) would
+            // sail through the MeshFilter-only purge untouched. Scan skinned renderers too.
+            foreach (var smr in npcRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr.sharedMesh == null) continue;
+                if (primitiveMeshes.Contains(smr.sharedMesh.name)) continue;
+                myMeshNames.Add(smr.sharedMesh.name);
+            }
             var dupKill = new HashSet<GameObject>();
             foreach (var mf in Object.FindObjectsByType<MeshFilter>(FindObjectsSortMode.None))
             {
@@ -5081,6 +5186,16 @@ namespace Afterhumans.EditorTools
                 var top = mf.transform; while (top.parent != null) top = top.parent;
                 if (top.name == "NPCs_Botanika") continue;   // keep ours
                 dupKill.Add(FigRoot(mf.transform).gameObject);
+            }
+            foreach (var smr in Object.FindObjectsByType<SkinnedMeshRenderer>(FindObjectsSortMode.None))
+            {
+                if (smr.sharedMesh == null) continue;
+                if (primitiveMeshes.Contains(smr.sharedMesh.name)) continue;
+                if (!myMeshNames.Contains(smr.sharedMesh.name)) continue;
+                var top = smr.transform; while (top.parent != null) top = top.parent;
+                if (top.name == "NPCs_Botanika") continue;   // keep ours (also protects Hero_Corgi, matched separately above)
+                if (smr.GetComponentInParent<Afterhumans.Kafka.KafkaDirectController>() != null) continue; // never touch the corgi
+                dupKill.Add(FigRoot(smr.transform).gameObject);
             }
             int purgedHumans = 0;
             foreach (var g in dupKill) if (g != null) { Object.DestroyImmediate(g); purgedHumans++; }
@@ -5734,7 +5849,7 @@ namespace Afterhumans.EditorTools
             }
 
             // centre on sp.x/z, rest the lowest point on the seat (or floor)
-            go.transform.position += new Vector3(sp.pos.x - b.center.x, seatY - b.min.y, sp.pos.z - b.center.z);
+            go.transform.position += new Vector3(sp.pos.x - b.center.x, seatY - b.min.y + sp.seatYAdjust, sp.pos.z - b.center.z);
         }
 
         /// <summary>Spawn a simple wooden chair box under a sitting NPC; returns the seat-top Y.</summary>
