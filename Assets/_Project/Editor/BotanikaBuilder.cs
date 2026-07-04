@@ -4882,6 +4882,37 @@ namespace Afterhumans.EditorTools
         }
 
         /// <summary>
+        /// Sprint D re-verify diagnostic (BLOCKER#2 re-check, this run): the live prod build
+        /// shows Kirill/Stas frozen across a 4s screenshot pair (no visible arm-stir motion),
+        /// contradicting the prior round's "stir plays" claim. This checks WITHOUT rebuilding
+        /// whether NpcArmStir/NpcFidget are actually attached and whether the named bones the
+        /// scripts drive (R_Upperarm/R_Forearm/R_Hand/Spine01/Head) exist under the CURRENT
+        /// saved scene's NPC_kirill/NPC_stas hierarchy — isolates "component missing" / "bone
+        /// name mismatch" from "amplitude too small to see on screen" before touching any code.
+        /// </summary>
+        public static void CheckStirComponents()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            foreach (var id in new[] { "kirill", "stas" })
+            {
+                var go = GameObject.Find("NPC_" + id);
+                if (go == null) { Debug.LogWarning($"[CheckStir] NPC_{id} NOT FOUND"); continue; }
+                var stir = go.GetComponent<Afterhumans.Art.NpcArmStir>();
+                var fidget = go.GetComponent<Afterhumans.Art.NpcFidget>();
+                var animr = go.GetComponent<Animator>();
+                Debug.Log($"[CheckStir] NPC_{id} active={go.activeInHierarchy} NpcArmStir={(stir != null)} NpcFidget={(fidget != null)} Animator={(animr != null)} animatorEnabled={(animr != null ? animr.enabled.ToString() : "n/a")} animatorController={(animr != null && animr.runtimeAnimatorController != null ? animr.runtimeAnimatorController.name : "null")}");
+                var smrs = go.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+                Debug.Log($"[CheckStir] NPC_{id} SkinnedMeshRenderers={smrs.Length}");
+                foreach (var name in new[] { "R_Upperarm", "R_Forearm", "R_Hand", "Spine01", "Head" })
+                {
+                    Transform found = null;
+                    foreach (var t in go.GetComponentsInChildren<Transform>(true)) if (t.name == name) { found = t; break; }
+                    Debug.Log($"[CheckStir] NPC_{id} bone '{name}' found={(found != null)}");
+                }
+            }
+        }
+
+        /// <summary>
         /// Sprint D diagnostic (BLOCKER fix prep): after WireBotanikaNpcs has run and saved the
         /// scene, log EXACT world-space numbers for Hero_Sofa and each sitting NPC's bounds, so
         /// the seatYAdjust correction is a measured value, not a guessed screenshot crop. Read
