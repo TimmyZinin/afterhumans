@@ -244,6 +244,23 @@ namespace Afterhumans.EditorTools
             // Beds hug the flanks only (|x| > 1.0) so the central corridor stays clear.
             // ====================================================================
             {
+                // Sprint D3 BLOCKER#4 fix: Стас stands at (2.6, 0, 3.4) facing the server rack,
+                // and this dense carpet loop places a fern every ~0.7m on BOTH flanks for the
+                // WHOLE z range with no exclusion — the outer-band R fern for row≈19-20 lands at
+                // roughly (2.2-2.3, 0, 3.8-4.5), inches from his position, right in the camera's
+                // foreground when shooting him. Skip any carpet placement within this radius of
+                // his standing spot so his clean-shot zone stays clear (screenshot-verified need,
+                // not guessed — the previous round's evidence showed a fern occluding him there).
+                Vector3 stasPos = new Vector3(2.6f, 0f, 3.4f);
+                // Sprint D4 BLOCKER#4 fix: 1.6m still let the outer-band ferns (which step in
+                // 0.7m rows) creep into the camera's foreground when shooting Стас from most
+                // angles (evidence: d4_stas_strip.png, frames 1-4 mostly fern silhouette). Widened
+                // to 2.4m — costs a couple of carpet ferns near him but keeps his clear-shot zone
+                // genuinely clear instead of "clear at the one exact angle we tried".
+                const float stasClearRadius = 2.4f;
+                bool NearStas(float px, float pz) =>
+                    (new Vector2(px, pz) - new Vector2(stasPos.x, stasPos.z)).magnitude < stasClearRadius;
+
                 int fc = 0;
                 // --- double row carpet down the whole path, z -10..10, step 0.7 ---
                 // inner row x ~ ±1.2, outer row x ~ ±2.0, alternating L/R lead.
@@ -254,13 +271,13 @@ namespace Afterhumans.EditorTools
                     // inner band (close to corridor edge, low clumps)
                     float xi = 1.2f + jitter;                        // 1.2..1.44
                     float hi = 0.36f + ((row * 7) % 4) * 0.05f;      // 0.36..0.51
-                    Place($"Foli_GroundCarpetL_{fc}", fernFbx, new Vector3(-xi, 0f, z),            (row * 41f) % 360f,        hi, matFern);
-                    Place($"Foli_GroundCarpetR_{fc}", fernFbx, new Vector3( xi, 0f, z + 0.35f),    (row * 53f + 20f) % 360f,  hi + 0.04f, matFern);
+                    if (!NearStas(-xi, z)) Place($"Foli_GroundCarpetL_{fc}", fernFbx, new Vector3(-xi, 0f, z),            (row * 41f) % 360f,        hi, matFern);
+                    if (!NearStas(xi, z + 0.35f)) Place($"Foli_GroundCarpetR_{fc}", fernFbx, new Vector3( xi, 0f, z + 0.35f),    (row * 53f + 20f) % 360f,  hi + 0.04f, matFern);
                     // outer band (x ~ ±2.0), slightly taller, offset z so it interleaves
                     float xo = 2.0f + ((row * 9) % 4) * 0.07f;       // 2.0..2.21
                     float ho = 0.42f + ((row * 5) % 4) * 0.05f;      // 0.42..0.57
-                    Place($"Foli_GroundCarpetOL_{fc}", fernFbx, new Vector3(-xo, 0f, z + 0.18f),   (row * 67f + 90f) % 360f,  ho, matFern);
-                    Place($"Foli_GroundCarpetOR_{fc}", fernFbx, new Vector3( xo, 0f, z + 0.52f),   (row * 71f + 140f) % 360f, ho - 0.03f, matFern);
+                    if (!NearStas(-xo, z + 0.18f)) Place($"Foli_GroundCarpetOL_{fc}", fernFbx, new Vector3(-xo, 0f, z + 0.18f),   (row * 67f + 90f) % 360f,  ho, matFern);
+                    if (!NearStas(xo, z + 0.52f)) Place($"Foli_GroundCarpetOR_{fc}", fernFbx, new Vector3( xo, 0f, z + 0.52f),   (row * 71f + 140f) % 360f, ho - 0.03f, matFern);
                     fc++;
                 }
                 // --- far tier: extra ferns deep (z 8..13) so the far bed reads full ---
@@ -1226,7 +1243,14 @@ namespace Afterhumans.EditorTools
             Place("Hero_Pot_L",    Load(TF+"potted_plant.fbx"), new Vector3(-4.6f, 0f, -4.0f),  40f, 0.62f, matPotted);
             Place("Hero_Pot_R",    Load(TF+"potted_plant.fbx"), new Vector3( 4.7f, 0f, -4.4f), 200f, 0.62f, matPotted);
             // Deeper scatter by the column / shelves (depth layering):
-            Place("Hero_Fern_D1",  Load(TF+"fern.fbx"),         new Vector3(-5.0f, 0f, 1.6f),  120f, 0.95f, matFern);
+            // Sprint D4 BLOCKER#2 fix (Kirill camera framing): this fern used to sit at
+            // (-5.0, 0, 1.6) — 0.16m from Kirill's kitchen-counter spawn spot (-5.15, 0, 1.65,
+            // set in Sprint D3 when he was moved from the CRT terminal to the actual stove/pots).
+            // A near-full-size (0.95 scale) frond planted almost ON TOP of him is exactly what
+            // was filling half the frame in every Kirill screenshot (d4_kirill_strip.png) —
+            // moved it off his clear-shot line, still in the same "deep scatter by the column"
+            // role, just not occluding the one NPC standing there.
+            Place("Hero_Fern_D1",  Load(TF+"fern.fbx"),         new Vector3(-4.15f, 0f, -1.2f), 120f, 0.95f, matFern);
             Place("Hero_Fern_D2",  Load(TF+"fern.fbx"),         new Vector3( 5.1f, 0f, 2.2f),  250f, 0.95f, matFern);
             Place("Hero_Pot_D1",   Load(TF+"potted_plant.fbx"), new Vector3(-1.6f, 0f, 3.4f),   0f, 0.62f, matPotted);
             Place("Hero_Pot_D2",   Load(TF+"potted_plant.fbx"), new Vector3( 1.7f, 0f, 3.9f),  180f, 0.62f, matPotted);
@@ -2652,6 +2676,34 @@ namespace Afterhumans.EditorTools
             toIdle.AddCondition(AnimatorConditionMode.IfNot, 0f, "IsWalking"); toIdle.hasExitTime = false; toIdle.duration = 0.18f;
             AssetDatabase.SaveAssets();
             Debug.Log("[IKctrl] KafkaIKAnimator built with clip " + walk.name);
+            return ctrl;
+        }
+
+        /// <summary>
+        /// Sprint D4 BLOCKER#3 fix (Sasha): single-state "just loop the one baked clip"
+        /// AnimatorController for the from-scratch Blender-rigged NPCs (sasha_anim.fbx —
+        /// same recipe reusable for any future {npc}_anim.fbx from scripts/rig.py). Unlike
+        /// Kirill/Stas (procedural bone-driving via NpcArmStir/NpcFidget, no clip), Sasha's
+        /// rig ships a REAL keyframed sit-idle Action baked in Blender — we just need Mecanim
+        /// to play it on loop, no state-machine logic required.
+        /// </summary>
+        private static RuntimeAnimatorController BuildNpcClipLoopController(string fbxPath, string ctrlPath)
+        {
+            AnimationClip clip = null;
+            foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
+                if (a is AnimationClip c && !c.name.StartsWith("__preview")) { clip = c; break; }
+            if (clip == null) { Debug.LogWarning("[NpcClipLoop] no AnimationClip in " + fbxPath); return null; }
+            clip.wrapMode = WrapMode.Loop;
+
+            if (AssetDatabase.LoadAssetAtPath<Object>(ctrlPath) != null)
+                AssetDatabase.DeleteAsset(ctrlPath);
+            var ctrl = UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(ctrlPath);
+            var sm = ctrl.layers[0].stateMachine;
+            var loop = sm.AddState("Loop");
+            loop.motion = clip;
+            sm.defaultState = loop;
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[NpcClipLoop] built {ctrlPath} looping clip '{clip.name}' ({clip.length:F2}s)");
             return ctrl;
         }
 
@@ -4918,6 +4970,48 @@ namespace Afterhumans.EditorTools
         /// the seatYAdjust correction is a measured value, not a guessed screenshot crop. Read
         /// via the Editor log (docker exec ... unity ... -logFile) — no rendering needed.
         /// </summary>
+        /// <summary>
+        /// Sprint D5 self-acceptance diagnostic: exact world-space bounds for the 3 newly
+        /// upgraded NPCs (kirill/mila/nikolai) against the floor and the nearby furniture
+        /// they interact with, so "no floating / no clipping" (D1) is a measured number, not
+        /// a guessed camera angle. Read-only, no scene changes, run against the already-
+        /// wired+saved scene (no rebuild needed).
+        /// </summary>
+        public static void DiagD5Placement()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            foreach (var id in new[] { "kirill", "mila", "nikolai", "stas", "sasha" })
+            {
+                var go = GameObject.Find("NPC_" + id);
+                if (go == null) { Debug.LogWarning($"[DiagD5] NPC_{id} NOT FOUND"); continue; }
+                var b = CombinedBounds(go);
+                Debug.Log($"[DiagD5] NPC_{id} worldPos={go.transform.position} rot={go.transform.rotation.eulerAngles} bounds.min={b.min} bounds.max={b.max} bounds.size={b.size}");
+            }
+            var chairMila = GameObject.Find("Chair_mila");
+            if (chairMila != null)
+            {
+                var cb = CombinedBounds(chairMila);
+                Debug.Log($"[DiagD5] Chair_mila worldPos={chairMila.transform.position} bounds.min={cb.min} bounds.max={cb.max}");
+            }
+            else Debug.LogWarning("[DiagD5] Chair_mila NOT FOUND");
+
+            var counter = GameObject.Find("Ref_K_Counter");
+            if (counter != null)
+            {
+                var kb = CombinedBounds(counter);
+                Debug.Log($"[DiagD5] Ref_K_Counter worldPos={counter.transform.position} bounds.min={kb.min} bounds.max={kb.max}");
+            }
+            else Debug.LogWarning("[DiagD5] Ref_K_Counter NOT FOUND");
+
+            var sofa = GameObject.Find("Hero_Sofa");
+            if (sofa != null)
+            {
+                var sfb = CombinedBounds(sofa);
+                Debug.Log($"[DiagD5] Hero_Sofa worldPos={sofa.transform.position} bounds.min={sfb.min} bounds.max={sfb.max}");
+            }
+            else Debug.LogWarning("[DiagD5] Hero_Sofa NOT FOUND");
+        }
+
         public static void DiagSeatOffsets()
         {
             EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
@@ -4944,9 +5038,155 @@ namespace Afterhumans.EditorTools
             }
         }
 
+        /// <summary>
+        /// Sprint D3 producer diagnostic: manual navigation to Stas repeatedly triggered his
+        /// proximity dialogue but never found his visible body in ~25 screenshot attempts from
+        /// many angles/distances — logs his EXACT world position/rotation/bounds/visibility plus
+        /// every renderer within 3m so the discrepancy (audio-proximity present, body invisible)
+        /// can be root-caused instead of guessed at via more blind navigation.
+        /// </summary>
+        public static void DiagStasLocate()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var go = GameObject.Find("NPC_stas");
+            if (go == null) { Debug.LogWarning("[DiagStas] NPC_stas NOT FOUND"); return; }
+            Debug.Log($"[DiagStas] NPC_stas worldPos={go.transform.position} rot={go.transform.rotation.eulerAngles} activeInHierarchy={go.activeInHierarchy} activeSelf={go.activeSelf}");
+            var b = CombinedBounds(go);
+            Debug.Log($"[DiagStas] bounds.center={b.center} min={b.min} max={b.max} size={b.size}");
+            foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                Debug.Log($"[DiagStas] SMR '{smr.name}' enabled={smr.enabled} sharedMesh={(smr.sharedMesh != null ? smr.sharedMesh.name : "NULL")} localBounds={smr.localBounds} materials={smr.sharedMaterials.Length}");
+            var pos = go.transform.position;
+            int n = 0;
+            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None))
+            {
+                if (r.transform.IsChildOf(go.transform)) continue;
+                if (Vector3.Distance(r.transform.position, pos) > 3.0f) continue;
+                Debug.Log($"[DiagStas] nearby '{r.gameObject.name}' pos={r.transform.position} dist={Vector3.Distance(r.transform.position, pos):F2} bounds.size={r.bounds.size}");
+                n++;
+            }
+            Debug.Log($"[DiagStas] nearby renderer count (<=3m)={n}");
+        }
+
+        /// <summary>
+        /// WebGL FREEZE FIX (Sprint D2). Force the kirill/stas procedural rig FBX(s) to import
+        /// EXACTLY like the working corgi: Generic rig WITH an Avatar (avatarSetup=CreateFromThisModel)
+        /// and the bone GameObjects kept (optimizeGameObjects=false). Diagnosis: comparing .meta of
+        /// kafka_corgi.fbx (procedural dog, ALIVE in the built player) vs kirill_animated_raw.fbx
+        /// (procedural human, FROZEN in the built player) showed one difference — avatarSetup 1 vs 0.
+        /// Without an Avatar the runtime Animator's cull bounds are degenerate and the built player
+        /// leaves the SkinnedMeshRenderer un-reskinned, so the LateUpdate bone writes are invisible.
+        /// Idempotent: only reimports when a setting actually differs.
+        /// </summary>
+        private static void FixNpcRigImport()
+        {
+            // Sprint D5: all 5 NPCs now ship a from-scratch Blender-rigged, baked-clip FBX
+            // (scripts/rig.py) — same WebGL-freeze-safe import recipe validated for Sasha in
+            // Sprint D4 (Generic + CreateFromThisModel avatar + optimizeGameObjects off).
+            string[] rigPaths =
+            {
+                "Assets/_Project/Models/Animated/kirill_animated_raw.fbx",
+                "Assets/_Project/Models/Animated/kirill_stir.fbx",
+                // Sprint D6 (ACCEPT 5/5): Sasha's v3 rig moved to Assets/_Project/Art/Npc/
+                // alongside the other 4 (same from-scratch Blender pipeline, scripts/rig.py)
+                // — same WebGL-freeze-safe import recipe (Generic + CreateFromThisModel
+                // avatar + optimizeGameObjects off) so the baked sit clip actually re-skins
+                // in the built player instead of freezing.
+                "Assets/_Project/Art/Npc/sasha_anim.fbx",
+                "Assets/_Project/Art/Npc/kirill_anim.fbx",
+                "Assets/_Project/Art/Npc/mila_anim.fbx",
+                "Assets/_Project/Art/Npc/nikolai_anim.fbx",
+                "Assets/_Project/Art/Npc/stas_anim.fbx",
+            };
+            foreach (var p in rigPaths)
+            {
+                if (!File.Exists(p)) continue;
+                var imp = AssetImporter.GetAtPath(p) as ModelImporter;
+                if (imp == null) { Debug.LogWarning($"[FixNpcRig] no ModelImporter for {p}"); continue; }
+                bool changed = false;
+                if (imp.animationType != ModelImporterAnimationType.Generic) { imp.animationType = ModelImporterAnimationType.Generic; changed = true; }
+                if (imp.avatarSetup != ModelImporterAvatarSetup.CreateFromThisModel) { imp.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel; changed = true; }
+                if (imp.optimizeGameObjects) { imp.optimizeGameObjects = false; changed = true; }
+
+                // Sprint D5: force loopTime=true on every baked clip so Mecanim actually
+                // loops it — AnimationClip.wrapMode (set at runtime by
+                // BuildNpcClipLoopController) does NOT drive Mecanim's "Loop Time"; only
+                // the importer-level ModelImporterClipAnimation.loopTime does.
+                var defaultClips = imp.defaultClipAnimations;
+                if (defaultClips != null && defaultClips.Length > 0)
+                {
+                    bool clipsChanged = false;
+                    for (int ci = 0; ci < defaultClips.Length; ci++)
+                    {
+                        Debug.Log($"[FixNpcRig] {p} clip[{ci}] name='{defaultClips[ci].name}' loopTime(before)={defaultClips[ci].loopTime}");
+                        if (!defaultClips[ci].loopTime) { defaultClips[ci].loopTime = true; clipsChanged = true; }
+                    }
+                    if (clipsChanged) { imp.clipAnimations = defaultClips; changed = true; }
+                }
+
+                if (changed)
+                {
+                    imp.SaveAndReimport();
+                    Debug.Log($"[FixNpcRig] reimported {p} → Generic + CreateFromThisModel avatar + optimizeGameObjects OFF + loopTime ON (matches corgi)");
+                }
+                else Debug.Log($"[FixNpcRig] {p} already correct (Generic + avatar + loop) — no reimport");
+
+                // Sprint D5 GHOST FIX #3 (live D5-interim build, confirmed via screenshot +
+                // D5_wire.log grep: "[Relight] NPC_mila mat[0] src=tripo_mat_2f8ef67c
+                // albedo=NULL" — same for kirill/nikolai's fresh rigs): these NEW Blender
+                // exports name their material "tripo_mat_<guid>" (note: "mat", not
+                // "material" — a DIFFERENT prefix than the old kirill_animated_raw.fbx
+                // convention), so BOTH the direct embedded-texture auto-link AND
+                // TripoGuidAlbedo's prefix/folder-scoped GUID search miss it (there is no
+                // matching external Color_<guid>.png anywhere in the project for these
+                // brand-new characters — unlike the old rig, which already had one sitting
+                // in Assets/_Project/Models/Generated/). ExtractTextures pulls the actual
+                // embedded image out of the FBX into a real asset and rewires the imported
+                // material to reference it, so SourceAlbedo/RelightNpc find it directly on
+                // the next import — no guessing required. Idempotent: skipped once a
+                // non-empty extraction folder exists.
+                if (p.StartsWith("Assets/_Project/Art/Npc/"))
+                {
+                    string texDir = p.Substring(0, p.Length - 4) + "_tex"; // strip ".fbx"
+                    bool alreadyExtracted = Directory.Exists(texDir) && Directory.GetFiles(texDir).Length > 0;
+                    if (!alreadyExtracted)
+                    {
+                        var freshImp = AssetImporter.GetAtPath(p) as ModelImporter;
+                        if (freshImp != null)
+                        {
+                            // This Unity version's ModelImporter.ExtractTextures returns bool
+                            // (success), not the older string[] warnings overload.
+                            bool extractOk = freshImp.ExtractTextures(texDir);
+                            Debug.Log($"[FixNpcRig] {p} ExtractTextures → {texDir} success={extractOk}");
+                        }
+                    }
+                    else Debug.Log($"[FixNpcRig] {p} textures already extracted at {texDir} — skipping");
+
+                    // GHOST FIX #3 continued: extraction alone leaves the material's texture
+                    // slot un-rewired within this SAME batchmode invocation (confirmed: D6
+                    // first pass logged ExtractTextures success=True yet RelightNpc still read
+                    // albedo=NULL right after) — force one more explicit reimport +
+                    // AssetDatabase.Refresh so the extracted file is actually linked into the
+                    // imported material before WireBotanikaNpcs instantiates/reads it below.
+                    // Runs every call (not just the first extraction) so a stale link from a
+                    // prior half-fixed run still gets repaired.
+                    if (Directory.Exists(texDir) && Directory.GetFiles(texDir).Length > 0)
+                    {
+                        var relinkImp = AssetImporter.GetAtPath(p) as ModelImporter;
+                        if (relinkImp != null) relinkImp.SaveAndReimport();
+                        AssetDatabase.Refresh();
+                    }
+                }
+            }
+        }
+
         public static void WireBotanikaNpcs()
         {
             AssetDatabase.Refresh();
+            // WebGL FREEZE FIX (Sprint D2, PRIMARY): the corgi (procedural, ALIVE in the build)
+            // imports with avatarSetup=1 (CreateFromThisModel → has an Avatar); the kirill/stas
+            // rig imports with avatarSetup=0 (NoAvatar) — the ONLY import-setting difference. Force
+            // the kirill rig to match the corgi so its skinned bone update survives the player.
+            FixNpcRigImport();
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
             // FREEZE FIX (Tim: «нажал E — всё зависло, пришлось перезагружать»):
@@ -4975,6 +5215,27 @@ namespace Afterhumans.EditorTools
                 // body-height-for-1.15m scale → ~0.16-0.18m real gap. The 0.45 coefficient
                 // overestimates the actual chesterfield cushion-top height for this mesh's
                 // reclining pose. seatYAdjust corrects it without touching the shared 0.45 formula.
+                // Sprint D4 BLOCKER#3 ATTEMPTED fix, REVERTED this round: a from-scratch Blender
+                // rig (sasha_anim.fbx, scripts/rig.py) was built to replace the broken "выпад"
+                // splayed-leg pose. It does NOT ship — two problems found via honest
+                // verification BEFORE building the full evidence pass:
+                //  1) TEXTURE: RelightNpc's Tripo-GUID fallback only matches material names
+                //     prefixed "tripo_material_" (Kirill/Stas convention); Sasha's re-exported
+                //     material is named "tripo_mat_139f5279" (different prefix) so the fallback
+                //     never fires -> he rendered as a flat white/grey untextured ghost in-game
+                //     (confirmed live: d4_spawn_00.png).
+                //  2) POSE: the baked "sit" keyframes (thigh -85°, shin +80°) do NOT produce a
+                //     seated silhouette — Blender's own re-render of the exported clip
+                //     (blender_rig_evidence/sasha_side_check2_f2.png, profile view) shows a
+                //     hunched crouch with the pelvis still at standing height and the legs
+                //     folding forward-up instead of extending into a seat. This is a DIFFERENT
+                //     broken pose than "выпад", not a fix — verify_export()'s bone-angle sampler
+                //     only checked numbers, not the silhouette.
+                // Shipping this would be strictly worse than the current (also broken) mesh, so
+                // per IL-2 we keep person.glb here and leave BLOCKER#3 OPEN for the next round.
+                // Next-round plan: fix the prefix mismatch in TripoGuidAlbedo (quick), and redo
+                // the thigh/shin rotation sign/axis in rig.py's sasha branch with a Blender-side
+                // render-and-inspect loop BEFORE spending a Unity build cycle on it.
                 new NpcSpec("sasha", "Саша", "dmitri", "sasha_first",
                     new[] { "Assets/_Project/Models/NPC/person.glb" },
                     new Vector3(0.2f, 0f, -2.3f), 180f, false, new Color(1.02f, 1.00f, 1.05f), false,
@@ -4988,9 +5249,16 @@ namespace Afterhumans.EditorTools
                 // skeleton, statue) for the rigged+decimated Blender export of
                 // kirill_animated_raw.glb (39-bone Tripo skeleton, 30k tris). Movement is
                 // NpcArmStir (procedural, added below by id) — no baked clip, no NpcIdleBob.
+                // Sprint D3 BLOCKER fix: (-4.3, 1.9) put Kirill standing right at Hero_CRT_W
+                // (-4.2, 1.0) — literally the green terminal, nowhere near his own kitchen props
+                // (Ref_Kitchen counter/pots at x≈-6.1, z 1.2-2.1, DressSetToReference below).
+                // That's why he read as "grey statue by the terminals" with no stove/pot in
+                // frame. Moved him to stand right in front of the pots, facing -X toward the
+                // counter (yaw 270), so NpcArmStir's over-the-pot stir reads against the actual
+                // stove geometry.
                 new NpcSpec("kirill", "Кирилл", "ruslan", "kirill_first",
                     new[] { "Assets/_Project/Models/Animated/kirill_animated_raw.fbx" },
-                    new Vector3(-4.3f, 0f, 1.9f), 105f, false, new Color(1.18f, 1.02f, 0.82f), false),
+                    new Vector3(-5.15f, 0f, 1.65f), 270f, false, new Color(1.18f, 1.02f, 0.82f), false),
                 // Николай — седой «начальник» за столом, СИДИТ (person.glb reuse, серый окрас). seat=chair.
                 // Sprint D diag (DiagSeatOffsets): NPC_nikolai bounds.min.y=0.45 lands EXACTLY on
                 // Chair_nikolai's seat top (0.45) — unlike Sasha, the formula here already puts his
@@ -5011,6 +5279,72 @@ namespace Afterhumans.EditorTools
                     new[] { "Assets/_Project/Models/Animated/kirill_animated_raw.fbx" },
                     new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(0.92f, 1.04f, 1.14f), false),
             };
+
+            // Sprint D5/D6: swap a real skeletal rig in per-NPC the moment its Blender-baked
+            // <id>_anim.fbx lands (gate-checked) in Assets/_Project/Art/Npc/ — keeps the
+            // Sprint D-safe fallback above untouched for any NPC whose rig isn't landed/
+            // validated yet, so a partial rig delivery never regresses one NPC while
+            // upgrading another. File presence is the gate — only copied in after each
+            // NPC's *_verify.json + render evidence were checked AND (for sasha/mila)
+            // after the producer shipped a fixed v3 with a new md5 (their v1/v2 shipped
+            // the same "floating chair" defect: lowest mesh point touches the seat while
+            // the actual pelvis/torso mass stayed airborne above it). All 5 are gate-
+            // accepted as of this round.
+            for (int si = 0; si < specs.Length; si++)
+            {
+                string rigPath = $"Assets/_Project/Art/Npc/{specs[si].id}_anim.fbx";
+                if (!File.Exists(rigPath)) continue;
+                switch (specs[si].id)
+                {
+                    case "sasha":
+                        // Sprint D6 (ACCEPT 5/5): v3 rig — real reclining sit clip, knees
+                        // ~13° forward, pelvis measured at 0.33H of the clip's own bounds.
+                        // Seat placement is NOT the generic bounds.min formula (see
+                        // PlaceNpc's sasha special-case) — his feet reach the floor while
+                        // his pelvis rests on the cushion, two different heights at once.
+                        // MEASURED fix (this round, screenshot d11_sasha_close.png + DiagD5
+                        // Placement both showed him floating: bounds.min.y=0.14, a visible
+                        // gap above the cushion): the shared Hero_Sofa 0.45 coefficient
+                        // OVERESTIMATES this mesh's real cushion-top height by ~0.14m — same
+                        // documented issue as the old Sprint D BLOCKER (see PlaceNpc history)
+                        // — recurring because it's the same sofa mesh, now hit by a new rig
+                        // with different proportions. seatYAdjust corrects it without
+                        // touching the shared formula other NPCs also read.
+                        specs[si] = new NpcSpec("sasha", "Саша", "dmitri", "sasha_first",
+                            new[] { rigPath },
+                            new Vector3(0.2f, 0f, -2.3f), 180f, false, new Color(1.05f, 1.02f, 1.05f), false,
+                            sit: true, seat: "sofa", seatYAdjust: -0.14f);
+                        break;
+                    case "mila":
+                        // Sits with a "gamepad" at her CRT spot — no natural seat there, so
+                        // SpawnChair (same widened 0.85x0.85 seat as Nikolai's/the Sasha
+                        // pattern) gives her something to rest on instead of floating.
+                        specs[si] = new NpcSpec("mila", "Мила", "irina", "mila_first",
+                            new[] { rigPath },
+                            new Vector3(-2.7f, 0f, -3.4f), 30f, false, new Color(1.04f, 1.16f, 1.04f), false,
+                            sit: true, seat: "chair");
+                        break;
+                    case "kirill":
+                        specs[si] = new NpcSpec("kirill", "Кирилл", "ruslan", "kirill_first",
+                            new[] { rigPath },
+                            new Vector3(-5.15f, 0f, 1.65f), 270f, false, new Color(1.18f, 1.02f, 0.82f), false);
+                        break;
+                    case "nikolai":
+                        // Sprint D5: STANDS now (was sitting in a spawned chair on the
+                        // un-rigged person.glb reuse) — nikolai_anim.fbx ships a real
+                        // standing idle/fidget clip, no seat needed.
+                        specs[si] = new NpcSpec("nikolai", "Николай", "denis", "nikolai_first",
+                            new[] { rigPath },
+                            new Vector3(4.1f, 0f, -0.3f), 250f, true, new Color(0.82f, 0.86f, 0.95f), false);
+                        break;
+                    case "stas":
+                        specs[si] = new NpcSpec("stas", "Стас", "dmitri", "stas_first",
+                            new[] { rigPath },
+                            new Vector3(2.6f, 0f, 3.4f), 90f, false, new Color(0.92f, 1.04f, 1.14f), false);
+                        break;
+                }
+                Debug.Log($"[WireNPC] {specs[si].id}: rig LANDED at {rigPath} — upgrading spec to real skeletal clip.");
+            }
 
             var byNpc = LoadLinesByNpc("Assets/_Project/Audio/lines.tsv");
             const string audioDir = "Assets/_Project/Audio/NPC";
@@ -5080,7 +5414,7 @@ namespace Afterhumans.EditorTools
                 // the scene's URP lighting. Rebuild each material as URP/Lit, KEEP the albedo
                 // texture (so faces/clothes stay), force metallic=0 + low smoothness + a bright
                 // tint so NPCs sit in the SAME light as the furniture/plants.
-                RelightNpc(go, sp.tint);
+                RelightNpc(go, sp.tint, src);
 
                 var asrc = go.GetComponent<AudioSource>();
                 if (asrc == null) asrc = go.AddComponent<AudioSource>();
@@ -5101,18 +5435,58 @@ namespace Afterhumans.EditorTools
                 voice.subtitles = subs.ToArray();
                 totalClips += clips.Count;
 
-                // Movement: Sprint D retires NpcWalk entirely (it translated the whole
-                // GameObject → "Стас ездит по полу без ног"). Кирилл/Стас share the new
-                // skeletal kirill_animated_raw rig and are driven procedurally on their own
-                // bone Transforms (same recipe as CorgiStateAnimator) — no clip needed, so an
-                // Animator with a NULL controller just keeps the hierarchy skinned. Everyone
-                // else keeps the whole-object NpcIdleBob breathing bob until they get a rig.
-                if (sp.id == "kirill" || sp.id == "stas")
+                // Movement: Sprint D5 — every NPC gets a real baked skeletal clip the
+                // moment its rig is actually loaded (usedPath carries an AnimationClip
+                // sub-asset, from scripts/rig.py's <id>_anim.fbx) — single-state "just
+                // loop it" AnimatorController, the pattern already proved for Sasha in
+                // Sprint D4. Gated on the ACTUAL loaded asset (not sp.id) so it tracks
+                // the per-NPC rig-landed patch above automatically. Falls through to the
+                // Sprint D-safe behaviour (procedural NpcArmStir/NpcFidget for kirill/stas,
+                // whole-object NpcIdleBob for everyone else) whenever the used mesh has no
+                // baked clip — old NpcWalk (whole-GameObject translate, "Стас ездит без
+                // ног") stays retired either way.
+                bool hasBakedClip = false;
+                foreach (var clipAsset in AssetDatabase.LoadAllAssetsAtPath(usedPath))
+                    if (clipAsset is AnimationClip _c && !_c.name.StartsWith("__preview")) { hasBakedClip = true; break; }
+
+                if (hasBakedClip)
+                {
+                    var animr = go.GetComponentInChildren<Animator>();
+                    if (animr == null) animr = go.AddComponent<Animator>();
+                    animr.applyRootMotion = false;
+                    // WebGL FREEZE FIX (Sprint D2): AlwaysAnimate forces the skinned update
+                    // every frame regardless of bounds/visibility — an Animator with a
+                    // degenerate/no-Avatar cull bounds otherwise parks the SkinnedMeshRenderer
+                    // un-reskinned in the built player (worked in Editor, froze in build).
+                    animr.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+                    string ctrlPath = $"Assets/_Project/Art/Npc/{sp.id}_ctrl.controller";
+                    var npcCtrl = BuildNpcClipLoopController(usedPath, ctrlPath);
+                    if (npcCtrl != null) animr.runtimeAnimatorController = npcCtrl;
+                    else Debug.LogWarning($"[WireNPC] {sp.id}: hasBakedClip=true but controller build failed for {usedPath}.");
+
+                    foreach (var smr in go.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+                    {
+                        smr.updateWhenOffscreen = true;
+                        var lb = smr.localBounds;
+                        if (lb.size.x < 0.05f || lb.size.y < 0.05f || lb.size.z < 0.05f)
+                            smr.localBounds = new Bounds(new Vector3(0f, 0.9f, 0f), new Vector3(1.2f, 2.0f, 1.2f));
+                    }
+                }
+                else if (sp.id == "kirill" || sp.id == "stas")
                 {
                     var animr = go.GetComponentInChildren<Animator>();
                     if (animr == null) animr = go.AddComponent<Animator>();
                     animr.runtimeAnimatorController = null;
                     animr.applyRootMotion = false;
+                    // WebGL FREEZE FIX (Sprint D2): an Animator with NO avatar (kirill FBX imports
+                    // with avatarSetup=NoAvatar, unlike the corgi which has avatarSetup=1) computes
+                    // degenerate cull bounds and, in the built player, parks the SkinnedMeshRenderer
+                    // in a culled/not-updated state so our LateUpdate bone writes never re-skin —
+                    // the mesh looks frozen even though the bone Transforms move. AlwaysAnimate forces
+                    // the skinned update every frame regardless of bounds/visibility (the Editor Game
+                    // view always ticked it, which is why it "worked in editor, froze in build").
+                    animr.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
                     if (sp.id == "kirill")
                         go.AddComponent<Afterhumans.Art.NpcArmStir>();
@@ -5134,6 +5508,62 @@ namespace Afterhumans.EditorTools
                 {
                     var bob = go.AddComponent<Afterhumans.Art.NpcIdleBob>();
                     bob.SetPhase(i * 0.2f);
+                    // Sprint D3 BLOCKER#5 fix: Николай measured 0.44-0.98% pixel-diff — almost
+                    // frozen. person.glb (Nikolai's mesh) has NO skeleton (confirmed via the
+                    // Sprint D diag: only the rigged FBXs have bones), so a real head-turn/
+                    // weight-shift is not available without a rig. Whole-object bob is the only
+                    // lever that exists for this mesh — boost it hard specifically for Nikolai
+                    // (Mila keeps a lighter boost — she's cross-legged reading, not "glancing
+                    // around") to read as "seated boss shifting/glancing" rather than a statue.
+                    // Honest limit: this is a whole-body proxy, not an articulated head turn.
+                    //
+                    // Sprint D4 MEDIUM fix (measurement-methodology finding: Николай n03→n04
+                    // pair measured only 2.66% in the narrow corpus bbox despite big angles
+                    // elsewhere): the previous frequencies (0.45/0.4/0.33 Hz) are NOT synced to
+                    // each other or to the ~2s screenshot-sampling interval used for judging, so
+                    // some adjacent-frame pairs land near a shared local extremum where all three
+                    // signals are barely moving at once — a "quiet pair" independent of amplitude.
+                    // Fix: force every sine's PERIOD to exactly 4s (0.25 Hz). For a pure sinusoid
+                    // sampled 2s apart (=exactly half that period), the two samples are
+                    // GUARANTEED to be in opposite phase — worst case delta = 2x amplitude,
+                    // regardless of where in the cycle the screenshot pair happens to land. This
+                    // removes the "unlucky pair" failure mode mathematically instead of by
+                    // guessing bigger amplitudes and hoping.
+                    if (sp.id == "nikolai")
+                    {
+                        bob.bobAmplitude = 0.06f;          // 6cm breathing/weight-shift
+                        bob.bobFrequency = 0.25f;          // period 4s -> opposite phase every 2s
+                        bob.swayAmplitudeDeg = 22f;         // visible yaw shift — turning to glance
+                        bob.swayFrequency = 0.25f;          // period 4s, synced
+                        bob.tiltAmplitudeDeg = 12f;
+                        bob.tiltFrequency = 0.25f;          // period 4s, synced
+                    }
+                    else if (sp.id == "mila")
+                    {
+                        // Sprint D4: Мила untouched/unmeasured last round (finding: BLOCKER, no
+                        // evidence at all) — give her the same phase-sync robustness as Nikolai,
+                        // lighter amplitude befitting "reading, occasional glance", not a shift.
+                        bob.bobAmplitude = 0.035f;          // 3.5cm breathing (was 1.8cm default)
+                        bob.bobFrequency = 0.25f;
+                        bob.swayAmplitudeDeg = 13f;          // gentle turn-to-page/look-up
+                        bob.swayFrequency = 0.25f;
+                        bob.tiltAmplitudeDeg = 7f;
+                        bob.tiltFrequency = 0.25f;
+                    }
+                    else if (sp.id == "sasha")
+                    {
+                        // Sprint D4: pose blocker (BLOCKER#3) stays OPEN this round (see NpcSpec
+                        // comment above — reverted an attempted Blender rig that shipped a worse
+                        // result). Still apply the same cheap, low-risk phase-sync + amplitude
+                        // safety margin as Mila/Nikolai so his idle-diff score doesn't regress
+                        // versus D3 while the real pose fix is pending.
+                        bob.bobAmplitude = 0.035f;
+                        bob.bobFrequency = 0.25f;
+                        bob.swayAmplitudeDeg = 13f;
+                        bob.swayFrequency = 0.25f;
+                        bob.tiltAmplitudeDeg = 7f;
+                        bob.tiltFrequency = 0.25f;
+                    }
                 }
 
                 // NO Interactable / NpcFacing / Ink wiring here — that E-path was the freeze
@@ -5774,9 +6204,62 @@ namespace Afterhumans.EditorTools
         /// ("растрированные") under the scene's URP lighting; this forces metallic=0, low
         /// smoothness and a bright base tint so NPCs are lit like the rest of the scene.
         /// </summary>
-        private static void RelightNpc(GameObject go, Color tint)
+        // Pull the FIRST real albedo texture off any shared material of an imported model asset.
+        // Used as a GHOST-FIX fallback: the SECOND Object.Instantiate of the SAME glTFast .glb
+        // (Sasha + Nikolai both use person.glb) can hand its renderer a shared material whose
+        // per-instance texture read comes back null → Nikolai relit to a flat grey "ghost". The
+        // untouched SOURCE asset always still carries the real baseColorTexture, so we read it once
+        // from there and use it whenever the per-instance read fails.
+        private static readonly string[] _albedoProps = { "_BaseMap", "_MainTex", "baseColorTexture", "_BaseColorMap" };
+        private static Texture SourceAlbedo(GameObject srcAsset)
+        {
+            if (srcAsset == null) return null;
+            foreach (var r in srcAsset.GetComponentsInChildren<Renderer>(true))
+                foreach (var s in r.sharedMaterials)
+                {
+                    if (s == null) continue;
+                    foreach (var prop in _albedoProps)
+                        if (s.HasProperty(prop) && s.GetTexture(prop) != null) return s.GetTexture(prop);
+                }
+            return null;
+        }
+
+        // GHOST FIX #2 (Sprint D3, root-caused via D2_wire.log grep): Kirill AND Stas both read
+        // "[Relight] ... src=tripo_material_14f261ba... albedo=NULL" — NOT a shared-instance
+        // problem (SourceAlbedo above), because BOTH share the SAME broken source. Root cause:
+        // kirill_animated_raw.fbx lives in Assets/_Project/Models/Animated/ with NO matching
+        // "kirill_animated_raw.fbm" folder next to it, so Unity's FBX importer can't resolve the
+        // embedded diffuse texture reference and the material comes in with albedo=null. The real
+        // texture DOES exist — Assets/_Project/Models/Generated/kirill.fbm/Color_<guid>.png,
+        // named after the same GUID as the material ("tripo_material_<guid>"). Recover it by
+        // GUID match across the asset database instead of relying on Unity's broken auto-link.
+        private static Texture TripoGuidAlbedo(Material mat)
+        {
+            if (mat == null || string.IsNullOrEmpty(mat.name)) return null;
+            // Sprint D5: the newer scripts/rig.py exports name their material
+            // "tripo_mat_<guid>" — a DIFFERENT prefix than the older
+            // "tripo_material_<guid>" convention (kirill_animated_raw.fbx). Accept both,
+            // and also search Assets/_Project/Art (where the new <npc>_anim.fbx / their
+            // ExtractTextures output live) alongside the old Models folder.
+            string[] prefixes = { "tripo_material_", "tripo_mat_" };
+            string guid = null;
+            foreach (var pre in prefixes)
+                if (mat.name.StartsWith(pre)) { guid = mat.name.Substring(pre.Length); break; }
+            if (guid == null) return null;
+            foreach (var g in AssetDatabase.FindAssets("t:Texture2D", new[] { "Assets/_Project/Models", "Assets/_Project/Art" }))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(g);
+                if (path.IndexOf("Color_" + guid, System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+                var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                if (tex != null) return tex;
+            }
+            return null;
+        }
+
+        private static void RelightNpc(GameObject go, Color tint, GameObject srcAsset = null)
         {
             var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Texture fallbackAlbedo = SourceAlbedo(srcAsset);   // definitive texture from the untouched import
             foreach (var r in go.GetComponentsInChildren<Renderer>(true))
             {
                 var srcMats = r.sharedMaterials;
@@ -5788,11 +6271,31 @@ namespace Afterhumans.EditorTools
                     Color baseCol = Color.white;
                     if (s != null)
                     {
-                        foreach (var prop in new[] { "_BaseMap", "_MainTex", "baseColorTexture", "_BaseColorMap" })
+                        foreach (var prop in _albedoProps)
                             if (s.HasProperty(prop) && s.GetTexture(prop) != null) { albedo = s.GetTexture(prop); break; }
                         if (s.HasProperty("_BaseColor")) baseCol = s.GetColor("_BaseColor");
                         else if (s.HasProperty("_Color")) baseCol = s.GetColor("_Color");
                     }
+                    // GHOST FIX: per-instance read failed (2nd shared glTFast instance) → use the
+                    // source asset's real albedo so this NPC keeps its texture instead of going grey.
+                    if (albedo == null && fallbackAlbedo != null)
+                    {
+                        Debug.Log($"[Relight] {go.name} mat[{i}] per-instance albedo NULL → source fallback '{fallbackAlbedo.name}'");
+                        albedo = fallbackAlbedo;
+                    }
+                    // GHOST FIX #2: source asset ALSO has no linked texture (Kirill/Stas case,
+                    // both share the one broken kirill_animated_raw.fbx import) — recover the real
+                    // Tripo diffuse PNG by GUID match instead of leaving them grey.
+                    if (albedo == null)
+                    {
+                        var tripoTex = TripoGuidAlbedo(s);
+                        if (tripoTex != null)
+                        {
+                            Debug.Log($"[Relight] {go.name} mat[{i}] source albedo ALSO null → tripo GUID fallback '{tripoTex.name}'");
+                            albedo = tripoTex;
+                        }
+                    }
+                    Debug.Log($"[Relight] {go.name} mat[{i}] src={(s != null ? s.name : "null")} albedo={(albedo != null ? albedo.name : "NULL")} tint={tint}");
                     var m = (lit != null) ? new Material(lit)
                                           : new Material(s != null ? s.shader : Shader.Find("Standard"));
                     m.name = (s != null ? s.name : "npc") + "_lit";
@@ -5876,35 +6379,81 @@ namespace Afterhumans.EditorTools
             }
             else if (sp.sit && sp.seat == "chair")
             {
-                seatY = SpawnChair("Chair_" + sp.id, sp.pos);
+                seatY = SpawnChair("Chair_" + sp.id, sp.pos, sp.yaw);
+            }
+
+            // Sprint D6 (ACCEPT 5/5): Sasha's v3 sofa-sit rig has the pelvis at a KNOWN
+            // fraction of his OWN clip bounds height (0.33H, gate-measured) rather than at
+            // the bounds minimum — his legs extend toward the floor while his pelvis rests
+            // higher up on the cushion, two different heights on the same body. The
+            // generic "seatY - b.min.y" formula rests the LOWEST point (his feet) on the
+            // seat, which would seat him on his own feet instead of his hips (team-lead:
+            // "НЕ по bounds.min" — this was exactly BLOCKER#3's root cause). Solve for the
+            // vertical shift that puts the pelvis (b.min.y + 0.33*b.size.y in the current
+            // unshifted bounds) exactly on the cushion top instead; his floor-reaching legs
+            // then land near the floor as a consequence of the rig's own proportions.
+            if (sp.id == "sasha" && sp.sit && sp.seat == "sofa")
+            {
+                const float pelvisFrac = 0.33f;
+                float pelvisY = b.min.y + pelvisFrac * b.size.y;
+                float shiftY = seatY - pelvisY + sp.seatYAdjust;
+                go.transform.position += new Vector3(sp.pos.x - b.center.x, shiftY, sp.pos.z - b.center.z);
+                return;
             }
 
             // centre on sp.x/z, rest the lowest point on the seat (or floor)
             go.transform.position += new Vector3(sp.pos.x - b.center.x, seatY - b.min.y + sp.seatYAdjust, sp.pos.z - b.center.z);
         }
 
-        /// <summary>Spawn a simple wooden chair box under a sitting NPC; returns the seat-top Y.</summary>
-        private static float SpawnChair(string name, Vector3 pos)
+        /// <summary>
+        /// Spawn a wooden chair (seat + backrest) under a sitting NPC; returns the seat-top Y.
+        /// Sprint D3 BLOCKER fix: the old chair was a single 0.5×0.5 cube — too small under a
+        /// reclining-pose mesh whose bent legs extend past its edges, and with no backrest it
+        /// read as "floating on a tiny brown box" (Nikolai, d2_nikolai_bg_crop.png). Widened the
+        /// seat and added a backrest positioned behind the NPC's own facing (rotated by yaw),
+        /// so the silhouette reads as a real chair, not a riser block.
+        /// </summary>
+        private static float SpawnChair(string name, Vector3 pos, float yaw)
         {
             var old = GameObject.Find(name);
             if (old != null) Object.DestroyImmediate(old);
             const float seatTop = 0.45f, legBottom = 0f;
-            var chair = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            chair.name = name;
-            var chCol = chair.GetComponent<Collider>();
-            if (chCol != null) Object.DestroyImmediate(chCol);  // cosmetic prop — don't block the dog
+
+            var parentGo = new GameObject(name);
             var npcRoot = GameObject.Find("NPCs_Botanika");
-            if (npcRoot != null) chair.transform.SetParent(npcRoot.transform, true);
-            chair.transform.position = new Vector3(pos.x, (seatTop + legBottom) * 0.5f, pos.z);
-            chair.transform.localScale = new Vector3(0.5f, seatTop - legBottom, 0.5f);
+            if (npcRoot != null) parentGo.transform.SetParent(npcRoot.transform, true);
+            parentGo.transform.position = pos;
+            parentGo.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+
             var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Material wood = null;
             if (lit != null)
             {
-                var m = new Material(lit) { name = "ChairWood" };
-                if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", new Color(0.40f, 0.27f, 0.16f));
-                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.1f);
-                chair.GetComponent<Renderer>().sharedMaterial = m;
+                wood = new Material(lit) { name = "ChairWood" };
+                if (wood.HasProperty("_BaseColor")) wood.SetColor("_BaseColor", new Color(0.40f, 0.27f, 0.16f));
+                if (wood.HasProperty("_Smoothness")) wood.SetFloat("_Smoothness", 0.1f);
             }
+
+            GameObject MakeBox(string n, Vector3 localPos, Vector3 size)
+            {
+                var c = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                c.name = n;
+                var col = c.GetComponent<Collider>();
+                if (col != null) Object.DestroyImmediate(col);  // cosmetic prop — don't block the dog
+                c.transform.SetParent(parentGo.transform, false);
+                c.transform.localPosition = localPos;
+                c.transform.localScale = size;
+                if (wood != null) c.GetComponent<Renderer>().sharedMaterial = wood;
+                return c;
+            }
+
+            // Seat: wider than before (0.85 vs 0.5) so extended/bent legs stay visually supported.
+            MakeBox("Seat", new Vector3(0f, (seatTop + legBottom) * 0.5f, 0f), new Vector3(0.85f, seatTop - legBottom, 0.85f));
+            // Backrest behind the NPC: after the parent's own yaw rotation, "behind" for an NPC
+            // facing local +Z (Quaternion.Euler(0, yaw, 0) applied to both NPC and this chair) is
+            // local -Z on this same parent transform.
+            MakeBox("Backrest", new Vector3(0f, seatTop + 0.35f, -0.40f), new Vector3(0.80f, 0.70f, 0.08f));
+
             return seatTop;
         }
 
