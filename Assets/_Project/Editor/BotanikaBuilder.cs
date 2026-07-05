@@ -4,6 +4,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.Rendering.Universal;
 using TMPro;
 using System.Linq;
 using System.IO;
@@ -4977,6 +4978,112 @@ namespace Afterhumans.EditorTools
         /// a guessed camera angle. Read-only, no scene changes, run against the already-
         /// wired+saved scene (no rebuild needed).
         /// </summary>
+        /// <summary>
+        /// Sprint D6: deterministic, camera-clip-safe D2 motion-diff evidence for any NPC —
+        /// bypasses NpcTourCam entirely. Root cause found this round: NpcTourCam frames each
+        /// NPC by extending ITS OWN position-from-origin vector further outward (camPos =
+        /// head + normalize(npc.xz)*reach) — for perimeter-corner NPCs (Stas, spawned right by
+        /// a door/wall) that extension lands the camera IN the wall, producing the persistent
+        /// blur/clip seen across every tour-camera capture attempt this sprint. This method
+        /// instead offsets the camera along the OPPOSITE (room-interior-facing) direction, and
+        /// poses the NPC's own baked clip directly via AnimationClip.SampleAnimation at two
+        /// fixed times (0s and 2s) instead of relying on real playback/timing — removes both
+        /// failure modes (camera-in-wall AND unpredictable capture timing) in one pass.
+        ///
+        /// KNOWN LIMITATION (unresolved this round): batchmode Camera.Render() on a freshly
+        /// created Camera + GetUniversalAdditionalCameraData() still produced a uniform-grey
+        /// PNG for all 5 NPCs, even after matching BotanikaCameraProbe.cs's working pattern —
+        /// URP's SRP callback likely needs a full frame/RenderPipelineManager tick that plain
+        /// Camera.Render() doesn't provide outside Play mode. Left in place as a documented
+        /// starting point, not wired into any build step.
+        /// </summary>
+        public static void CaptureNpcMotionPair()
+        {
+            string npcId = System.Environment.GetEnvironmentVariable("NPC_CAPTURE_ID");
+            if (string.IsNullOrEmpty(npcId)) npcId = "stas";
+            string outDir = "/root/afterhumans/npc_motion_pair";
+            Directory.CreateDirectory(outDir);
+
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var npc = GameObject.Find("NPC_" + npcId);
+            if (npc == null) { Debug.LogError($"[MotionPair] NPC_{npcId} NOT FOUND"); return; }
+
+            var rends = npc.GetComponentsInChildren<Renderer>();
+            if (rends.Length == 0) { Debug.LogError($"[MotionPair] {npcId}: no renderer"); return; }
+            Bounds b = rends[0].bounds; foreach (var r in rends) b.Encapsulate(r.bounds);
+            Vector3 head = new Vector3(b.center.x, b.max.y - b.size.y * 0.12f, b.center.z);
+            float reach = Mathf.Max(b.size.y * 1.1f, 1.4f);
+
+            // Room-interior-facing offset: NEGATIVE of the npc-from-origin direction (the
+            // NpcTourCam formula's sign, flipped) — pulls the camera toward the room centre
+            // instead of past the NPC toward whatever perimeter wall it's spawned against.
+            Vector3 dir = npc.transform.position; dir.y = 0f;
+            dir = (dir.sqrMagnitude < 0.01f) ? Vector3.back : dir.normalized;
+            Vector3 camPos = head - dir * reach;
+
+            // Sprint D6 bug found+fixed: reading clips off the built RuntimeAnimatorController
+            // (animr.runtimeAnimatorController.animationClips) surfaced a clip literally named
+            // "Scene" instead of the NPC's own baked action clip — go straight to the source FBX
+            // instead, same lookup the wire step itself uses to detect a baked clip.
+            string rigPath = $"Assets/_Project/Art/Npc/{npcId}_anim.fbx";
+            AnimationClip clip = null;
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(rigPath))
+            {
+                if (asset is AnimationClip c && !c.name.StartsWith("__preview")) { clip = c; break; }
+            }
+            if (clip == null) { Debug.LogError($"[MotionPair] {npcId}: no baked AnimationClip found at {rigPath}"); return; }
+
+            var go = new GameObject("AH_MotionPairCam");
+            try
+            {
+                go.hideFlags = HideFlags.HideAndDontSave;
+                go.transform.position = camPos;
+                go.transform.rotation = Quaternion.LookRotation(head - camPos, Vector3.up);
+                var cam = go.AddComponent<Camera>();
+                cam.fieldOfView = 42f;
+                cam.nearClipPlane = 0.05f;
+                cam.farClipPlane = 1000f;
+                cam.clearFlags = CameraClearFlags.Skybox;
+                cam.allowHDR = true;
+                cam.allowMSAA = true;
+                // URP requires this additional-data component to actually render a manually
+                // created Camera in batchmode — without it Camera.Render() silently produces a
+                // blank frame (found this round: first pass gave uniform-grey PNGs on all 5 NPCs).
+                var addData = cam.GetUniversalAdditionalCameraData();
+                if (addData != null) addData.renderPostProcessing = true;
+
+                float t0 = 0f;
+                float t1 = clip.length > 0.01f ? (2.0f % clip.length) : 0f;
+                RenderClipFrame(npc, clip, t0, cam, Path.Combine(outDir, $"{npcId}_t0.png"));
+                RenderClipFrame(npc, clip, t1, cam, Path.Combine(outDir, $"{npcId}_t2.png"));
+                Debug.Log($"[MotionPair] {npcId}: camPos={camPos} head={head} clip={clip.name} len={clip.length:F2} t0=0 t1={t1:F2} -> {outDir}/{npcId}_t0.png, {npcId}_t2.png");
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
+        }
+
+        private static void RenderClipFrame(GameObject npc, AnimationClip clip, float time, Camera cam, string outPath)
+        {
+            clip.SampleAnimation(npc, time);
+            const int W = 1280, H = 720;
+            var rt = new RenderTexture(W, H, 24, RenderTextureFormat.ARGB32);
+            var prevActive = RenderTexture.active;
+            cam.targetTexture = rt;
+            cam.Render();
+            RenderTexture.active = rt;
+            var tex = new Texture2D(W, H, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, W, H), 0, 0);
+            tex.Apply();
+            File.WriteAllBytes(outPath, tex.EncodeToPNG());
+            RenderTexture.active = prevActive;
+            cam.targetTexture = null;
+            rt.Release();
+            UnityEngine.Object.DestroyImmediate(rt);
+            UnityEngine.Object.DestroyImmediate(tex);
+        }
+
         public static void DiagD5Placement()
         {
             EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
