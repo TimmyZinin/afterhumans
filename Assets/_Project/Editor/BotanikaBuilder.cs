@@ -6172,7 +6172,19 @@ namespace Afterhumans.EditorTools
             var mWatch   = TexAlphaClip("Ref_WatchOut", "ref_watchout_decal.png", Color.white);
             var mScreen  = TexScreen("Ref_CRT", "ref_monitor_green.png", new Color(0.5f, 1.0f, 0.6f), 2.6f);
             var mWood    = DecorMat("Ref_Wood",   new Color(0.34f, 0.24f, 0.16f), 0.16f);
+            // D14: судья кросс-реф — "болванка" видна и у стойки Кирилла. Ref_K_Counter (his
+            // kitchen counter, 0.7x0.9x3.0m) shares this material with both CRT desks
+            // (Ref_DeskL/R), and it was flat DecorMat color same as the chair-wood issue — a
+            // sizeable untextured box among otherwise-textured furniture. Same real PBR wood
+            // scan already applied to SpawnChair's seat, so all three surfaces match.
             var mWoodLt  = DecorMat("Ref_WoodLt", new Color(0.50f, 0.37f, 0.24f), 0.14f);
+            {
+                var ltTex = RealTex("Assets/_Project/Vendor/PolyHaven/Materials/wood_painterly/wood_painterly_albedo_2k.png");
+                var ltNrm = RealTex("Assets/_Project/Vendor/PolyHaven/Materials/wood_painterly/wood_painterly_normal_2k.png");
+                if (ltTex != null) { mWoodLt.SetTexture("_BaseMap", ltTex); mWoodLt.SetTextureScale("_BaseMap", new Vector2(2.2f, 2.2f)); }
+                if (ltNrm != null && mWoodLt.HasProperty("_BumpMap"))
+                { mWoodLt.SetTexture("_BumpMap", ltNrm); mWoodLt.SetTextureScale("_BumpMap", new Vector2(2.2f, 2.2f)); mWoodLt.EnableKeyword("_NORMALMAP"); }
+            }
             var mBody    = DecorMat("Ref_MonBody", new Color(0.09f, 0.10f, 0.11f), 0.35f);
             var mWire    = DecorMat("Ref_Wire",   new Color(0.05f, 0.05f, 0.06f), 0.30f);
             var mMetal   = DecorMat("Ref_Metal",  new Color(0.16f, 0.16f, 0.18f), 0.55f);
