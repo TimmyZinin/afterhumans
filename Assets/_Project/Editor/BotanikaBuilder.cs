@@ -263,18 +263,21 @@ namespace Afterhumans.EditorTools
                 // sasha, kirill, or nikolai — only Stas had it). Same 2.4m radius, now shared.
                 var npcClearSpots = new[]
                 {
-                    new Vector2(2.6f, 3.4f),     // stas
-                    new Vector2(0.2f, -2.3f),    // sasha
-                    new Vector2(-2.7f, -3.4f),   // mila
-                    new Vector2(-5.15f, 1.65f),  // kirill
-                    new Vector2(4.1f, -0.3f),    // nikolai
+                    (new Vector2(2.6f, 3.4f),    2.4f),  // stas
+                    (new Vector2(0.2f, -2.3f),   2.4f),  // sasha
+                    // D14 (судья1): a carpet fern's fronds were still reaching onto her seat
+                    // cushion at the shared 2.4m radius — she's SEATED (elevated, facing a
+                    // fixed direction toward the CRT) so leaf-spread reaches further into her
+                    // frame than for a standing NPC at floor level. Widened her radius only.
+                    (new Vector2(-2.7f, -3.4f),  3.2f),  // mila
+                    (new Vector2(-5.15f, 1.65f), 2.4f),  // kirill
+                    (new Vector2(4.1f, -0.3f),   2.4f),  // nikolai
                 };
-                const float npcClearRadius = 2.4f;
                 bool NearAnyNpc(float px, float pz)
                 {
                     var p = new Vector2(px, pz);
-                    foreach (var spot in npcClearSpots)
-                        if ((p - spot).magnitude < npcClearRadius) return true;
+                    foreach (var (spot, radius) in npcClearSpots)
+                        if ((p - spot).magnitude < radius) return true;
                     return false;
                 }
 
@@ -1265,7 +1268,14 @@ namespace Afterhumans.EditorTools
             Place("Hero_ShelfL", Load(TF+"bookshelf.fbx"),   new Vector3(-3.1f, 0f, 5.8f), 180f, 2.3f, matShelf);
             Place("Hero_ShelfR", Load(TF+"bookshelf.fbx"),   new Vector3( 3.1f, 0f, 5.8f), 180f, 2.3f, matShelf);
             // CRT monitors on the two work desks (kept procedural desks below them).
-            Place("Hero_CRT_W", Load(TF+"crt_monitor.fbx"),  new Vector3(-4.2f, 0.78f, 1.0f),  65f, 0.42f, matCRT);
+            // D14 (судья3): screen faced away from Mila (yaw=65 pointed the model's forward
+            // toward +X/+Z; Mila sits at -2.7,-3.4, i.e. +X/-Z from here) — she read as
+            // facing an unlit monitor back instead of "absorbed in the glowing screen".
+            // yaw recomputed toward her seat with this project's established atan2(dx,dz)
+            // convention (same one used for her own yaw=341 toward this CRT). Verify
+            // visually after build — crt_monitor.fbx's own forward axis wasn't independently
+            // confirmed, only inferred from the same convention NPCs use.
+            Place("Hero_CRT_W", Load(TF+"crt_monitor.fbx"),  new Vector3(-4.2f, 0.78f, 1.0f),  161f, 0.42f, matCRT);
             Place("Hero_CRT_E", Load(TF+"crt_monitor.fbx"),  new Vector3( 4.6f, 0.78f, -1.0f), 250f, 0.42f, matCRT);
             // VEGETATION — Cycle N: the camera moved to z=-9.2, so the old foreground ferns
             // (z=-8.6, x=±5.3) ended up 0.6 m to the side = OFF-SCREEN → judges saw "zero
@@ -2698,8 +2708,14 @@ namespace Afterhumans.EditorTools
             // already sits inside Light_Sofa's pool but still read dark — this adds a closer,
             // lower accent tuned to his exact seat. Nikolai's real spawn (4.1, 0, -0.3) has
             // no coverage at all (see note above), hence a full new light, not just a tweak.
-            CreatePointLight(root, "Light_SashaFill", new Vector3(0.2f, 1.9f, -2.2f), warm, 0.9f, 2.6f);
-            CreatePointLight(root, "Light_NikolaiFill", new Vector3(4.1f, 2.1f, -0.3f), warm, 1.1f, 3.2f);
+            // D14 (судья1, REJECT впритык): Sasha STILL read as a dark half-silhouette from
+            // behind with this light present in the scene — root cause is the URP per-object
+            // additional-lights cap (4), not intensity: with 12+ point lights in the room this
+            // one could lose the "closest 4" cull for Sasha's specific mesh. ForcePixel exempts
+            // it from that cap; also raised intensity/range since he's judged from behind (fill
+            // has to carry across his whole silhouette, not just a rim).
+            CreatePointLight(root, "Light_SashaFill", new Vector3(0.2f, 1.9f, -2.2f), warm, 1.6f, 3.6f, forcePixel: true);
+            CreatePointLight(root, "Light_NikolaiFill", new Vector3(4.1f, 2.1f, -0.3f), warm, 1.1f, 3.2f, forcePixel: true);
 
             // === ATMOSPHERE — emissive haze cards (RenderSettings.fog is ignored
             // in the headless SubmitRenderRequest path). Stacked low-alpha warm
@@ -2793,7 +2809,7 @@ namespace Afterhumans.EditorTools
         }
 
         private static void CreatePointLight(GameObject parent, string name, Vector3 pos,
-            Color color, float intensity, float range)
+            Color color, float intensity, float range, bool forcePixel = false)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent.transform);
@@ -2804,6 +2820,14 @@ namespace Afterhumans.EditorTools
             light.intensity = intensity;
             light.range = range;
             light.shadows = LightShadows.None; // perf: only sun casts shadows
+            // URP Afterhumans_URP_Asset has m_AdditionalLightsPerObjectLimit=4 — with
+            // 12+ point lights in the scene (Kitchen/Nikolai/NikolaiFill/Rim/SashaFill/
+            // Server/Sofa/Spawn + the Pt_* AddPoint accents) a per-NPC fill light can
+            // silently lose the per-object "top 4 closest/brightest" cull and never
+            // reach that NPC's mesh at all — judge saw Sasha dark even WITH the fill
+            // light present in the scene. renderMode=ForcePixel exempts it from that
+            // cap so it always lights whatever it's aimed at.
+            if (forcePixel) light.renderMode = LightRenderMode.ForcePixel;
         }
 
         /// <summary>
@@ -5227,12 +5251,31 @@ namespace Afterhumans.EditorTools
                 Debug.Log($"[DiagDupe] '{name}': {n} GameObject instance(s) in scene");
             }
             foreach (var n in new[] {
-                "RealAssets", "Botanika_RefDress",
+                "RealAssets", "Botanika_RefDress", "Botanika_Atmosphere", "EnhanceShafts",
                 "Hero_Corgi", "Hero_CorgiMesh", "CM_FreeLook_Corgi",
                 "Clut_WatchOut", "Ref_WatchOut",
                 "NPC_LapGlow", "Chair_mila", "Chair_nikolai",
-                "Hero_Sofa", "Hero_Fern_M1",
+                "Hero_Sofa", "Hero_Fern_M1", "Hero_CRT_W", "Hero_CRT_E",
+                "DustParticles", "SteamParticles",
+                "NPC_sasha", "NPC_mila", "NPC_kirill", "NPC_nikolai", "NPC_stas",
+                "Audio_Ambient", "Audio_Music", "Audio_Kitchen",
             }) CountName(n);
+            int srcCount = 0;
+            foreach (var a in Object.FindObjectsByType<AudioSource>(FindObjectsSortMode.None)) srcCount++;
+            Debug.Log($"[DiagDupe] AudioSource total in scene: {srcCount}");
+            int psCount = 0;
+            foreach (var p in Object.FindObjectsByType<ParticleSystem>(FindObjectsSortMode.None))
+            {
+                psCount++;
+                Debug.Log($"[DiagDupe] ParticleSystem #{psCount}: '{p.gameObject.name}' parent='{(p.transform.parent!=null?p.transform.parent.name:"none")}' maxParticles={p.main.maxParticles}");
+            }
+            Debug.Log($"[DiagDupe] ParticleSystem total in scene: {psCount}");
+            int asCount = 0;
+            foreach (var a in Object.FindObjectsByType<AudioSource>(FindObjectsSortMode.None))
+            {
+                asCount++;
+                Debug.Log($"[DiagDupe] AudioSource #{asCount}: '{a.gameObject.name}' clip='{(a.clip!=null?a.clip.name:"NULL")}' playOnAwake={a.playOnAwake}");
+            }
         }
 
         public static void DiagNikolaiFreeze()
@@ -5668,9 +5711,15 @@ namespace Afterhumans.EditorTools
                         // Sprint D5: STANDS now (was sitting in a spawned chair on the
                         // un-rigged person.glb reuse) — nikolai_anim.fbx ships a real
                         // standing idle/fidget clip, no seat needed.
+                        // D14 (судья по движению, HIGH): yaw=250 put his gesture toward the
+                        // wall/corner behind him, arms hidden by his own torso from the
+                        // approach path. He's standing (no seat/chair to regress) so a
+                        // straight rotation is safe. -110 deg toward the room's main aisle
+                        // (his old forward pointed SW into the corner; this turns him back
+                        // toward the path a player actually walks).
                         specs[si] = new NpcSpec("nikolai", "Николай", "denis", "nikolai_first",
                             new[] { rigPath },
-                            new Vector3(4.1f, 0f, -0.3f), 250f, true, new Color(0.82f, 0.86f, 0.95f), false);
+                            new Vector3(4.1f, 0f, -0.3f), 140f, true, new Color(0.82f, 0.86f, 0.95f), false);
                         break;
                     case "stas":
                         specs[si] = new NpcSpec("stas", "Стас", "dmitri", "stas_first",
