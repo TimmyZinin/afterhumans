@@ -1088,6 +1088,31 @@ namespace Afterhumans.EditorTools
         /// </summary>
         private static void ComposeRealAssets(GameObject greybox)
         {
+            // idempotent (Tim's live-D13 blocker, 5 июл): this method had NO purge, so every
+            // re-run of BuildArt() (e.g. round-2 fern/pot repositioning) left the PRIOR
+            // "RealAssets" subtree in place and created a second one on top — doubled
+            // Hero_Sofa/Hero_Corgi/Hero_CorgiMesh/Clut_WatchOut/NPC_LapGlow/every Hero_Fern|Pot|
+            // Vine/etc, confirmed 2x via DiagDupeCount(). CM_FreeLook_Corgi is created as a
+            // scene-root Cinemachine vcam (not nested under root) so it needs its own purge.
+            // Loop, not a single GameObject.Find: the scene already accumulated 2x copies
+            // (this exact bug, pre-fix) and Find() only returns ONE match — a single
+            // find-and-destroy would leave the other orphaned. Destroy every match by name.
+            void DestroyAllNamed(string nm)
+            {
+                // snapshot names BEFORE destroying anything: destroying a parent (e.g. a
+                // "RealAssets" root) cascades to its children, so touching .name on a later
+                // array entry that was one of those children throws (Unity "fake null").
+                var all = Resources.FindObjectsOfTypeAll<GameObject>();
+                var toKill = new System.Collections.Generic.List<GameObject>();
+                foreach (var go in all)
+                    if (go != null && go.name == nm && go.scene.IsValid())
+                        toKill.Add(go);
+                foreach (var go in toKill)
+                    if (go != null) Object.DestroyImmediate(go);
+            }
+            DestroyAllNamed("RealAssets");
+            DestroyAllNamed("CM_FreeLook_Corgi");
+
             var root = new GameObject("RealAssets");
             root.transform.SetParent(greybox.transform, worldPositionStays: false);
 
@@ -1851,6 +1876,16 @@ namespace Afterhumans.EditorTools
         /// </summary>
         private static void BuildDecor(GameObject greybox)
         {
+            // idempotent — same class of bug as ComposeRealAssets (see its comment): no purge
+            // meant every BuildArt() re-run duplicated the whole "Decor" subtree (Rug_Persian
+            // + procedural sofa/table/etc that ComposeRealAssets later hides). Loop, not a
+            // single Transform.Find: the scene may already carry >1 copy from past re-runs
+            // (Find only returns the first match, which would leave the rest orphaned).
+            var oldDecors = new System.Collections.Generic.List<GameObject>();
+            foreach (Transform t in greybox.transform)
+                if (t.name == "Decor") oldDecors.Add(t.gameObject);
+            foreach (var d in oldDecors) Object.DestroyImmediate(d);
+
             var decor = new GameObject("Decor");
             decor.transform.SetParent(greybox.transform, worldPositionStays: false);
 
@@ -5173,6 +5208,33 @@ namespace Afterhumans.EditorTools
         /// exact class of bug — a leftover duplicate — hit human NPCs before, see the
         /// "purge dupes" commits).
         /// </summary>
+        /// <summary>
+        /// Tim's live-D13 blocker (dupe corgi head, dupe WATCH OUT, brown cube by Mila):
+        /// counts ACTUAL GameObject instances (via GameObject.Find + a full-hierarchy walk,
+        /// not a raw YAML text grep which conflates a Material and a GameObject sharing the
+        /// same name, e.g. "Ref_WatchOut" is both a TexAlphaClip material AND a Quad name) for
+        /// every name implicated in the report or its root causes.
+        /// </summary>
+        public static void DiagDupeCount()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var allGO = Resources.FindObjectsOfTypeAll<GameObject>();
+            void CountName(string name)
+            {
+                int n = 0;
+                foreach (var go in allGO)
+                    if (go.name == name && go.scene.IsValid()) n++;
+                Debug.Log($"[DiagDupe] '{name}': {n} GameObject instance(s) in scene");
+            }
+            foreach (var n in new[] {
+                "RealAssets", "Botanika_RefDress",
+                "Hero_Corgi", "Hero_CorgiMesh", "CM_FreeLook_Corgi",
+                "Clut_WatchOut", "Ref_WatchOut",
+                "NPC_LapGlow", "Chair_mila", "Chair_nikolai",
+                "Hero_Sofa", "Hero_Fern_M1",
+            }) CountName(n);
+        }
+
         public static void DiagNikolaiFreeze()
         {
             EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
@@ -6698,13 +6760,24 @@ namespace Afterhumans.EditorTools
             parentGo.transform.position = pos;
             parentGo.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
 
+            // Tim's live-D13 blocker: reported as "brown cube blockout" next to Mila. The box
+            // itself is intentional (cheap placeholder chair, same as Nikolai's — not a dupe,
+            // confirmed via DiagDupeCount: exactly 1 instance), but it was the one surface left
+            // on a FLAT solid color while every other furniture piece got a real PBR texture in
+            // BuildArt/BuildDecor — that contrast is what reads as "untextured blockout". Give
+            // it the same real wood scan already used for WoodDark furniture so it matches.
             var lit = Shader.Find("Universal Render Pipeline/Lit");
             Material wood = null;
             if (lit != null)
             {
                 wood = new Material(lit) { name = "ChairWood" };
+                var woodTex = RealTex("Assets/_Project/Vendor/PolyHaven/Materials/wood_painterly/wood_painterly_albedo_2k.png");
+                var woodNrm = RealTex("Assets/_Project/Vendor/PolyHaven/Materials/wood_painterly/wood_painterly_normal_2k.png");
+                if (woodTex != null) { wood.SetTexture("_BaseMap", woodTex); wood.SetTextureScale("_BaseMap", new Vector2(1.4f, 1.4f)); }
                 if (wood.HasProperty("_BaseColor")) wood.SetColor("_BaseColor", new Color(0.40f, 0.27f, 0.16f));
-                if (wood.HasProperty("_Smoothness")) wood.SetFloat("_Smoothness", 0.1f);
+                if (woodNrm != null && wood.HasProperty("_BumpMap"))
+                { wood.SetTexture("_BumpMap", woodNrm); wood.SetTextureScale("_BumpMap", new Vector2(1.4f, 1.4f)); wood.EnableKeyword("_NORMALMAP"); }
+                if (wood.HasProperty("_Smoothness")) wood.SetFloat("_Smoothness", 0.12f);
             }
 
             GameObject MakeBox(string n, Vector3 localPos, Vector3 size)
