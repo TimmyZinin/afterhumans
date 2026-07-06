@@ -42,11 +42,15 @@ namespace Afterhumans.EditorTools
 
             // 2) Music bed — very quiet, must sit UNDER the voices (VO ducking is overkill for
             //    the demo; a low static level reads as score, not competition).
-            var music = FirstClip("Assets/_Project/Audio/Music");
+            // Prefer the chillwave bed over alphabetical-first (anamalie drone): Tim's
+            // 6 Jul report — «музыка пропала» — the 0.16 bed under a 0.38 ambient was
+            // inaudible in the live build, so the score must sit clearly above the floor.
+            var music = ClipMatching("Assets/_Project/Audio/Music", new[] { "chillwave" })
+                        ?? FirstClip("Assets/_Project/Audio/Music");
             if (music != null)
             {
                 var src = EnsureSource("Audio_Music", Vector3.zero, spatial: false);
-                src.clip = music; src.volume = 0.16f; src.loop = true; src.playOnAwake = true;
+                src.clip = music; src.volume = 0.34f; src.loop = true; src.playOnAwake = true;
                 wired++;
             }
             else Debug.LogWarning("[AudioWiring] no music clip in Audio/Music — skipped");

@@ -6777,6 +6777,20 @@ namespace Afterhumans.EditorTools
             {
                 seatY = SpawnChair("Chair_" + sp.id, sp.pos, sp.yaw);
             }
+            else
+            {
+                // Judge1 (D15, ACCEPT 8/8/8/8/9 — one open question): Nikolai read as standing
+                // on a raised dais. Root cause — an ORPHAN, not decor: SpawnChair only runs in
+                // the "chair" branch above; when an NPC's spec drops sit/seat (Nikolai's Sprint
+                // D5 sit->stand conversion, current gate-accepted rig has no sit/seat args at
+                // all, defaulting to false/"floor"), the OLD "Chair_<id>" box from a PRIOR round
+                // (when it still had sit:true/seat:"chair") never gets destroyed — nothing calls
+                // SpawnChair for it anymore, and SpawnChair is the only place that purges by that
+                // name. Universal guard, not Nikolai-specific: any NPC that stops sitting leaves
+                // this same orphan behind on the NEXT re-sit->stand transition.
+                var orphanChair = GameObject.Find("Chair_" + sp.id);
+                if (orphanChair != null) Object.DestroyImmediate(orphanChair);
+            }
 
             // Sprint D6 (ACCEPT 5/5): Sasha's v3 sofa-sit rig has the pelvis at a KNOWN
             // fraction of his OWN clip bounds height (0.33H, gate-measured) rather than at

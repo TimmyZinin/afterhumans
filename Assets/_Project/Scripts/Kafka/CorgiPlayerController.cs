@@ -42,7 +42,9 @@ namespace Afterhumans.Kafka
         {
             float dt = Time.deltaTime;
             float h = Input.GetAxisRaw("Horizontal"); // A/D + arrows → turn
-            float v = Input.GetAxisRaw("Vertical");   // W/S + arrows → forward/back
+            // Sign flipped per Tim's bug report (6 Jul): with +Vertical the corgi walked
+            // away from its nose/camera, so W and S were effectively swapped in play.
+            float v = -Input.GetAxisRaw("Vertical");  // W/S + arrows → forward/back
             bool run = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
             if (Mathf.Abs(h) > 0.01f)
