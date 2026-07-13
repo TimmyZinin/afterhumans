@@ -2780,13 +2780,83 @@ namespace Afterhumans.EditorTools
         /// rig ships a REAL keyframed sit-idle Action baked in Blender — we just need Mecanim
         /// to play it on loop, no state-machine logic required.
         /// </summary>
-        private static RuntimeAnimatorController BuildNpcClipLoopController(string fbxPath, string ctrlPath)
+        // E-sprint (12 июл): MEASURED via DiagnoseNpcClipRanges — Sasha's own "Scene" clip
+        // (2.967s, a DIFFERENT origin than the other 4's "Armature|...|NlaTrack" ambient-idle
+        // clips) is a single continuous gesture arc, not a loop-safe idle: R hand rest≈0.994 at
+        // t=0, rises smoothly to a peak of 1.326 at t≈1.27s (that's the "arm floats up past
+        // shoulder height" team-lead's live playtest caught), falls back, and only settles
+        // (0.993-0.997, near-flat) from t≈2.33s to the clip's end (2.967s). Looping the WHOLE
+        // clip (the old behaviour) replays that rise-and-fall forever. Kirill/Mila/Nikolai/Stas
+        // measured STABLE across their full clip (hand Y within ±0.02 the whole way) — no trim
+        // needed for them, confirmed by the same diagnostic, not assumed.
+        private static readonly Dictionary<string, (float start, float end)> NpcClipTrimRanges =
+            new Dictionary<string, (float, float)> { { "sasha", (2.4f, 2.967f) } };
+
+        // E-sprint (12 июл, P0-2 fix): MEASURED via BotanikaCameraProbe.DiagnoseNpcFacing —
+        // per-NPC, shot the head from 0/90/180/270° around transform.forward and read off
+        // which angle showed the actual FACE (not guessed from team-lead's "180° for the new
+        // Tripo rigs" hypothesis, which turned out wrong: all 4 new deci-rigs measured at
+        // 270°, not 180°). Sasha (old sasha_anim.fbx, different pipeline) measured at 180°,
+        // confirmed independently via np_sasha.png (CaptureNpcCloseups) showing his back at
+        // the equivalent 0° angle. Feeds NpcVoice.faceYawOffsetDeg so the "face the dog while
+        // talking" turn actually points the character's real face at the target instead of
+        // its raw transform.forward. Re-measure (don't reuse these numbers) after any future
+        // rig swap.
+        private static readonly Dictionary<string, float> NpcFaceYawOffsetDeg =
+            new Dictionary<string, float> { { "sasha", 180f }, { "kirill", 270f }, { "mila", 270f },
+                                             { "nikolai", 270f }, { "stas", 270f } };
+
+        private static AnimationClip TrimClip(AnimationClip source, float startTime, float endTime, string savePath)
+        {
+            var trimmed = new AnimationClip { name = source.name + "_trim", frameRate = source.frameRate };
+            foreach (var binding in AnimationUtility.GetCurveBindings(source))
+            {
+                var curve = AnimationUtility.GetEditorCurve(source, binding);
+                if (curve == null) continue;
+                var newCurve = new AnimationCurve();
+                foreach (var key in curve.keys)
+                {
+                    if (key.time < startTime || key.time > endTime) continue;
+                    var nk = key; nk.time = key.time - startTime;
+                    newCurve.AddKey(nk);
+                }
+                // no keyframe fell inside the window (sparse curve) — sample the boundary
+                // values explicitly so the trimmed clip still has SOMETHING for this binding.
+                if (newCurve.length == 0)
+                {
+                    newCurve.AddKey(0f, curve.Evaluate(startTime));
+                    newCurve.AddKey(endTime - startTime, curve.Evaluate(endTime));
+                }
+                AnimationUtility.SetEditorCurve(trimmed, binding, newCurve);
+            }
+            trimmed.wrapMode = WrapMode.Loop;
+            // BUG FIX (12 июл, caught by re-running DiagnoseNpcClipRanges as a FRESH process
+            // right after this ran — "controller has no AnimationClip state"): a bare `new
+            // AnimationClip()` only exists in memory. It has no GUID/fileID, so when the
+            // AnimatorController asset gets serialized to disk the `motion` reference to it
+            // does NOT survive — it reads back null in the NEXT Unity process (exactly what
+            // the WireBotanikaNpcs process vs. the later BuildHero/diagnostic process is:
+            // separate -executeMethod invocations, separate Unity launches). CreateAsset gives
+            // it a real project-asset identity so the reference actually persists.
+            if (AssetDatabase.LoadAssetAtPath<Object>(savePath) != null) AssetDatabase.DeleteAsset(savePath);
+            AssetDatabase.CreateAsset(trimmed, savePath);
+            Debug.Log($"[NpcClipLoop] trimmed '{source.name}' [{startTime:F2}-{endTime:F2}]s -> saved asset '{savePath}' ({trimmed.length:F2}s)");
+            return trimmed;
+        }
+
+        private static RuntimeAnimatorController BuildNpcClipLoopController(string fbxPath, string ctrlPath, string npcId = null)
         {
             AnimationClip clip = null;
             foreach (var a in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
                 if (a is AnimationClip c && !c.name.StartsWith("__preview")) { clip = c; break; }
             if (clip == null) { Debug.LogWarning("[NpcClipLoop] no AnimationClip in " + fbxPath); return null; }
             clip.wrapMode = WrapMode.Loop;
+
+            if (npcId != null && NpcClipTrimRanges.TryGetValue(npcId, out var range))
+            {
+                string trimPath = $"Assets/_Project/Art/Npc/{npcId}_trim.anim";
+                clip = TrimClip(clip, range.start, range.end, trimPath);
+            }
 
             if (AssetDatabase.LoadAssetAtPath<Object>(ctrlPath) != null)
                 AssetDatabase.DeleteAsset(ctrlPath);
@@ -5007,7 +5077,7 @@ namespace Afterhumans.EditorTools
               this.tint = tint; this.walk = walk; this.sit = sit; this.seat = seat; this.seatYAdjust = seatYAdjust; }
         }
 
-        private class LineRow { public string lineId; public string text; }
+        private class LineRow { public string lineId; public string text; public string knot; }
 
         // Diagnostic: enumerate every human figure (GLB meshes import as "tmp*.ply")
         // with its ROOT object name + world position, so we know exactly what to purge.
@@ -5575,6 +5645,12 @@ namespace Afterhumans.EditorTools
             // removed it — the dog was falling through a deleted floor. Additive, guarded by name.
             EnsureGreyboxShell();
 
+            // E-sprint (E1.4/E1.5): real door prop (replaces the flat, solid-collider
+            // DoorToCity_Placeholder) + the fade-transition singleton that was previously never
+            // spawned anywhere (see SceneTransition.cs doc comment).
+            EnsureCityDoor();
+            Afterhumans.Scenes.SceneTransition.EnsureInstance();
+
             // 5 GDD speakers. Prefer textured GLB (glTFast keeps embedded textures
             // → faces/clothes render; FBX would come in white and need a flat tint).
             var specs = new[]
@@ -5664,28 +5740,50 @@ namespace Afterhumans.EditorTools
             // accepted as of this round.
             for (int si = 0; si < specs.Length; si++)
             {
-                string rigPath = $"Assets/_Project/Art/Npc/{specs[si].id}_anim.fbx";
+                // E-sprint cycle #5 (12 июл, приказ Тима «адекватная анимация каждому NPC»):
+                // team-lead is re-rigging all 5 NPCs in Tripo Studio with real idle/talk
+                // presets (same decimation pipeline as Anna) — landed as <id>_deci.fbx.
+                // Prefer it over the older <id>_anim.fbx the moment it lands (gate = file
+                // presence, same pattern as the _anim.fbx swap-in below), so Kirill/Stas
+                // automatically get a real baked clip and fall OUT of the hasBakedClip==false
+                // branch further down that attaches NpcRestPose/NpcFidget — no separate code
+                // path needed to "stop attaching procedural motion", the existing gate does
+                // it for free once a real clip is present.
+                string rigPath = $"Assets/_Project/Art/Npc/{specs[si].id}_deci.fbx";
+                if (!File.Exists(rigPath)) rigPath = $"Assets/_Project/Art/Npc/{specs[si].id}_anim.fbx";
                 if (!File.Exists(rigPath)) continue;
                 switch (specs[si].id)
                 {
                     case "sasha":
-                        // Sprint D6 (ACCEPT 5/5): v3 rig — real reclining sit clip, knees
-                        // ~13° forward, pelvis measured at 0.33H of the clip's own bounds.
-                        // Seat placement is NOT the generic bounds.min formula (see
-                        // PlaceNpc's sasha special-case) — his feet reach the floor while
-                        // his pelvis rests on the cushion, two different heights at once.
-                        // MEASURED fix (this round, screenshot d11_sasha_close.png + DiagD5
-                        // Placement both showed him floating: bounds.min.y=0.14, a visible
-                        // gap above the cushion): the shared Hero_Sofa 0.45 coefficient
-                        // OVERESTIMATES this mesh's real cushion-top height by ~0.14m — same
-                        // documented issue as the old Sprint D BLOCKER (see PlaceNpc history)
-                        // — recurring because it's the same sofa mesh, now hit by a new rig
-                        // with different proportions. seatYAdjust corrects it without
-                        // touching the shared formula other NPCs also read.
+                        // Sprint D6/E history (now superseded): the original v3 rig had a
+                        // reclining SIT clip, so PlaceNpc's sasha-specific pelvis-on-cushion
+                        // formula (seatY from Hero_Sofa's bounds + pelvisFrac + seatYAdjust)
+                        // was the correct model. Cycle #5d's MEASURED trim (DiagnoseNpcClipRanges
+                        // + AssetDatabase-persisted sasha_trim.anim, taska #9) changed what the
+                        // clip actually plays: the only loop-safe segment of the source "Scene"
+                        // clip is near-static and STANDING, not seated. Team-lead's live
+                        // playtest after #5d confirmed exactly that — a standing figure planted
+                        // on the sofa cushion (bounds.min.y=0.523) reads as "stuck to the seat",
+                        // not sitting. The fix is placement, not the clip (team-lead: "НЕ трогай
+                        // клип — он теперь стабильный").
+                        //
+                        // E-sprint cycle #5e (12 июл, team-lead review after #5d playtest):
+                        // drop the sofa/sit special-case entirely — sit defaults to false, seat
+                        // defaults to "floor", seatYAdjust defaults to 0f (same generic
+                        // bounds.min-on-floor formula every standing NPC already uses, e.g.
+                        // Kirill/Stas below). Position moved from (0.2, -2.3) — the sofa seat
+                        // cushion itself — to (0.2, -1.0): same X (still visually paired with
+                        // the sofa), Z pulled ~0.9m off the cushion into open floor BEHIND the
+                        // sofa's backrest (sofa center z=-1.9, PosCoffeeTable z=-3.2 is the
+                        // sofa's FRONT since yaw=180 faces -Z toward it, so +Z from the sofa is
+                        // its back). That Z is clear floor per the room's placed-object list —
+                        // nearest neighbours are Hero_Fern_D1 (x=-4.15) and Workstation E
+                        // (x=4.6, z=-1.0), both >4m away in X. Yaw unchanged (180, still facing
+                        // camera) so the standing pose reads the same as before, just off the
+                        // furniture.
                         specs[si] = new NpcSpec("sasha", "Саша", "dmitri", "sasha_first",
                             new[] { rigPath },
-                            new Vector3(0.2f, 0f, -2.3f), 180f, false, new Color(1.05f, 1.02f, 1.05f), false,
-                            sit: true, seat: "sofa", seatYAdjust: -0.14f);
+                            new Vector3(0.2f, 0f, -1.0f), 180f, false, new Color(1.05f, 1.02f, 1.05f), false);
                         break;
                     case "mila":
                         // Sits with a "gamepad" at her CRT spot — no natural seat there, so
@@ -5807,17 +5905,55 @@ namespace Afterhumans.EditorTools
 
                 var voice = go.AddComponent<Afterhumans.Audio.NpcVoice>();
                 voice.speakerName = sp.display;
+                if (NpcFaceYawOffsetDeg.TryGetValue(sp.id, out var faceOffset)) voice.faceYawOffsetDeg = faceOffset;
                 var clips = new List<AudioClip>();
                 var subs = new List<string>();
                 if (byNpc.TryGetValue(sp.id, out var lines))
                     foreach (var ln in lines)
                     {
+                        // E-sprint: nikolai_gate/nikolai_gate_react rows are the LOCKED finale —
+                        // they must NEVER play through the normal cycle (that would let Nikolai
+                        // say "иди, дверь я не закрою" before the player met all 4 NPCs). Routed
+                        // into voice.gateClips/gateSubtitles below instead.
+                        if (ln.knot == "nikolai_gate" || ln.knot == "nikolai_gate_react") continue;
                         var clip = FindNpcClip(audioDir, ln.lineId);
                         if (clip != null) { clips.Add(clip); subs.Add(ln.text); }
                     }
                 voice.clips = clips.ToArray();
                 voice.subtitles = subs.ToArray();
                 totalClips += clips.Count;
+
+                // E-sprint (E1.3/E1.4): Nikolai's finale lines, gated on all 4 other NPCs met.
+                // Filtered by knot=="nikolai_gate" (NOT mixed into the normal cycle above) so
+                // they never play early. Unlike the main cycle, a missing clip is KEPT (null)
+                // here so the subtitle still shows via NpcVoice's subtitle-only fallback — R2's
+                // TTS pipeline may not have shipped audio for these yet.
+                if (sp.id == "nikolai")
+                {
+                    var gateClips = new List<AudioClip>();
+                    var gateSubs = new List<string>();
+                    if (lines != null)
+                        foreach (var ln in lines)
+                            if (ln.knot == "nikolai_gate")
+                            {
+                                gateClips.Add(FindNpcClip(audioDir, ln.lineId));
+                                gateSubs.Add(ln.text);
+                            }
+                    if (gateSubs.Count == 0)
+                    {
+                        // Placeholder until R1 (writer) + R2 (TTS) ship lines_sprintE.tsv rows
+                        // with knot="nikolai_gate" — meaning preserved per Tim's brief. Text-only
+                        // (null clips), automatically superseded once real rows land in lines.tsv.
+                        gateSubs.Add("Мы тут все потерянные и сумасшедшие, Кафка. Но там, на улице, — возможно, твой хозяин. Тот, кого ты ищешь.");
+                        gateSubs.Add("Иди. Дверь открыта.");
+                        gateClips.Add(null);
+                        gateClips.Add(null);
+                    }
+                    voice.gateClips = gateClips.ToArray();
+                    voice.gateSubtitles = gateSubs.ToArray();
+                    voice.gateActive = () => Afterhumans.Audio.NpcProgressTracker.AllFourMet;
+                    Debug.Log($"[WireNPC] nikolai gate lines wired: {gateSubs.Count} (clips found: {gateClips.FindAll(c => c != null).Count})");
+                }
 
                 // Movement: Sprint D5 — every NPC gets a real baked skeletal clip the
                 // moment its rig is actually loaded (usedPath carries an AnimationClip
@@ -5845,7 +5981,7 @@ namespace Afterhumans.EditorTools
                     animr.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
                     string ctrlPath = $"Assets/_Project/Art/Npc/{sp.id}_ctrl.controller";
-                    var npcCtrl = BuildNpcClipLoopController(usedPath, ctrlPath);
+                    var npcCtrl = BuildNpcClipLoopController(usedPath, ctrlPath, sp.id);
                     if (npcCtrl != null) animr.runtimeAnimatorController = npcCtrl;
                     else Debug.LogWarning($"[WireNPC] {sp.id}: hasBakedClip=true but controller build failed for {usedPath}.");
 
@@ -5872,10 +6008,14 @@ namespace Afterhumans.EditorTools
                     // view always ticked it, which is why it "worked in editor, froze in build").
                     animr.cullingMode = AnimatorCullingMode.AlwaysAnimate;
 
-                    if (sp.id == "kirill")
-                        go.AddComponent<Afterhumans.Art.NpcArmStir>();
-                    else
-                        go.AddComponent<Afterhumans.Art.NpcFidget>();
+                    // E-sprint (12 июл, приказ Тима): NpcArmStir retired — its shoulder swing
+                    // kept sweeping back through T-pose at its own extremum (5-frame 1s-interval
+                    // screenshot series). Both NPCs now get NpcRestPose (static Awake-only arm
+                    // correction — prevents a T-pose regression from simply removing the old
+                    // animation) + NpcFidget (torso/head micro-life only, no limbs, capped at
+                    // <=2 deg sway / <=10 deg head turn on a 6-10s period per the order).
+                    go.AddComponent<Afterhumans.Art.NpcRestPose>();
+                    go.AddComponent<Afterhumans.Art.NpcFidget>();
 
                     // Skinned bounds can come out stale/degenerate straight off import (same
                     // vanish-under-culling bug fixed for the corgi) — force sane localBounds
@@ -5977,6 +6117,17 @@ namespace Afterhumans.EditorTools
                 {
                     var dogBeh = dog.AddComponent<Afterhumans.Kafka.DogBehavior>();
                     dogBeh.EditorAutoWireAudio();
+                }
+                // E-sprint (E1.5): survive the Botanika→City scene load (GDD §8 persistence
+                // requirement). Requires KafkaDirectController (the scripted follow-camera
+                // owner) — only wire it if that's actually present, so a differently-rigged
+                // dog build doesn't silently get a component with nothing to drive.
+                if (dog.GetComponent<Afterhumans.Kafka.PersistentPlayer>() == null)
+                {
+                    if (dog.GetComponent<Afterhumans.Kafka.KafkaDirectController>() != null)
+                        dog.AddComponent<Afterhumans.Kafka.PersistentPlayer>();
+                    else
+                        Debug.LogWarning("[WireBotanikaNpcs] Hero_Corgi has no KafkaDirectController — skipping PersistentPlayer (City transition won't carry Kafka over)");
                 }
             }
             else Debug.LogWarning("[WireBotanikaNpcs] Hero_Corgi NOT found — run EnsurePlayableDog first.");
@@ -6567,6 +6718,100 @@ namespace Afterhumans.EditorTools
         }
 
         /// <summary>
+        /// E-sprint (E1.4/E1.5): builds the real door-to-City — a timber frame with two leaves
+        /// that swing open (Afterhumans.Scenes.CityDoorGate) + a warm glow light/panel that
+        /// switches on once unlocked. Replaces the flat DoorToCity_Placeholder box, which had a
+        /// SOLID BoxCollider (GameObject.CreatePrimitive always adds one) physically sealing the
+        /// doorway gap — that collider is destroyed along with the placeholder here. Idempotent:
+        /// destroys+rebuilds its own root every call so leaf/light wiring never goes stale.
+        /// "Light cosmetic, no radical rebuild" per the sprint brief — no wall geometry touched,
+        /// the door sits 1m inside Wall_North (DoorZ=13 vs wall at NaveHalfL=14), matching where
+        /// the placeholder already lived.
+        /// </summary>
+        private static void EnsureCityDoor()
+        {
+            var oldPlaceholder = GameObject.Find("DoorToCity_Placeholder");
+            if (oldPlaceholder != null) Object.DestroyImmediate(oldPlaceholder);
+            var oldDoor = GameObject.Find("CityDoor_Botanika");
+            if (oldDoor != null) Object.DestroyImmediate(oldDoor);
+
+            var timber = MakeMaterial("DoorTimber", new Color(0.14f, 0.10f, 0.07f), 0.25f);
+            var glow = MakeMaterial("DoorGlow", new Color(0.95f, 0.85f, 0.55f), 0.1f);
+            if (glow.HasProperty("_EmissionColor"))
+            {
+                glow.EnableKeyword("_EMISSION");
+                glow.SetColor("_EmissionColor", new Color(3.5f, 2.6f, 1.2f));
+            }
+
+            const float doorW = 2.2f, doorH = 2.6f;
+            const float leafW = doorW * 0.5f;
+
+            var root = new GameObject("CityDoor_Botanika");
+            root.transform.position = new Vector3(0f, 0f, DoorZ);
+
+            // Frame — visual only, no collider (the trigger box below handles detection).
+            var frameTop = MakeBox(root, "DoorFrame_Top", new Vector3(0f, doorH + 0.15f, 0f), new Vector3(doorW + 0.3f, 0.3f, 0.15f), timber);
+            Object.DestroyImmediate(frameTop.GetComponent<Collider>());
+            var frameL = MakeBox(root, "DoorFrame_L", new Vector3(-(doorW * 0.5f + 0.15f), doorH * 0.5f, 0f), new Vector3(0.3f, doorH + 0.3f, 0.15f), timber);
+            Object.DestroyImmediate(frameL.GetComponent<Collider>());
+            var frameR = MakeBox(root, "DoorFrame_R", new Vector3(doorW * 0.5f + 0.15f, doorH * 0.5f, 0f), new Vector3(0.3f, doorH + 0.3f, 0.15f), timber);
+            Object.DestroyImmediate(frameR.GetComponent<Collider>());
+
+            // Two leaves, each hinged at its OUTER post so they swing open away from the player.
+            var hingeL = new GameObject("Hinge_L");
+            hingeL.transform.SetParent(root.transform, false);
+            hingeL.transform.localPosition = new Vector3(-(doorW * 0.5f), 0f, 0f);
+            var leafL = MakeBox(hingeL, "Leaf_L", new Vector3(leafW * 0.5f, doorH * 0.5f, 0f), new Vector3(leafW, doorH, 0.08f), timber);
+            Object.DestroyImmediate(leafL.GetComponent<Collider>());
+
+            var hingeR = new GameObject("Hinge_R");
+            hingeR.transform.SetParent(root.transform, false);
+            hingeR.transform.localPosition = new Vector3(doorW * 0.5f, 0f, 0f);
+            var leafR = MakeBox(hingeR, "Leaf_R", new Vector3(-leafW * 0.5f, doorH * 0.5f, 0f), new Vector3(leafW, doorH, 0.08f), timber);
+            Object.DestroyImmediate(leafR.GetComponent<Collider>());
+
+            // Glow slit behind the leaves — light spilling through, per the sprint brief
+            // ("скрип, свет из проёма"). Hidden until CityDoorGate unlocks it.
+            var glowPanel = MakeBox(root, "DoorGlow_Slit", new Vector3(0f, doorH * 0.5f, 0.1f), new Vector3(doorW * 0.7f, doorH * 0.7f, 0.05f), glow);
+            Object.DestroyImmediate(glowPanel.GetComponent<Collider>());
+            glowPanel.SetActive(false);
+
+            var doorLightGO = new GameObject("DoorGlowLight");
+            doorLightGO.transform.SetParent(root.transform, false);
+            doorLightGO.transform.localPosition = new Vector3(0f, doorH * 0.5f, 0.3f);
+            var doorLight = doorLightGO.AddComponent<Light>();
+            doorLight.type = LightType.Point;
+            doorLight.color = new Color(1f, 0.85f, 0.55f);
+            // E-sprint (12 июл, P0-3): was 0f/disabled — a completely invisible door means the
+            // player has no idea where the exit even is before it unlocks. Dim always-on hint
+            // instead (CityDoorGate's existing ramp-to-glowIntensity on unlock starts from
+            // whatever the light's current value is, so this only changes the LOCKED baseline,
+            // not the unlock behaviour).
+            doorLight.intensity = 0.35f;
+            doorLight.range = 6f;
+            doorLight.shadows = LightShadows.None;
+            doorLight.enabled = true;
+
+            // Trigger volume — separate object from the visual leaves so the leaf swing never
+            // affects hit-testing.
+            var triggerGO = new GameObject("CityDoor_Trigger");
+            triggerGO.transform.SetParent(root.transform, false);
+            triggerGO.transform.localPosition = new Vector3(0f, doorH * 0.5f, -0.6f);
+            var box = triggerGO.AddComponent<BoxCollider>();
+            box.isTrigger = true;
+            box.size = new Vector3(doorW + 0.6f, doorH + 0.6f, 1.6f);
+
+            var gate = triggerGO.AddComponent<Afterhumans.Scenes.CityDoorGate>();
+            gate.leafL = hingeL.transform;
+            gate.leafR = hingeR.transform;
+            gate.glowLight = doorLight;
+            gate.glowPanel = glowPanel;
+            gate.targetScene = "Scene_City";
+
+            Debug.Log($"[EnsureCityDoor] built door frame+leaves+light+trigger at z={DoorZ} (placeholder's solid collider removed)");
+        }
+
+        /// <summary>
         /// FREEZE FIX: remove every component of the old Ink dialogue path so pressing E
         /// (or anything else) can never re-enter the hang. Kills PlayerInteraction on the
         /// player/dog, all Interactable + NpcFacing on NPCs, and the DialogueManager /
@@ -6743,6 +6988,79 @@ namespace Afterhumans.EditorTools
             go.transform.position += new Vector3(0f, pos.y - b.min.y, 0f);
         }
 
+        /// <summary>
+        /// E-sprint (12 июл) MEASURED clip-range diagnostic — team-lead's live playtest caught
+        /// Sasha standing full-height on the sofa with his arm floating horizontally (exactly
+        /// the "loops an enter-pose segment forever" class of bug already flagged for Anna's
+        /// clip). BuildNpcClipLoopController takes the FIRST non-preview AnimationClip found in
+        /// the FBX and loops it whole, with zero range trimming — if that clip contains BOTH an
+        /// entry transition AND the stable idle (or if there are multiple clips and the wrong
+        /// one gets picked), this is exactly what you'd see. Rather than guess a trim range,
+        /// sample every already-wired NPC's clip(s) at evenly-spaced timestamps and log combined
+        /// bounds height (standing vs sitting discriminator) + the world Y of any bone whose name
+        /// contains "hand" (arm-raise discriminator), so the actual stable segment is read off
+        /// real numbers. Run AFTER WireBotanikaNpcs (needs the live wired scene).
+        /// </summary>
+        public static void DiagnoseNpcClipRanges()
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            string[] ids = { "sasha", "kirill", "mila", "nikolai", "stas" };
+            const int samples = 14;
+            foreach (var id in ids)
+            {
+                var go = GameObject.Find("NPC_" + id);
+                if (go == null) { Debug.LogWarning($"[ClipDiag] NPC_{id} NOT FOUND"); continue; }
+                var animr = go.GetComponentInChildren<Animator>();
+                if (animr == null) { Debug.LogWarning($"[ClipDiag] {id}: no Animator — procedural NPC, skip"); continue; }
+                var ctrl = animr.runtimeAnimatorController;
+                Debug.Log($"[ClipDiag] {id}: Animator controller={(ctrl != null ? ctrl.name : "NULL")}");
+
+                // pull EVERY non-preview clip actually reachable from the controller's states
+                // (not just "first clip in the fbx" — if BuildNpcClipLoopController picked the
+                // wrong one among several, this shows what's ACTUALLY assigned right now).
+                var seenClips = new List<AnimationClip>();
+                if (ctrl is UnityEditor.Animations.AnimatorController ac)
+                {
+                    foreach (var layer in ac.layers)
+                        foreach (var state in layer.stateMachine.states)
+                            if (state.state.motion is AnimationClip c && !seenClips.Contains(c))
+                                seenClips.Add(c);
+                }
+                if (seenClips.Count == 0)
+                {
+                    Debug.LogWarning($"[ClipDiag] {id}: controller has no AnimationClip state — nothing to sample");
+                    continue;
+                }
+
+                var hands = new List<Transform>();
+                foreach (var t in go.GetComponentsInChildren<Transform>(true))
+                    if (t.name.ToLowerInvariant().Contains("hand")) hands.Add(t);
+
+                foreach (var clip in seenClips)
+                {
+                    Debug.Log($"[ClipDiag] {id} clip='{clip.name}' length={clip.length:F3}s (ASSIGNED — this is what plays in the build)");
+                    AnimationMode.StartAnimationMode();
+                    try
+                    {
+                        for (int i = 0; i <= samples; i++)
+                        {
+                            float t = clip.length * i / samples;
+                            AnimationMode.SampleAnimationClip(go, clip, t);
+                            var b = CombinedBounds(go);
+                            var handYs = new List<string>();
+                            foreach (var h in hands) handYs.Add($"{h.name}={h.position.y:F3}");
+                            Debug.Log($"[ClipDiag] {id} t={t:F3}/{clip.length:F3} boundsHeight={b.size.y:F3} boundsMinY={b.min.y:F3} boundsMaxY={b.max.y:F3} hands=[{string.Join(",", handYs)}]");
+                        }
+                    }
+                    finally
+                    {
+                        AnimationMode.StopAnimationMode();
+                    }
+                }
+            }
+            Debug.Log("[ClipDiag] DONE — read boundsHeight/hand-Y series per NPC to find the stable segment (low variance across consecutive samples = stable idle; big swings = still in an entry/transition).");
+        }
+
         private static Bounds CombinedBounds(GameObject go)
         {
             var rends = go.GetComponentsInChildren<Renderer>(true);
@@ -6808,6 +7126,11 @@ namespace Afterhumans.EditorTools
                 float pelvisY = b.min.y + pelvisFrac * b.size.y;
                 float shiftY = seatY - pelvisY + sp.seatYAdjust;
                 go.transform.position += new Vector3(sp.pos.x - b.center.x, shiftY, sp.pos.z - b.center.z);
+                // E-sprint (12 июл) measured check: Tim reported him sunk INTO the cushion at
+                // seatYAdjust=-0.14; now 0f (trust the pelvis-fraction formula). Log the actual
+                // post-shift bounds so this is a MEASURED correction next round, not a guess.
+                var post = CombinedBounds(go);
+                Debug.Log($"[SashaSeat] seatY={seatY:F3} pelvisFrac={pelvisFrac} pelvisY(pre-shift)={pelvisY:F3} seatYAdjust={sp.seatYAdjust:F3} shiftY={shiftY:F3} POST bounds.min.y={post.min.y:F3} (gap-vs-seatY={post.min.y - seatY:F3}; negative=sunk, positive=floating)");
                 return;
             }
 
@@ -6923,9 +7246,9 @@ namespace Afterhumans.EditorTools
             {
                 var c = ls[i].Split('\t');
                 if (c.Length < 6) continue;
-                string id = c[0].Trim(), npc = c[1].Trim(), text = c[5];
+                string id = c[0].Trim(), npc = c[1].Trim(), knot = c[2].Trim(), text = c[5];
                 if (!d.ContainsKey(npc)) d[npc] = new List<LineRow>();
-                d[npc].Add(new LineRow { lineId = id, text = text });
+                d[npc].Add(new LineRow { lineId = id, text = text, knot = knot });
             }
             return d;
         }

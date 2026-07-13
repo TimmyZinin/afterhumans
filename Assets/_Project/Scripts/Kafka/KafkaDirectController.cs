@@ -33,7 +33,6 @@ namespace Afterhumans.Kafka
         // семенит. Сбавил скорость → каденс падает до уверенного шага, контроль спокойнее.
         [SerializeField] private float walkSpeed = 1.4f;
         [SerializeField] private float runSpeed = 3.0f;
-        [SerializeField] private float turnSpeedDeg = 180f;
         [SerializeField] private float acceleration = 12f;
 
         [Header("3rd-person camera-relative")]
@@ -103,6 +102,19 @@ namespace Afterhumans.Kafka
                 Debug.LogWarning("[KafkaDirectController] No Animator found in children.");
         }
 
+        /// <summary>
+        /// E-sprint: call after this GameObject survives a scene load (see
+        /// Afterhumans.Kafka.PersistentPlayer). The scripted follow camera caches Camera.main
+        /// ONCE behind the _camInit guard (see LateUpdate below) — the OLD scene's camera is
+        /// destroyed on unload, so without this the cached reference goes permanently null and
+        /// the camera never follows again. Resetting the guard makes LateUpdate re-acquire
+        /// whatever camera is tagged MainCamera in the newly loaded scene.
+        /// </summary>
+        public void ReacquireCamera()
+        {
+            _camInit = false;
+        }
+
         private void Update()
         {
             HandleCursorLock();
@@ -117,25 +129,42 @@ namespace Afterhumans.Kafka
 
             float dt = Time.deltaTime;
 
-            // TANK steering (proven scheme — dog faces NOSE-forward). The corgi mesh is
-            // parented with a 180° visual offset, so the nose reads as -root.forward; the
-            // negated Vertical makes W drive the dog along its visible nose. (The earlier
-            // camera-relative LookRotation rotated root.forward to moveDir → nose pointed at
-            // the camera → "собака ходит попой вперёд". Reverted.) Camera is still freely
-            // mouse-orbited via Cinemachine FreeLook + pointer-lock above.
-            float horizontal = Input.GetAxisRaw("Horizontal"); // A/D → turn
-            // W/S → forward/back. NO negation: the corgi mesh is placed yaw -90 so its NOSE
-            // aligns with +root.forward (measured live: NAVPROBE fwd=(0,1) while the dog faces
-            // the NPCs/door at +Z). So +Vertical (W) must drive +transform.forward = toward the
-            // nose. The old negation came from an EARLIER mesh offset and made W moonwalk the dog
-            // SOUTH, away from every NPC (Tim: «нажимаю E — ничего», because the dog could never
-            // reach an NPC). Verified: with negation removed, W decreases the dog→NPC distance.
-            float vertical = Input.GetAxisRaw("Vertical");
+            // CAMERA-RELATIVE steering (Tim, live playtest of #5d: tank steering read as
+            // INVERTED whenever the dog faced the screen — "W везёт собаку на камеру, S от
+            // камеры". Root cause: tank mode always drove +transform.forward regardless of
+            // where the camera was looking, so once the dog turned to face the camera (e.g.
+            // greeting an NPC), W started walking it toward the lens instead of "deeper into
+            // the screen". Standard 3rd-person fix: W/A/S/D compose a move direction relative
+            // to the FOLLOW CAMERA's own facing (flattened onto the floor, so tilt doesn't
+            // creep in), and the dog turns to face that direction. faceTurnSpeedDeg already
+            // existed for exactly this (unused since the earlier tank-steering revert — see
+            // git history above this method) — 360°/s is fast enough that the turn is
+            // effectively instant for normal input, so horizontalVel below (still driven by
+            // transform.forward, unchanged) tracks the camera-relative direction with no
+            // perceptible lag.
+            float horizontal = Input.GetAxisRaw("Horizontal"); // A/D → camera-relative strafe
+            float vertical = Input.GetAxisRaw("Vertical");     // W/S → camera-relative fwd/back
             bool sprinting = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
-            transform.Rotate(0f, horizontal * turnSpeedDeg * dt, 0f, Space.World);
+            if (_probeCam == null) _probeCam = Camera.main; // usually already set by LateUpdate
+            Vector3 camF = transform.forward, camR = transform.right; // frame-0 fallback, no camera yet
+            if (_probeCam != null)
+            {
+                var cf = _probeCam.transform.forward; cf.y = 0f;
+                var cr = _probeCam.transform.right;   cr.y = 0f;
+                if (cf.sqrMagnitude > 0.0001f) camF = cf.normalized;
+                if (cr.sqrMagnitude > 0.0001f) camR = cr.normalized;
+            }
+            Vector3 moveDir = camF * vertical + camR * horizontal;
+            float inputMag = Mathf.Clamp01(moveDir.magnitude);
+            if (inputMag > 0.0001f)
+            {
+                moveDir /= inputMag;
+                Quaternion want = Quaternion.LookRotation(moveDir, Vector3.up);
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, want, faceTurnSpeedDeg * dt);
+            }
 
-            float targetSpeed = Mathf.Clamp(vertical, -1f, 1f) * (sprinting ? runSpeed : walkSpeed);
+            float targetSpeed = inputMag * (sprinting ? runSpeed : walkSpeed);
             _currentSpeed = Mathf.MoveTowards(_currentSpeed, targetSpeed, acceleration * dt);
 
             Vector3 horizontalVel = transform.forward * _currentSpeed;

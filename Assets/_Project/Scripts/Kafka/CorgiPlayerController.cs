@@ -42,9 +42,10 @@ namespace Afterhumans.Kafka
         {
             float dt = Time.deltaTime;
             float h = Input.GetAxisRaw("Horizontal"); // A/D + arrows → turn
-            // Sign flipped per Tim's bug report (6 Jul): with +Vertical the corgi walked
-            // away from its nose/camera, so W and S were effectively swapped in play.
-            float v = -Input.GetAxisRaw("Vertical");  // W/S + arrows → forward/back
+            // D17 flipped this sign after a bug report, but Tim's live playtest (6 Jul
+            // evening) showed the flip inverted a correct axis: S drove forward, W back.
+            // Restored to the original +Vertical mapping — W is forward again.
+            float v = Input.GetAxisRaw("Vertical");   // W/S + arrows → forward/back
             bool run = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
 
             if (Mathf.Abs(h) > 0.01f)

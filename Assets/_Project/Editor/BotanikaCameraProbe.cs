@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -411,6 +412,239 @@ namespace Afterhumans.EditorTools
             Object.DestroyImmediate(fill);
             Object.DestroyImmediate(fill2);
             Debug.Log("[CameraProbe] NPC closeups done → " + OutputDir);
+        }
+
+        /// <summary>
+        /// E-sprint (12 июл, P0-2 investigation): team-lead's hypothesis was "the new Tripo
+        /// deci-rigs have their forward axis flipped 180° from the old models" — but
+        /// CaptureNpcCloseups' own fwd-vector camera positioning (camPos = npc.pos +
+        /// npc.transform.forward * 2.4, looking back at the NPC) already showed Sasha
+        /// CONFIRMED backward (his back, not face, in np_sasha.png) while Mila/Nikolai/Stas
+        /// came back as ambiguous PROFILE views (not clearly face or back) — inconclusive,
+        /// and Kirill's shot clipped into a bookshelf/column. Guessing an offset per rig from
+        /// ambiguous renders would violate IL-3 (measure, don't guess). This is the measurement:
+        /// shoot each wired NPC's head from FOUR cardinal angles around transform.forward (0°/
+        /// 90°/180°/270°) so which exact angle shows the actual face is a simple visual read,
+        /// not a guess — same "sample multiple points, read the answer" method already proven
+        /// for Sasha's clip-trim range (DiagnoseNpcClipRanges). Cheap: scene-load + screenshots
+        /// only, no WireBotanikaNpcs/BuildHero needed — reuses whatever NPCs are already wired
+        /// in the last-saved scene.
+        /// </summary>
+        public static void DiagnoseNpcFacing()
+        {
+            Directory.CreateDirectory(OutputDir);
+            EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
+
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(1.35f, 1.32f, 1.22f);
+            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.fog = false;
+
+            var fill = new GameObject("AH_FaceDiagFill");
+            fill.hideFlags = HideFlags.HideAndDontSave;
+            var fl = fill.AddComponent<Light>();
+            fl.type = LightType.Directional; fl.intensity = 1.2f; fl.shadows = LightShadows.None;
+            fl.color = new Color(1f, 0.96f, 0.9f);
+            fill.transform.rotation = Quaternion.Euler(55f, 20f, 0f);
+
+            var fill2 = new GameObject("AH_FaceDiagFill2");
+            fill2.hideFlags = HideFlags.HideAndDontSave;
+            var fl2 = fill2.AddComponent<Light>();
+            fl2.type = LightType.Directional; fl2.intensity = 0.9f; fl2.shadows = LightShadows.None;
+            fl2.color = new Color(0.95f, 0.95f, 1f);
+            fill2.transform.rotation = Quaternion.Euler(50f, 210f, 0f);
+
+            string[] ids = { "nikolai", "mila", "kirill", "stas", "sasha" };
+            float[] degs = { 0f, 90f, 180f, 270f };
+            foreach (var id in ids)
+            {
+                var npc = GameObject.Find("NPC_" + id);
+                if (npc == null) { Debug.LogWarning("[FaceDiag] NPC_" + id + " NOT FOUND"); continue; }
+                var rends = npc.GetComponentsInChildren<Renderer>(true);
+                var b = rends.Length > 0 ? rends[0].bounds : new Bounds(npc.transform.position, Vector3.one * 1.6f);
+                foreach (var r in rends) b.Encapsulate(r.bounds);
+                var aim = new Vector3(b.center.x, b.max.y - 0.18f, b.center.z);
+                var baseFwd = npc.transform.forward; baseFwd.y = 0f;
+                if (baseFwd.sqrMagnitude < 0.01f) baseFwd = Vector3.back;
+                baseFwd.Normalize();
+                Debug.Log($"[FaceDiag] {id} pos={npc.transform.position} baseForward={baseFwd} headY={b.max.y:0.00}");
+                foreach (var deg in degs)
+                {
+                    var dir = Quaternion.AngleAxis(deg, Vector3.up) * baseFwd;
+                    // camera 1.6m out at THIS angle, close enough to clear most furniture/
+                    // columns (2.4m in CaptureNpcCloseups clipped Kirill into a bookshelf).
+                    var camPos = new Vector3(npc.transform.position.x, aim.y + 0.05f, npc.transform.position.z) + dir * 1.6f;
+                    var rot = Quaternion.LookRotation((aim - camPos).normalized, Vector3.up);
+                    var key = new GameObject("AH_FaceDiagKey"); key.hideFlags = HideFlags.HideAndDontSave;
+                    var kl = key.AddComponent<Light>();
+                    kl.type = LightType.Point; kl.range = 14f; kl.intensity = 14f;
+                    kl.shadows = LightShadows.None; kl.color = new Color(1f, 0.97f, 0.92f);
+                    key.transform.position = camPos + Vector3.up * 0.4f;
+                    CaptureLitShot(camPos, rot, $"facediag_{id}_{deg:0}.png", false);
+                    Object.DestroyImmediate(key);
+                }
+            }
+
+            Object.DestroyImmediate(fill);
+            Object.DestroyImmediate(fill2);
+            Debug.Log("[CameraProbe] NPC facing diagnostic done → " + OutputDir);
+        }
+
+        /// <summary>
+        /// E-sprint (12 июл, P0-3 sub-item): team-lead relayed Tim's #5d screenshot showing a
+        /// "posторонний интерьер" (sofa/floor lamp) visible THROUGH the glass — hypothesis is
+        /// stray geometry outside the greenhouse's own walls (NaveHalfW=7, NaveHalfL=14).
+        /// Rather than guess which object or move anything blind, shoot outward through each
+        /// actual glass surface (Wall_GlassEast/West, Wall_North — Wall_South is solid plaster,
+        /// not glass, per BuildGreybox's RetextureGlass calls) from near room centre, so
+        /// whatever's really out there is a visual read, not a guess. Cheap: scene-load +
+        /// screenshots only, no wire/build.
+        /// </summary>
+        public static void CaptureGlassOutlook()
+        {
+            Directory.CreateDirectory(OutputDir);
+            EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
+
+            var key = new GameObject("AH_GlassOutlookKey"); key.hideFlags = HideFlags.HideAndDontSave;
+            var kl = key.AddComponent<Light>();
+            kl.type = LightType.Directional; kl.intensity = 1.1f; kl.shadows = LightShadows.None;
+            kl.transform.rotation = Quaternion.Euler(45f, 30f, 0f);
+
+            var eye = new Vector3(0f, EyeLevel, 0f);
+            var dirs = new (string name, Vector3 dir)[]
+            {
+                ("east",  Vector3.right),
+                ("west",  Vector3.left),
+                ("north", Vector3.forward),
+            };
+            foreach (var (name, dir) in dirs)
+            {
+                var rot = Quaternion.LookRotation(dir, Vector3.up);
+                Debug.Log($"[GlassOutlook] {name} eye={eye} dir={dir}");
+                CaptureLitShot(eye, rot, $"glassoutlook_{name}.png", false);
+            }
+
+            Object.DestroyImmediate(key);
+            Debug.Log("[CameraProbe] Glass outlook diagnostic done → " + OutputDir);
+        }
+
+        // =====================================================================
+        // E-SPRINT SELF-CHECK: CityDoor_Botanika geometry sanity — CLOSED state
+        // (as authored) and a manually-forced OPEN state (leaves rotated + glow
+        // lit, bypassing the runtime gate so the ASSET can be inspected without
+        // a live playtest). This is a static geometry/lighting check only — it
+        // does NOT exercise NpcProgressTracker/CityDoorGate's actual Update()
+        // gate logic (that needs a real Play-mode/browser run, which judges do
+        // per SPRINT_E_PLAN.md).
+        // =====================================================================
+        public static void CaptureCityDoorCheck()
+        {
+            Directory.CreateDirectory(OutputDir);
+            EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
+
+            var door = GameObject.Find("CityDoor_Botanika");
+            if (door == null) { Debug.LogError("[DoorCheck] CityDoor_Botanika NOT FOUND in scene"); return; }
+
+            var camPos = door.transform.position + new Vector3(0f, 1.5f, -3.2f);
+            var rot = Quaternion.LookRotation((door.transform.position + Vector3.up * 1.3f - camPos).normalized, Vector3.up);
+
+            CaptureLitShot(camPos, rot, "e1_door_closed.png", false);
+
+            var hingeL = door.transform.Find("Hinge_L");
+            var hingeR = door.transform.Find("Hinge_R");
+            var glowSlit = door.transform.Find("DoorGlow_Slit");
+            var glowLightGo = door.transform.Find("DoorGlowLight");
+            Quaternion savedL = hingeL != null ? hingeL.localRotation : Quaternion.identity;
+            Quaternion savedR = hingeR != null ? hingeR.localRotation : Quaternion.identity;
+            bool savedSlitActive = glowSlit != null && glowSlit.gameObject.activeSelf;
+            var lightComp = glowLightGo != null ? glowLightGo.GetComponent<Light>() : null;
+            bool savedLightEnabled = lightComp != null && lightComp.enabled;
+            float savedIntensity = lightComp != null ? lightComp.intensity : 0f;
+
+            if (hingeL != null) hingeL.localRotation = Quaternion.Euler(0f, -100f, 0f);
+            if (hingeR != null) hingeR.localRotation = Quaternion.Euler(0f, 100f, 0f);
+            if (glowSlit != null) glowSlit.gameObject.SetActive(true);
+            if (lightComp != null) { lightComp.enabled = true; lightComp.intensity = 2.5f; }
+
+            CaptureLitShot(camPos, rot, "e1_door_open.png", false);
+
+            // restore authored (closed) state before saving anything else touches the scene
+            if (hingeL != null) hingeL.localRotation = savedL;
+            if (hingeR != null) hingeR.localRotation = savedR;
+            if (glowSlit != null) glowSlit.gameObject.SetActive(savedSlitActive);
+            if (lightComp != null) { lightComp.enabled = savedLightEnabled; lightComp.intensity = savedIntensity; }
+
+            Debug.Log("[DoorCheck] captured e1_door_closed.png + e1_door_open.png (door state restored to authored/closed)");
+        }
+
+        // =====================================================================
+        // E-SPRINT BUG HUNT (12 июл): team-lead's live playtest — E next to
+        // Stas triggers Sasha's dialogue instead, Kirill unresponsive too.
+        // AuditAllFigures() already proved all 5 NpcVoice components are
+        // wired with valid clips/positions, so this is either a logical-vs-
+        // visual position mismatch or an NPC identity mixup (this codebase
+        // has documented history of exactly that: Stas/Nikolai confusion).
+        // A colored pole above each NPC's LOGICAL transform.position, shot
+        // top-down, tells us in one render whether the figure standing where
+        // Tim/team-lead sees "Stas" (by costume) actually IS NPC_stas's
+        // wired position, or whether the wired position sits somewhere else
+        // in the room. No live browser run needed to get this evidence.
+        // =====================================================================
+        public static void CaptureNpcTopDown()
+        {
+            Directory.CreateDirectory(OutputDir);
+            EditorSceneManager.OpenScene(BotanikaScenePath, OpenSceneMode.Single);
+
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(1.2f, 1.2f, 1.15f);
+            RenderSettings.ambientIntensity = 1.0f;
+            RenderSettings.fog = false;
+
+            var fill = new GameObject("AH_TopDownFill");
+            fill.hideFlags = HideFlags.HideAndDontSave;
+            var fl = fill.AddComponent<Light>();
+            fl.type = LightType.Directional; fl.intensity = 1.3f; fl.shadows = LightShadows.None;
+            fill.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
+
+            var legend = new (string id, Color col)[]
+            {
+                ("nikolai", Color.magenta),
+                ("mila",    Color.blue),
+                ("kirill",  Color.yellow),
+                ("stas",    Color.red),
+                ("sasha",   Color.green),
+            };
+
+            var markerShader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+            var markers = new List<GameObject>();
+            var center = Vector3.zero;
+            int found = 0;
+            foreach (var (id, col) in legend)
+            {
+                var npc = GameObject.Find("NPC_" + id);
+                if (npc == null) { Debug.LogWarning("[TopDown] NPC_" + id + " NOT FOUND"); continue; }
+                found++;
+                center += npc.transform.position;
+                Debug.Log($"[TopDown-LEGEND] {id} = {ColorUtility.ToHtmlStringRGB(col)} pos={npc.transform.position}");
+
+                var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                pole.hideFlags = HideFlags.HideAndDontSave;
+                Object.DestroyImmediate(pole.GetComponent<Collider>());
+                pole.transform.position = npc.transform.position + Vector3.up * 2.0f;
+                pole.transform.localScale = new Vector3(0.18f, 2.2f, 0.18f);
+                var mat = new Material(markerShader) { color = col };
+                pole.GetComponent<Renderer>().sharedMaterial = mat;
+                markers.Add(pole);
+            }
+            if (found > 0) center /= found;
+
+            var camPos = center + Vector3.up * 13f;
+            var rot = Quaternion.LookRotation(Vector3.down, Vector3.forward);
+            CaptureLitShot(camPos, rot, "e1_npc_topdown.png", false);
+
+            foreach (var m in markers) Object.DestroyImmediate(m);
+            Object.DestroyImmediate(fill);
+            Debug.Log("[CameraProbe] NPC top-down layout done (found=" + found + "/5) → " + OutputDir + "/e1_npc_topdown.png");
         }
 
         private static void CaptureLitShot(Vector3 pos, Quaternion rot, string fileName, bool postFx = true)

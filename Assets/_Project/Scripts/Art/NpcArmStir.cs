@@ -3,6 +3,12 @@ using UnityEngine;
 namespace Afterhumans.Art
 {
     /// <summary>
+    /// RETIRED (12 июл, приказ Тима): no longer added to any NPC in BotanikaBuilder's wiring —
+    /// the shoulder swing kept sweeping back up through T-pose at its own extremum. Kirill now
+    /// gets NpcRestPose (static arm correction) + NpcFidget (torso/head micro-life only). Class
+    /// kept in the project (unused, never instantiated) only so existing diagnostic tooling that
+    /// references the type by name (CheckStir etc.) still compiles; it never runs.
+    ///
     /// Sprint D — Kirill "cooking" POC of the skeletal procedural pipeline (same recipe as
     /// CorgiStateAnimator/CorgiProceduralAnimator: no baked clip, drive the imported Tripo
     /// skeleton's bone Transforms directly in LateUpdate). Finds the right-arm chain by name
@@ -42,6 +48,16 @@ namespace Afterhumans.Art
         public float headDipEverySeconds = 5.5f;
         public float headDipDuration = 1.2f;
 
+        [Header("Rest pose correction — E-sprint T-pose fix")]
+        // Tim (11 июл): NPCs read as stuck in T-pose. Kirill shares the same kirill_animated_raw
+        // rig/bind-pose as Stas (confirmed T-pose via batchmode render, see NpcFidget.cs same
+        // fix) — R_Upperarm's raw bind points straight out to the side. Same corrective idea as
+        // NpcFidget: pitch the captured base down (Z-axis, the same axis proven on this rig to
+        // move the bone toward the body) BEFORE the existing X/Y stir sweep layers on top, so
+        // the resting/low point of the stir cycle reads as a lowered arm reaching for the pot,
+        // not a permanently horizontal one.
+        public float restPitchDeg = 65f;
+
         [Header("Diagnostics")]
         // WebGL-detective probe (Sprint D2): logs the driven bone's WORLD position every
         // ~3s so a headless build can PROVE whether the bone Transform actually moves in the
@@ -71,7 +87,9 @@ namespace Afterhumans.Art
             _spine = FindBone("Spine01");
             _head = FindBone("Head");
 
-            if (_upperarm != null) _upperarmBase = _upperarm.localRotation;
+            // T-pose fix: -restPitchDeg matches the R_Upperarm (right-arm) sign convention used
+            // in NpcFidget's identical-rig correction (rUpper uses -restPitchDeg there).
+            if (_upperarm != null) _upperarmBase = _upperarm.localRotation * Quaternion.Euler(0f, 0f, -restPitchDeg);
             if (_forearm != null) _forearmBase = _forearm.localRotation;
             if (_hand != null) _handBase = _hand.localRotation;
             if (_spine != null) _spineBase = _spine.localRotation;

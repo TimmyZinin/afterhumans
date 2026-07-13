@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using UnityEditor;
@@ -18,6 +19,11 @@ namespace Afterhumans.EditorTools
     public static class WebGLBuilder
     {
         private const string Scene = "Assets/_Project/Scenes/Scene_Botanika.unity";
+        // E-sprint: the City door (CityDoorGate) calls SceneManager.LoadScene("Scene_City") at
+        // runtime — a scene not included in BuildPlayerOptions.scenes below can't be loaded by
+        // name even if it's listed in the Editor's Build Settings window (that list is IGNORED
+        // here since opts.scenes is set explicitly). Must ship both.
+        private const string CityScene = "Assets/_Project/Scenes/Scene_City.unity";
         private const string OutDir = "/root/afterhumans/Build/WebGL";
         private const string ProfilePath = "Assets/_Project/Settings/URP/VolumeProfiles/VP_Botanika_v2.asset";
 
@@ -104,9 +110,17 @@ namespace Afterhumans.EditorTools
             PlayerSettings.WebGL.dataCaching = false;
             try { PlayerSettings.WebGL.threadsSupport = false; } catch {}
 
+            // Scene_Botanika MUST be index 0 (it's the boot scene the player loads into);
+            // Scene_City only needs to be present so LoadSceneAsync("Scene_City") resolves.
+            var sceneList = new List<string> { Scene };
+            if (File.Exists(CityScene)) sceneList.Add(CityScene);
+            else Debug.LogWarning($"[WebGLBuilder] {CityScene} not found — City door transition will fail at runtime (LoadScene will error).");
+
+            SyncEditorBuildSettingsScenes(sceneList);
+
             var opts = new BuildPlayerOptions
             {
-                scenes = new[] { Scene },
+                scenes = sceneList.ToArray(),
                 locationPathName = OutDir,
                 target = BuildTarget.WebGL,
                 targetGroup = BuildTargetGroup.WebGL,
@@ -124,6 +138,19 @@ namespace Afterhumans.EditorTools
             // No custom WebGLTemplate exists, so we patch the built index.html here.
             if (report.summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded)
                 ForceDevicePixelRatioOne(Path.Combine(OutDir, "index.html"));
+        }
+
+        /// <summary>
+        /// Keeps the Editor's Build Settings window (EditorBuildSettings.scenes) in sync with
+        /// what this script actually ships — cosmetic/tooling consistency only (BuildPlayer
+        /// uses opts.scenes above regardless), but other build entry points or a human opening
+        /// File > Build Settings should see the same list.
+        /// </summary>
+        private static void SyncEditorBuildSettingsScenes(List<string> scenePaths)
+        {
+            var entries = new List<EditorBuildSettingsScene>();
+            foreach (var p in scenePaths) entries.Add(new EditorBuildSettingsScene(p, true));
+            EditorBuildSettings.scenes = entries.ToArray();
         }
 
         /// <summary>

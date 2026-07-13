@@ -20,11 +20,20 @@ namespace Afterhumans.Audio
             if (!Input.GetKeyDown(key)) return;
             NpcVoice best = null;
             float bestD = keyRadius;
+            // E-sprint diagnostic (team-lead 12 июл: Stas/Kirill don't respond to E, Sasha's
+            // cycle fires instead) — log EVERY candidate's distance on every E-press so the
+            // NEXT reproduction pins down whether this is a selection-logic bug or a
+            // logical-position-vs-visual-mesh mismatch, instead of guessing blind.
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"[NpcInteractor] E at dogPos={transform.position} candidates: ");
             foreach (var v in Object.FindObjectsByType<NpcVoice>(FindObjectsSortMode.None))
             {
                 float d = Vector3.Distance(transform.position, v.transform.position);
+                sb.Append($"{v.gameObject.name}@{v.transform.position}(d={d:F2}) ");
                 if (d <= bestD) { bestD = d; best = v; }
             }
+            sb.Append($"-> PICKED={(best != null ? best.gameObject.name : "none")}");
+            Debug.Log(sb.ToString());
             if (best != null) best.ForceSpeak();
         }
     }

@@ -6,8 +6,15 @@ using UnityEngine.UI;
 namespace Afterhumans.Scenes
 {
     /// <summary>
-    /// Handles fade-to-black scene transitions.
+    /// Handles fade-to-black scene transitions (GDD §8: 0.8s fade out → load → 0.8s fade in).
     /// Singleton, persistent across scenes.
+    ///
+    /// E-sprint fix: this component previously had NO spawn site anywhere in the live scenes
+    /// (only an archived, non-compiled _v1_archive script created it) — every caller used
+    /// `SceneTransition.Instance?.LoadScene(...)`, which silently no-opped. It now self-builds
+    /// its own full-screen black overlay if none is wired in the Inspector, matching the
+    /// self-contained pattern already used by NpcDialogueHud/DoorCueUI, so a single
+    /// `gameObject.AddComponent&lt;SceneTransition&gt;()` anywhere is enough to make it work.
     /// </summary>
     public class SceneTransition : MonoBehaviour
     {
@@ -25,13 +32,52 @@ namespace Afterhumans.Scenes
                 return;
             }
             Instance = this;
-            DontDestroyOnLoad(gameObject);
+            // Guarded: this Awake also fires once at EDIT time when a build script does
+            // AddComponent<SceneTransition>() (see EnsureInstance below) — DontDestroyOnLoad
+            // is play-mode-only and would log an edit-mode error otherwise. The scene is saved
+            // with this component baked in, so the REAL Awake (Application.isPlaying == true)
+            // fires normally when the built player loads the scene.
+            if (Application.isPlaying) DontDestroyOnLoad(gameObject);
 
-            if (fadeOverlay != null)
-            {
-                fadeOverlay.color = new Color(0, 0, 0, 0);
-                fadeOverlay.gameObject.SetActive(true);
-            }
+            if (fadeOverlay == null) fadeOverlay = BuildFadeOverlay();
+
+            fadeOverlay.color = new Color(0, 0, 0, 0);
+            fadeOverlay.gameObject.SetActive(true);
+        }
+
+        private Image BuildFadeOverlay()
+        {
+            var canvasGo = new GameObject("FadeCanvas");
+            canvasGo.transform.SetParent(transform, false);
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 9000; // above NpcDialogueHud (5000) — fade must cover everything
+            var scaler = canvasGo.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+
+            var imgGo = new GameObject("FadeOverlay");
+            imgGo.transform.SetParent(canvasGo.transform, false);
+            var img = imgGo.AddComponent<Image>();
+            img.color = new Color(0, 0, 0, 0);
+            img.raycastTarget = false;
+            var rt = img.rectTransform;
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            return img;
+        }
+
+        /// <summary>
+        /// Idempotent spawn helper for editor build scripts: creates the singleton if it
+        /// doesn't already exist in the scene. Safe to call every build.
+        /// </summary>
+        public static void EnsureInstance()
+        {
+            if (Instance != null) return;
+            var existing = Object.FindObjectOfType<SceneTransition>();
+            if (existing != null) return; // Awake will assign Instance on next play/build
+            var go = new GameObject("SceneTransition");
+            go.AddComponent<SceneTransition>();
         }
 
         public void LoadScene(string sceneName)
